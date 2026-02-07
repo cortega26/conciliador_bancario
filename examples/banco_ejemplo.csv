@@ -1,0 +1,4 @@
+fecha_operacion;fecha_contable;monto;moneda;descripcion;referencia;cuenta
+05-01-2026;05-01-2026;$ 150.000;CLP;Transferencia a ACME;FAC-1001;123456789012
+06/01/2026;06/01/2026;-250000;CLP;Pago nomina enero;NOM-ENE;123456789012
+

@@ -1,0 +1,15 @@
+cliente: "Estudio Ejemplo SpA"
+rut_mask: "***123"
+
+# Matching
+ventana_dias_monto_fecha: 3
+umbral_autoconcilia: 0.85
+umbral_confianza_campos: 0.80
+
+# PDF OCR
+permitir_ocr: false
+
+# Seguridad
+mask_por_defecto: true
+moneda_default: "CLP"
+

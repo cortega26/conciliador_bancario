@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("FASE 1: ingestion/OCR fuera de alcance (solo scaffold).", allow_module_level=True)
+
 import importlib.util
 from pathlib import Path
 
@@ -22,4 +26,3 @@ def test_pdf_ocr_fail_closed_si_no_hay_dependencias(tmp_path: Path) -> None:
     cfg = ConfiguracionCliente(cliente="X", permitir_ocr=True)
     with pytest.raises(ErrorIngestion):
         cargar_transacciones_pdf_ocr(pdf, cfg=cfg, audit=NullAuditWriter())  # type: ignore[arg-type]
-

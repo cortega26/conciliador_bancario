@@ -7,6 +7,12 @@ CLI local (Chile-first) para conciliacion bancaria con enfoque:
 - Auditoria completa: reglas, scores, explicaciones y hallazgos.
 - Idempotencia: misma entrada -> mismo output (sin timestamps variables).
 
+## Estado del repo
+
+- FASE 1 (esqueleto + CLI scaffold): `concilia --help` y `concilia init` operativos.
+- `concilia validate` / `concilia run` estan presentes como interfaz, pero fallan explicitamente con `NotImplementedError`
+  hasta habilitar las fases posteriores.
+
 ## Instalacion (desarrollo)
 
 ```powershell

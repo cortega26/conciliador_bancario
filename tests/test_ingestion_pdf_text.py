@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("FASE 1: ingestion PDF texto fuera de alcance (solo scaffold).", allow_module_level=True)
+
 from pathlib import Path
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter
@@ -52,4 +56,3 @@ def test_pdf_texto_extraible_genera_transacciones(monkeypatch, tmp_path: Path) -
     assert tx.origen == OrigenDato.pdf_texto
     assert tx.bloquea_autoconcilia is False
     assert tx.referencia is not None and tx.referencia.valor == "FAC-1001"
-

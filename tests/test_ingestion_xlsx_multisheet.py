@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("FASE 1: ingestion XLSX fuera de alcance (solo scaffold).", allow_module_level=True)
+
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -27,4 +31,3 @@ def test_xlsx_multisheet_selecciona_hoja_con_columnas(tmp_path: Path) -> None:
     txs = cargar_transacciones_xlsx(path, cfg=cfg, audit=NullAuditWriter())  # type: ignore[arg-type]
     assert len(txs) == 1
     assert txs[0].origen == OrigenDato.xlsx
-

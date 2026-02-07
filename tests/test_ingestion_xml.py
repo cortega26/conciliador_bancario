@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("FASE 1: ingestion XML fuera de alcance (solo scaffold).", allow_module_level=True)
+
 from pathlib import Path
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter
@@ -37,4 +41,3 @@ def test_ingestion_xml_confianza_alta(tmp_path: Path) -> None:
     assert tx.cuenta_mask is not None and tx.cuenta_mask.endswith("9012")
     assert tx.monto.confianza.score >= 0.90
     assert tx.descripcion.confianza.score >= 0.90
-

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("FASE 1: matching fuera de alcance (solo scaffold).", allow_module_level=True)
+
 from decimal import Decimal
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter

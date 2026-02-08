@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-pytest.skip("FASE 1: tests de parsing utilitario quedan para fases de ingestion.", allow_module_level=True)
-
 from decimal import Decimal
 
 from conciliador_bancario.utils.parsing import ErrorParseo, parse_fecha_chile, parse_monto_clp

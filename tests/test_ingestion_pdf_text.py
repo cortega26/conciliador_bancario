@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-pytest.skip("FASE 1: ingestion PDF texto fuera de alcance (solo scaffold).", allow_module_level=True)
-
 from pathlib import Path
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter

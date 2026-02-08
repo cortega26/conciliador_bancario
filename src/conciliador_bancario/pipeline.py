@@ -41,10 +41,41 @@ def ejecutar_validate(
     log_level: str,
     enable_ocr: bool,
 ) -> dict[str, Any]:
-    _ = (config, bank, expected, log_level, enable_ocr)
-    raise NotImplementedError(
-        "FASE 1: validate es solo scaffold. La validacion/ingestion real se implementa en fases posteriores."
-    )
+    from conciliador_bancario.audit.audit_log import NullAuditWriter, configurar_logging
+    from conciliador_bancario.ingestion.detector import cargar_movimientos_esperados, cargar_transacciones_bancarias
+    from conciliador_bancario.normalization.normalizer import normalizar_lote
+
+    configurar_logging(log_level)
+    cfg = _cargar_config(config)
+    if enable_ocr:
+        cfg = cfg.model_copy(update={"permitir_ocr": True})
+
+    # Validacion de existencia se hace por typer; aqui chequeamos formato soportado + parseo real.
+    errores: list[str] = []
+    for p, etiqueta in ((bank, "bank"), (expected, "expected")):
+        if p.suffix.lower() not in (".csv", ".xlsx", ".xml", ".pdf"):
+            errores.append(f"Formato no soportado para {etiqueta}: {p.name}")
+    if errores:
+        return {"ok": False, "errores": errores, "config": cfg.model_dump()}
+
+    try:
+        audit = NullAuditWriter()
+        txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)  # type: ignore[arg-type]
+        exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)  # type: ignore[arg-type]
+        txs, exps = normalizar_lote(cfg=cfg, transacciones=txs, esperados=exps)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "errores": [str(e)], "config": cfg.model_dump()}
+
+    if not txs:
+        errores.append("No se detectaron transacciones bancarias.")
+    if not exps:
+        errores.append("No se detectaron movimientos esperados.")
+    return {
+        "ok": len(errores) == 0,
+        "errores": errores,
+        "config": cfg.model_dump(),
+        "resumen": {"txs": len(txs), "esperados": len(exps)},
+    }
 
 
 def ejecutar_run(
@@ -59,9 +90,61 @@ def ejecutar_run(
     enable_ocr: bool,
 ) -> ResultadoConciliacion:
     """
-    FASE 1: stub. La orquestacion completa se implementa en fases posteriores.
+    Ejecuta pipeline end-to-end hasta matching + artefactos tecnicos (run.json + audit.jsonl).
+
+    Reporting XLSX es fase posterior; en esta etapa, `--dry-run` es el modo recomendado.
     """
-    _ = (config, bank, expected, out_dir, mask, dry_run, log_level, enable_ocr)
-    raise NotImplementedError(
-        "FASE 1: run es solo scaffold. La conciliacion real se implementa en fases posteriores."
+    from conciliador_bancario import __version__
+    from conciliador_bancario.audit.audit_log import JsonlAuditWriter, configurar_logging
+    from conciliador_bancario.ingestion.detector import cargar_movimientos_esperados, cargar_transacciones_bancarias
+    from conciliador_bancario.matching.engine import conciliar
+    from conciliador_bancario.normalization.normalizer import normalizar_lote
+    from conciliador_bancario.utils.hashing import sha256_archivo, sha256_json_estable
+    from conciliador_bancario.models import MODELO_INTERNO_VERSION
+
+    configurar_logging(log_level)
+    cfg = _cargar_config(config)
+    if enable_ocr:
+        cfg = cfg.model_copy(update={"permitir_ocr": True})
+
+    run_fingerprint = {
+        "config_sha256": sha256_archivo(config),
+        "bank_sha256": sha256_archivo(bank),
+        "expected_sha256": sha256_archivo(expected),
+        "mask": mask,
+        "permitir_ocr": cfg.permitir_ocr,
+        "modelo_interno_version": MODELO_INTERNO_VERSION,
+        "version": __version__,
+    }
+    run_id = sha256_json_estable(run_fingerprint)[:16]
+
+    audit = JsonlAuditWriter(out_dir / "audit.jsonl", run_id=run_id)
+
+    txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)
+    exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)
+    txs, exps = normalizar_lote(cfg=cfg, transacciones=txs, esperados=exps)
+
+    resultado = conciliar(cfg=cfg, transacciones=txs, esperados=exps, audit=audit, run_id=run_id)
+
+    run_json = out_dir / "run.json"
+    run_json.write_text(
+        json.dumps(
+            {
+                "run_id": resultado.run_id,
+                "fingerprint": run_fingerprint,
+                "matches": [m.model_dump() for m in resultado.matches],
+                "hallazgos": [h.model_dump() for h in resultado.hallazgos],
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
     )
+
+    if not dry_run:
+        from conciliador_bancario.reporting.excel_report import generar_reporte_excel
+
+        generar_reporte_excel(out_dir / "reporte_conciliacion.xlsx", resultado, mask=mask, cfg=cfg)
+
+    return resultado

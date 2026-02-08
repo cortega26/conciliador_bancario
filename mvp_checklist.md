@@ -17,4 +17,6 @@
 - [ ] `pytest` pasa 100%.
 - [ ] No hay errores silenciosos (excepciones explicitas).
 - [ ] Reportes/logs enmascaran datos sensibles por defecto.
-
+- [ ] Golden datasets en `tests/golden/` cubren CSV/XLSX/XML/PDF texto/OCR stub.
+- [ ] `audit.jsonl` incluye `run_id` y `seq` (trazabilidad y determinismo).
+- [ ] Reporte previene Excel/CSV injection en celdas (prefijo `'` cuando corresponde).

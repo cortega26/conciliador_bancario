@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cartola banco="Banco Demo" cuenta="123456789012">
+  <movimiento>
+    <fecha_operacion>05/01/2026</fecha_operacion>
+    <fecha_contable>05/01/2026</fecha_contable>
+    <monto>150000</monto>
+    <moneda>clp</moneda>
+    <descripcion>  Transferencia   a   ACME </descripcion>
+    <referencia> fac-1001 </referencia>
+  </movimiento>
+</cartola>
+

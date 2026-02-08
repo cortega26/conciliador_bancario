@@ -68,8 +68,8 @@ def parse_fecha_chile(texto: str) -> date:
 
 
 def normalizar_texto(texto: str) -> str:
-    return re.sub(r"\\s+", " ", (texto or "").strip())
+    return re.sub(r"\s+", " ", (texto or "").strip())
 
 
 def normalizar_referencia(texto: str) -> str:
-    return re.sub(r"\\s+", "", (texto or "").strip()).upper()
+    return re.sub(r"\s+", "", (texto or "").strip()).upper()

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cartola banco="Banco Demo" cuenta="123">
+  <movimiento>
+    <fecha_operacion>05/01/2026</fecha_operacion>
+    <monto>150000</monto>
+    <moneda>CLP</moneda>
+    <descripcion>Falta cierre
+  </movimiento>
+</cartola>
+

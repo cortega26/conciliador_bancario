@@ -32,6 +32,9 @@ def cmd_validate(
         res = ejecutar_validate(
             config=config, bank=bank, expected=expected, log_level=log_level, enable_ocr=enable_ocr
         )
+    except NotImplementedError as e:
+        console.print(f"[red]No implementado:[/red] {e}")
+        raise typer.Exit(code=3)
     except Exception as e:  # noqa: BLE001
         console.print(f"[red]Error en validacion:[/red] {e}")
         raise typer.Exit(code=1)
@@ -72,11 +75,15 @@ def cmd_run(
             log_level=log_level,
             enable_ocr=enable_ocr,
         )
+    except NotImplementedError as e:
+        console.print(f"[red]No implementado:[/red] {e}")
+        raise typer.Exit(code=3)
     except Exception as e:  # noqa: BLE001
         console.print(f"[red]Error en run:[/red] {e}")
         raise typer.Exit(code=1)
     console.print(f"[green]Run ID[/green]: {resultado.run_id}")
-    console.print(f"[green]Reporte[/green]: {out / 'reporte_conciliacion.xlsx'}")
+    if not dry_run:
+        console.print(f"[green]Reporte[/green]: {out / 'reporte_conciliacion.xlsx'}")
 
 
 @app.command("explain")

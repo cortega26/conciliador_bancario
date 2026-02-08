@@ -9,9 +9,10 @@ CLI local (Chile-first) para conciliacion bancaria con enfoque:
 
 ## Estado del repo
 
-- FASE 1 (esqueleto + CLI scaffold): `concilia --help` y `concilia init` operativos.
-- `concilia validate` / `concilia run` estan presentes como interfaz, pero fallan explicitamente con `NotImplementedError`
-  hasta habilitar las fases posteriores.
+- FASE 1: esqueleto + CLI scaffold (`concilia --help`, `concilia init`).
+- FASE 3: ingestion (parsing) implementada para CSV/XLSX/XML/PDF texto; OCR como extra opcional (fail-closed si falta).
+- `concilia validate` operativo (valida formatos y parsea entradas).
+- `concilia run` operativo (matching + `run.json`/`audit.jsonl` + `reporte_conciliacion.xlsx`).
 
 ## Instalacion (desarrollo)
 

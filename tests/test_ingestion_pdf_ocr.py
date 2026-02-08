@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
-pytest.skip("FASE 1: ingestion/OCR fuera de alcance (solo scaffold).", allow_module_level=True)
-
 import importlib.util
 from pathlib import Path
 

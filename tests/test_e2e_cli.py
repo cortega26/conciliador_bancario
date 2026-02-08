@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-pytest.skip("FASE 1: pruebas E2E de conciliacion fuera de alcance (solo scaffold).", allow_module_level=True)
-
 import json
 from pathlib import Path
 
@@ -75,12 +73,12 @@ def test_e2e_run_csv(tmp_path: Path) -> None:
             str(exp),
             "--out",
             str(out),
+            "--dry-run",
         ],
     )
     assert r.exit_code == 0, r.stdout
     assert (out / "run.json").exists()
     assert (out / "audit.jsonl").exists()
-    assert (out / "reporte_conciliacion.xlsx").exists()
 
     data = json.loads((out / "run.json").read_text(encoding="utf-8"))
     assert "run_id" in data
@@ -110,3 +108,37 @@ def test_idempotencia_run_id(tmp_path: Path) -> None:
     run_id_1 = json.loads((out1 / "run.json").read_text(encoding="utf-8"))["run_id"]
     run_id_2 = json.loads((out2 / "run.json").read_text(encoding="utf-8"))["run_id"]
     assert run_id_1 == run_id_2
+
+
+def test_run_crea_reporte_xlsx(tmp_path: Path) -> None:
+    runner = CliRunner()
+    cfg = tmp_path / "config.yaml"
+    bank = tmp_path / "bank.csv"
+    exp = tmp_path / "exp.csv"
+    _write(cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n")
+    _write(
+        bank,
+        "\n".join(
+            [
+                "fecha_operacion,monto,moneda,descripcion,referencia",
+                "05/01/2026,1000,CLP,TEST,FAC-1",
+                "",
+            ]
+        ),
+    )
+    _write(
+        exp,
+        "\n".join(
+            [
+                "fecha,monto,moneda,descripcion,referencia",
+                "05/01/2026,1000,CLP,TEST,FAC-1",
+                "",
+            ]
+        ),
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+
+    r = runner.invoke(app, ["run", "--config", str(cfg), "--bank", str(bank), "--expected", str(exp), "--out", str(out)])
+    assert r.exit_code == 0, r.stdout
+    assert (out / "reporte_conciliacion.xlsx").exists()

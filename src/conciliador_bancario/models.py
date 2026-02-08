@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-MODELO_INTERNO_VERSION = "1"
+MODELO_INTERNO_VERSION = "2"
 
 
 class OrigenDato(str, Enum):
@@ -27,20 +27,28 @@ class NivelConfianza(str, Enum):
     baja = "baja"
 
 
-class MetadataConfianza(BaseModel):
+class CBModel(BaseModel):
+    # Forzamos schemas estables y evitamos que se cuelen campos inesperados.
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class MetadataConfianza(CBModel):
     score: float = Field(ge=0.0, le=1.0)
     nivel: NivelConfianza
     origen: OrigenDato
     notas: str | None = None
 
 
-class CampoConConfianza(BaseModel):
+class CampoConConfianza(CBModel):
     valor: Any
     confianza: MetadataConfianza
 
 
-class TransaccionBancaria(BaseModel):
-    id: str
+Moneda = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+
+
+class TransaccionBancaria(CBModel):
+    id: str = Field(min_length=1)
     cuenta_mask: str | None = None
     banco: str | None = None
     bloquea_autoconcilia: bool = False
@@ -48,22 +56,54 @@ class TransaccionBancaria(BaseModel):
     fecha_operacion: CampoConConfianza
     fecha_contable: CampoConConfianza | None = None
     monto: CampoConConfianza
-    moneda: str = "CLP"
+    moneda: Moneda = "CLP"
     descripcion: CampoConConfianza
     referencia: CampoConConfianza | None = None
-    archivo_origen: str
+    archivo_origen: str = Field(min_length=1)
     origen: OrigenDato
     fila_origen: int | None = None
 
+    @model_validator(mode="after")
+    def _validar_bloqueo(self) -> TransaccionBancaria:
+        if self.bloquea_autoconcilia and not (self.motivo_bloqueo_autoconcilia or "").strip():
+            raise ValueError("motivo_bloqueo_autoconcilia requerido si bloquea_autoconcilia=True")
+        if not isinstance(self.fecha_operacion.valor, date):
+            raise ValueError("fecha_operacion.valor debe ser date")
+        if self.fecha_contable is not None and self.fecha_contable.valor is not None and not isinstance(
+            self.fecha_contable.valor, date
+        ):
+            raise ValueError("fecha_contable.valor debe ser date")
+        if not isinstance(self.monto.valor, Decimal):
+            raise ValueError("monto.valor debe ser Decimal")
+        if not isinstance(self.descripcion.valor, str):
+            raise ValueError("descripcion.valor debe ser str")
+        if self.referencia is not None and self.referencia.valor is not None and not isinstance(self.referencia.valor, str):
+            raise ValueError("referencia.valor debe ser str")
+        return self
 
-class MovimientoEsperado(BaseModel):
-    id: str
+
+class MovimientoEsperado(CBModel):
+    id: str = Field(min_length=1)
     fecha: CampoConConfianza
     monto: CampoConConfianza
-    moneda: str = "CLP"
+    moneda: Moneda = "CLP"
     descripcion: CampoConConfianza
     referencia: CampoConConfianza | None = None
     tercero: CampoConConfianza | None = None
+
+    @model_validator(mode="after")
+    def _validar_tipos(self) -> MovimientoEsperado:
+        if not isinstance(self.fecha.valor, date):
+            raise ValueError("fecha.valor debe ser date")
+        if not isinstance(self.monto.valor, Decimal):
+            raise ValueError("monto.valor debe ser Decimal")
+        if not isinstance(self.descripcion.valor, str):
+            raise ValueError("descripcion.valor debe ser str")
+        if self.referencia is not None and self.referencia.valor is not None and not isinstance(self.referencia.valor, str):
+            raise ValueError("referencia.valor debe ser str")
+        if self.tercero is not None and self.tercero.valor is not None and not isinstance(self.tercero.valor, str):
+            raise ValueError("tercero.valor debe ser str")
+        return self
 
 
 class EstadoMatch(str, Enum):
@@ -73,14 +113,14 @@ class EstadoMatch(str, Enum):
     rechazado = "rechazado"
 
 
-class Match(BaseModel):
-    id: str
+class Match(CBModel):
+    id: str = Field(min_length=1)
     estado: EstadoMatch
     score: float = Field(ge=0.0, le=1.0)
-    regla: str
-    explicacion: str
-    transacciones_bancarias: list[str]
-    movimientos_esperados: list[str]
+    regla: str = Field(min_length=1)
+    explicacion: str = Field(min_length=1)
+    transacciones_bancarias: list[str] = Field(min_length=1)
+    movimientos_esperados: list[str] = Field(min_length=1)
     bloqueado_por_confianza: bool = False
 
 
@@ -90,25 +130,25 @@ class SeveridadHallazgo(str, Enum):
     critica = "critica"
 
 
-class Hallazgo(BaseModel):
-    id: str
+class Hallazgo(CBModel):
+    id: str = Field(min_length=1)
     severidad: SeveridadHallazgo
-    tipo: str
-    mensaje: str
+    tipo: str = Field(min_length=1)
+    mensaje: str = Field(min_length=1)
     entidad: Literal["banco", "esperado", "match", "sistema"]
     entidad_id: str | None = None
     detalles: dict[str, Any] = Field(default_factory=dict)
 
 
-class ConfiguracionCliente(BaseModel):
-    cliente: str
+class ConfiguracionCliente(CBModel):
+    cliente: str = Field(min_length=1)
     rut_mask: str | None = None
-    ventana_dias_monto_fecha: int = 3
-    umbral_autoconcilia: float = 0.85
-    umbral_confianza_campos: float = 0.80
+    ventana_dias_monto_fecha: int = Field(default=3, ge=0)
+    umbral_autoconcilia: float = Field(default=0.85, ge=0.0, le=1.0)
+    umbral_confianza_campos: float = Field(default=0.80, ge=0.0, le=1.0)
     permitir_ocr: bool = False
     mask_por_defecto: bool = True
-    moneda_default: str = "CLP"
+    moneda_default: Moneda = "CLP"
 
 
 @dataclass(frozen=True)

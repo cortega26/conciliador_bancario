@@ -10,4 +10,5 @@ build/
 .idea/
 .vscode/
 salida/
+internals/
 

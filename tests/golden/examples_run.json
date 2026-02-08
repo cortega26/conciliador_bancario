@@ -1,0 +1,49 @@
+{
+  "fingerprint": {
+    "bank_sha256": "36bed6866e117ea50c4affffe76b244d89d06868b98911c5eee6feb2a0527541",
+    "config_sha256": "e945e0648ad08a255d9dc1043e7227db54a69048693fd293d242ad27af9a6f4d",
+    "expected_sha256": "a351abb4480819bd5d11628f70799d4ef50ac6e9503522c305c404472055d31b",
+    "mask": true,
+    "modelo_interno_version": "2",
+    "permitir_ocr": false,
+    "version": "0.1.0"
+  },
+  "hallazgos": [
+    {
+      "detalles": {},
+      "entidad": "esperado",
+      "entidad_id": "EXP-002",
+      "id": "H-2063c7d31ebde6",
+      "mensaje": "Movimiento esperado sin match (pendiente).",
+      "severidad": "advertencia",
+      "tipo": "pendiente_esperado"
+    },
+    {
+      "detalles": {},
+      "entidad": "banco",
+      "entidad_id": "TX-6bc852f1da26",
+      "id": "H-542ae4abb1ad63",
+      "mensaje": "Transaccion bancaria con match (ver Matches).",
+      "severidad": "info",
+      "tipo": "tx_con_match"
+    }
+  ],
+  "matches": [
+    {
+      "bloqueado_por_confianza": false,
+      "estado": "conciliado",
+      "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto.",
+      "id": "M-639351ed39c571",
+      "movimientos_esperados": [
+        "EXP-001"
+      ],
+      "regla": "ref_exacta",
+      "score": 1.0,
+      "transacciones_bancarias": [
+        "TX-6bc852f1da26"
+      ]
+    }
+  ],
+  "run_id": "b6b8c6bdf6eb7f97"
+}
+

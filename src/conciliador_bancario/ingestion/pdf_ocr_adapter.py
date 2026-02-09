@@ -14,7 +14,12 @@ from conciliador_bancario.models import (
     TransaccionBancaria,
 )
 from conciliador_bancario.utils.hashing import sha256_json_estable
-from conciliador_bancario.utils.parsing import normalizar_texto, parse_fecha_chile, parse_monto_clp
+from conciliador_bancario.utils.parsing import (
+    ErrorParseo,
+    normalizar_texto,
+    parse_fecha_chile,
+    parse_monto_clp,
+)
 
 
 def _campo(valor: Any, *, notas: str | None = None, degrade: float = 0.0) -> CampoConConfianza:
@@ -22,7 +27,9 @@ def _campo(valor: Any, *, notas: str | None = None, degrade: float = 0.0) -> Cam
     score = max(0.0, min(1.0, base - degrade))
     return CampoConConfianza(
         valor=valor,
-        confianza=MetadataConfianza(score=score, nivel=NivelConfianza.baja, origen=OrigenDato.pdf_ocr, notas=notas),
+        confianza=MetadataConfianza(
+            score=score, nivel=NivelConfianza.baja, origen=OrigenDato.pdf_ocr, notas=notas
+        ),
     )
 
 
@@ -30,14 +37,16 @@ def _id_tx(path: Path, idx: int, data_norm: dict[str, Any]) -> str:
     return "TX-" + sha256_json_estable({"file": path.name, "idx": idx, "data": data_norm})[:12]
 
 
-def cargar_transacciones_pdf_ocr(path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter) -> list[TransaccionBancaria]:
+def cargar_transacciones_pdf_ocr(
+    path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
+) -> list[TransaccionBancaria]:
     """
     OCR es un fallback controlado (baja confianza).
     Si OCR no esta disponible, se falla explicitamente (fail-closed).
     """
     try:
-        from pdf2image import convert_from_path  # type: ignore
         import pytesseract  # type: ignore
+        from pdf2image import convert_from_path  # type: ignore
     except Exception as e:  # noqa: BLE001
         raise ErrorIngestion(
             "OCR no disponible. Instale extras: pip install -e '.[pdf_ocr]' y dependencias del sistema (poppler)."
@@ -52,6 +61,19 @@ def cargar_transacciones_pdf_ocr(path: Path, *, cfg: ConfiguracionCliente, audit
 
     out: list[TransaccionBancaria] = []
     idx = 0
+
+    def _try_parse_fecha(texto: str):
+        try:
+            return parse_fecha_chile(texto)
+        except ErrorParseo:
+            return None
+
+    def _try_parse_monto(texto: str):
+        try:
+            return parse_monto_clp(texto)
+        except ErrorParseo:
+            return None
+
     for raw_line in full.splitlines():
         line = normalizar_texto(raw_line)
         if not line:
@@ -60,17 +82,14 @@ def cargar_transacciones_pdf_ocr(path: Path, *, cfg: ConfiguracionCliente, audit
         if len(parts) < 2:
             continue
         fecha_txt = parts[0]
-        try:
-            fecha = parse_fecha_chile(fecha_txt)
-        except Exception:
+        fecha = _try_parse_fecha(fecha_txt)
+        if fecha is None:
             continue
         monto = None
         for tok in reversed(parts):
-            try:
-                monto = parse_monto_clp(tok)
+            monto = _try_parse_monto(tok)
+            if monto is not None:
                 break
-            except Exception:
-                continue
         if monto is None:
             continue
         desc = normalizar_texto(line.replace(fecha_txt, "", 1))

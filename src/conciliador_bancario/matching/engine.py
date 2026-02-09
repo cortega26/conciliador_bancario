@@ -20,15 +20,21 @@ from conciliador_bancario.utils.parsing import normalizar_referencia
 
 
 def _match_id(run_id: str, tx_ids: list[str], exp_ids: list[str], regla: str) -> str:
-    return "M-" + sha256_json_estable({"run_id": run_id, "tx": sorted(tx_ids), "exp": sorted(exp_ids), "r": regla})[
-        :14
-    ]
+    return (
+        "M-"
+        + sha256_json_estable(
+            {"run_id": run_id, "tx": sorted(tx_ids), "exp": sorted(exp_ids), "r": regla}
+        )[:14]
+    )
 
 
 def _hallazgo_id(run_id: str, tipo: str, entidad: str, entidad_id: str | None, extra: dict) -> str:
-    return "H-" + sha256_json_estable({"run_id": run_id, "tipo": tipo, "ent": entidad, "id": entidad_id, "x": extra})[
-        :14
-    ]
+    return (
+        "H-"
+        + sha256_json_estable(
+            {"run_id": run_id, "tipo": tipo, "ent": entidad, "id": entidad_id, "x": extra}
+        )[:14]
+    )
 
 
 def _valor_fecha_tx(tx: TransaccionBancaria) -> date:
@@ -159,7 +165,13 @@ def conciliar(
             continue
         cands = [e for e in idx_exp_ref.get(r, []) if e.id not in used_exp]
         if len(cands) > 1:
-            hid = _hallazgo_id(run_id, "ambiguedad_referencia", "banco", tx.id, {"cands": [e.id for e in cands], "ref": r})
+            hid = _hallazgo_id(
+                run_id,
+                "ambiguedad_referencia",
+                "banco",
+                tx.id,
+                {"cands": [e.id for e in cands], "ref": r},
+            )
             h = Hallazgo(
                 id=hid,
                 severidad=SeveridadHallazgo.advertencia,
@@ -170,7 +182,13 @@ def conciliar(
                 detalles={"tx_id": tx.id, "referencia": r, "candidatos": [e.id for e in cands]},
             )
             hallazgos.append(h)
-            audit.write(AuditEvent("hallazgo", "Ambiguedad por referencia", {"hallazgo_id": h.id, "tx_id": tx.id, "ref": r}))
+            audit.write(
+                AuditEvent(
+                    "hallazgo",
+                    "Ambiguedad por referencia",
+                    {"hallazgo_id": h.id, "tx_id": tx.id, "ref": r},
+                )
+            )
             continue
         if len(cands) != 1:
             continue
@@ -181,7 +199,12 @@ def conciliar(
                 "referencia_coincide_monto_difiere",
                 "banco",
                 tx.id,
-                {"exp_id": exp.id, "ref": r, "m_tx": str(_valor_monto_tx(tx)), "m_exp": str(_valor_monto_exp(exp))},
+                {
+                    "exp_id": exp.id,
+                    "ref": r,
+                    "m_tx": str(_valor_monto_tx(tx)),
+                    "m_exp": str(_valor_monto_exp(exp)),
+                },
             )
             h = Hallazgo(
                 id=hid,
@@ -210,7 +233,11 @@ def conciliar(
 
         bloqueado, motivo = _bloqueado_por_confianza(cfg, [tx], [exp])
         score = 1.0
-        estado = EstadoMatch.conciliado if (score >= cfg.umbral_autoconcilia and not bloqueado) else EstadoMatch.pendiente
+        estado = (
+            EstadoMatch.conciliado
+            if (score >= cfg.umbral_autoconcilia and not bloqueado)
+            else EstadoMatch.pendiente
+        )
         explicacion = f"Match por referencia exacta ({r}) y monto exacto."
         if bloqueado and motivo:
             explicacion += f" BLOQUEADO: {motivo}"
@@ -264,7 +291,9 @@ def conciliar(
         if not cands:
             continue
         if len(cands) > 1:
-            hid = _hallazgo_id(run_id, "ambiguedad_monto_fecha", "banco", tx.id, {"cands": [e.id for e in cands]})
+            hid = _hallazgo_id(
+                run_id, "ambiguedad_monto_fecha", "banco", tx.id, {"cands": [e.id for e in cands]}
+            )
             hallazgos.append(
                 Hallazgo(
                     id=hid,
@@ -281,8 +310,14 @@ def conciliar(
         exp = cands[0]
         bloqueado, motivo = _bloqueado_por_confianza(cfg, [tx], [exp])
         delta = _dias_diff(tx_fecha, _valor_fecha_exp(exp))
-        score = 0.90 if delta == 0 else 0.80  # mas conservador: delta != 0 no autoconcilia por defecto
-        estado = EstadoMatch.conciliado if (score >= cfg.umbral_autoconcilia and not bloqueado) else EstadoMatch.sugerido
+        score = (
+            0.90 if delta == 0 else 0.80
+        )  # mas conservador: delta != 0 no autoconcilia por defecto
+        estado = (
+            EstadoMatch.conciliado
+            if (score >= cfg.umbral_autoconcilia and not bloqueado)
+            else EstadoMatch.sugerido
+        )
         explicacion = (
             f"Match por monto exacto y ventana temporal (+/-{cfg.ventana_dias_monto_fecha} dias). "
             f"Delta dias: {delta}."
@@ -382,7 +417,12 @@ def conciliar(
         AuditEvent(
             "matching",
             "Matching completado",
-            {"txs": len(transacciones), "exps": len(esperados), "matches": len(matches), "hallazgos": len(hallazgos)},
+            {
+                "txs": len(transacciones),
+                "exps": len(esperados),
+                "matches": len(matches),
+                "hallazgos": len(hallazgos),
+            },
         )
     )
 

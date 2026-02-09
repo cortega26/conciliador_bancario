@@ -4,8 +4,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
-
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -14,6 +12,7 @@ from conciliador_bancario.models import (
     OrigenDato,
     TransaccionBancaria,
 )
+from pydantic import ValidationError
 
 
 def _conf(score: float = 0.9) -> MetadataConfianza:

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 
+from conciliador_bancario.utils.parsing import parse_fecha_chile, parse_monto_clp
 from hypothesis import given
 from hypothesis import strategies as st
-
-from conciliador_bancario.utils.parsing import parse_fecha_chile, parse_monto_clp
 
 
 @given(st.integers(min_value=-10_000_000, max_value=10_000_000))
@@ -21,4 +20,3 @@ def test_parse_fecha_chile_formatos_basicos(dt: date) -> None:
     # Soporta dd/mm/yyyy y yyyy-mm-dd
     assert parse_fecha_chile(dt.strftime("%d/%m/%Y")) == dt
     assert parse_fecha_chile(dt.strftime("%Y-%m-%d")) == dt
-

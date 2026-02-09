@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
-
 from decimal import Decimal
 
+import pytest
 from conciliador_bancario.utils.parsing import ErrorParseo, parse_fecha_chile, parse_monto_clp
 
 

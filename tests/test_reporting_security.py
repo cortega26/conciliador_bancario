@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from conciliador_bancario.cli import app
 from openpyxl import load_workbook
 from typer.testing import CliRunner
-
-from conciliador_bancario.cli import app
 
 
 def test_reporte_previene_excel_injection(tmp_path: Path) -> None:

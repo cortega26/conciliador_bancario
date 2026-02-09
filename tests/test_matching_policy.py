@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from decimal import Decimal
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter
@@ -9,18 +7,24 @@ from conciliador_bancario.matching.engine import conciliar
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
+    EstadoMatch,
     MetadataConfianza,
+    MovimientoEsperado,
     NivelConfianza,
     OrigenDato,
     TransaccionBancaria,
-    MovimientoEsperado,
-    EstadoMatch,
 )
 
 
 def _campo(valor, score: float, origen: OrigenDato):
-    nivel = NivelConfianza.alta if score >= 0.85 else (NivelConfianza.media if score >= 0.55 else NivelConfianza.baja)
-    return CampoConConfianza(valor=valor, confianza=MetadataConfianza(score=score, nivel=nivel, origen=origen))
+    nivel = (
+        NivelConfianza.alta
+        if score >= 0.85
+        else (NivelConfianza.media if score >= 0.55 else NivelConfianza.baja)
+    )
+    return CampoConConfianza(
+        valor=valor, confianza=MetadataConfianza(score=score, nivel=nivel, origen=origen)
+    )
 
 
 def test_pdf_ocr_no_autoconcilia_aun_con_ref() -> None:
@@ -64,7 +68,9 @@ def test_fail_closed_si_ambiguedad_monto_fecha() -> None:
         banco=None,
         bloquea_autoconcilia=False,
         motivo_bloqueo_autoconcilia=None,
-        fecha_operacion=CampoConConfianza(valor=__import__("datetime").date(2026, 1, 5), confianza=base_conf),
+        fecha_operacion=CampoConConfianza(
+            valor=__import__("datetime").date(2026, 1, 5), confianza=base_conf
+        ),
         fecha_contable=None,
         monto=CampoConConfianza(valor=Decimal("150000"), confianza=base_conf),
         moneda="CLP",

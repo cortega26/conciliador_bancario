@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import re
 
-from conciliador_bancario.models import CampoConConfianza, ConfiguracionCliente, MovimientoEsperado, TransaccionBancaria
+from conciliador_bancario.models import (
+    CampoConConfianza,
+    ConfiguracionCliente,
+    MovimientoEsperado,
+    TransaccionBancaria,
+)
 from conciliador_bancario.utils.parsing import normalizar_referencia, normalizar_texto
-
 
 _MONEDA_RE = re.compile(r"^[A-Z]{3}$")
 
@@ -41,7 +45,9 @@ def _campo_ref_normalizado(c: CampoConConfianza) -> CampoConConfianza:
     return c.model_copy(update={"valor": nv})
 
 
-def normalizar_transaccion(tx: TransaccionBancaria, *, cfg: ConfiguracionCliente) -> TransaccionBancaria:
+def normalizar_transaccion(
+    tx: TransaccionBancaria, *, cfg: ConfiguracionCliente
+) -> TransaccionBancaria:
     """
     Normalizacion estable (sin heuristicas):
     - moneda en ISO-3 mayusculas
@@ -62,7 +68,9 @@ def normalizar_transaccion(tx: TransaccionBancaria, *, cfg: ConfiguracionCliente
     return tx.model_copy(update={"moneda": moneda, "descripcion": desc, "referencia": ref})
 
 
-def normalizar_movimiento(exp: MovimientoEsperado, *, cfg: ConfiguracionCliente) -> MovimientoEsperado:
+def normalizar_movimiento(
+    exp: MovimientoEsperado, *, cfg: ConfiguracionCliente
+) -> MovimientoEsperado:
     _ = cfg
     moneda = normalizar_moneda(exp.moneda)
     desc = _campo_str_normalizado(exp.descripcion)
@@ -77,9 +85,16 @@ def normalizar_movimiento(exp: MovimientoEsperado, *, cfg: ConfiguracionCliente)
         if not str(terc.valor).strip():
             terc = None
 
-    if moneda == exp.moneda and desc is exp.descripcion and ref is exp.referencia and terc is exp.tercero:
+    if (
+        moneda == exp.moneda
+        and desc is exp.descripcion
+        and ref is exp.referencia
+        and terc is exp.tercero
+    ):
         return exp
-    return exp.model_copy(update={"moneda": moneda, "descripcion": desc, "referencia": ref, "tercero": terc})
+    return exp.model_copy(
+        update={"moneda": moneda, "descripcion": desc, "referencia": ref, "tercero": terc}
+    )
 
 
 def normalizar_lote(
@@ -94,4 +109,3 @@ def normalizar_lote(
     ntx = [normalizar_transaccion(t, cfg=cfg) for t in transacciones]
     nexp = [normalizar_movimiento(e, cfg=cfg) for e in esperados]
     return ntx, nexp
-

@@ -4,7 +4,8 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree as ET
+
+from defusedxml import ElementTree as ET
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
@@ -30,7 +31,9 @@ from conciliador_bancario.utils.parsing import (
 def _campo(valor: Any, *, notas: str | None = None) -> CampoConConfianza:
     return CampoConConfianza(
         valor=valor,
-        confianza=MetadataConfianza(score=0.95, nivel=NivelConfianza.alta, origen=OrigenDato.xml, notas=notas),
+        confianza=MetadataConfianza(
+            score=0.95, nivel=NivelConfianza.alta, origen=OrigenDato.xml, notas=notas
+        ),
     )
 
 
@@ -43,7 +46,9 @@ def _txt(node: ET.Element, tag: str) -> str:
     return normalizar_texto(el.text if el is not None and el.text else "")
 
 
-def cargar_transacciones_xml(path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter) -> list[TransaccionBancaria]:
+def cargar_transacciones_xml(
+    path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
+) -> list[TransaccionBancaria]:
     """
     XML MVP (extensible):
 
@@ -68,7 +73,11 @@ def cargar_transacciones_xml(path: Path, *, cfg: ConfiguracionCliente, audit: Js
     cuenta_mask = enmascarar_cuenta(cuenta_raw) if cuenta_raw else None
 
     movs = list(root.findall(".//movimiento"))
-    audit.write(AuditEvent("ingestion", "XML cartola cargado", {"archivo": path.name, "movimientos": len(movs)}))
+    audit.write(
+        AuditEvent(
+            "ingestion", "XML cartola cargado", {"archivo": path.name, "movimientos": len(movs)}
+        )
+    )
 
     out: list[TransaccionBancaria] = []
     for idx, m in enumerate(movs, start=1):

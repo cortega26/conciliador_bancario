@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from conciliador_bancario.cli import app
+from typer.testing import CliRunner
 
 
 def test_audit_jsonl_incluye_run_id_y_seq(tmp_path: Path) -> None:
@@ -41,4 +40,3 @@ def test_audit_jsonl_incluye_run_id_y_seq(tmp_path: Path) -> None:
         seqs.append(int(ev["seq"]))
     assert seqs[0] == 0
     assert seqs == list(range(0, len(seqs)))
-

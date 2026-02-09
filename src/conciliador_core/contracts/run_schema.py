@@ -62,10 +62,12 @@ class RunPayload(_CBContractModel):
     hallazgos: list[RunHallazgo]
 
     @model_validator(mode="after")
-    def _validate_schema_version_and_invariants(self) -> "RunPayload":
+    def _validate_schema_version_and_invariants(self) -> RunPayload:
         want = RUN_JSON_SCHEMA_VERSION
         if self.schema_version != want:
-            raise ValueError(f"schema_version inesperada: {self.schema_version!r} (esperado {want!r})")
+            raise ValueError(
+                f"schema_version inesperada: {self.schema_version!r} (esperado {want!r})"
+            )
 
         # Valida SemVer para evitar strings arbitrarias.
         _parse_semver(self.schema_version)
@@ -77,12 +79,16 @@ class RunPayload(_CBContractModel):
             for tx in m.transacciones_bancarias:
                 prev = seen_tx.get(tx)
                 if prev is not None and prev != m.id:
-                    raise ValueError(f"Invariante violada (run.json): tx_id en multiples matches: {tx}")
+                    raise ValueError(
+                        f"Invariante violada (run.json): tx_id en multiples matches: {tx}"
+                    )
                 seen_tx[tx] = m.id
             for exp in m.movimientos_esperados:
                 prev = seen_exp.get(exp)
                 if prev is not None and prev != m.id:
-                    raise ValueError(f"Invariante violada (run.json): exp_id en multiples matches: {exp}")
+                    raise ValueError(
+                        f"Invariante violada (run.json): exp_id en multiples matches: {exp}"
+                    )
                 seen_exp[exp] = m.id
 
         return self
@@ -144,7 +150,9 @@ class RunPayloadConsumer(_CBContractConsumerModel):
     hallazgos: list[RunHallazgoConsumer]
 
 
-def validate_run_payload_for_consumer(payload: dict[str, Any], *, accept_major: int | None = None) -> dict[str, Any]:
+def validate_run_payload_for_consumer(
+    payload: dict[str, Any], *, accept_major: int | None = None
+) -> dict[str, Any]:
     """
     Validador para consumidores (Premium u otros):
 

@@ -22,7 +22,12 @@ class JsonlAuditWriter:
         self._seq = 0
 
     def write(self, event: AuditEvent) -> None:
-        payload: dict[str, Any] = {"seq": self._seq, "tipo": event.tipo, "mensaje": event.mensaje, "detalles": event.detalles}
+        payload: dict[str, Any] = {
+            "seq": self._seq,
+            "tipo": event.tipo,
+            "mensaje": event.mensaje,
+            "detalles": event.detalles,
+        }
         if self._run_id is not None:
             payload["run_id"] = self._run_id
         line = json.dumps(

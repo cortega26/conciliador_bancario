@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from pathlib import Path
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter
@@ -14,8 +12,8 @@ def test_ingestion_xml_confianza_alta(tmp_path: Path) -> None:
     xml.write_text(
         "\n".join(
             [
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-                "<cartola banco=\"Banco Demo\" cuenta=\"123456789012\">",
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<cartola banco="Banco Demo" cuenta="123456789012">',
                 "  <movimiento>",
                 "    <fecha_operacion>05/01/2026</fecha_operacion>",
                 "    <fecha_contable>05/01/2026</fecha_contable>",

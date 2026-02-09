@@ -8,7 +8,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 MODELO_INTERNO_VERSION = "2"
 
 
@@ -69,15 +68,21 @@ class TransaccionBancaria(CBModel):
             raise ValueError("motivo_bloqueo_autoconcilia requerido si bloquea_autoconcilia=True")
         if not isinstance(self.fecha_operacion.valor, date):
             raise ValueError("fecha_operacion.valor debe ser date")
-        if self.fecha_contable is not None and self.fecha_contable.valor is not None and not isinstance(
-            self.fecha_contable.valor, date
+        if (
+            self.fecha_contable is not None
+            and self.fecha_contable.valor is not None
+            and not isinstance(self.fecha_contable.valor, date)
         ):
             raise ValueError("fecha_contable.valor debe ser date")
         if not isinstance(self.monto.valor, Decimal):
             raise ValueError("monto.valor debe ser Decimal")
         if not isinstance(self.descripcion.valor, str):
             raise ValueError("descripcion.valor debe ser str")
-        if self.referencia is not None and self.referencia.valor is not None and not isinstance(self.referencia.valor, str):
+        if (
+            self.referencia is not None
+            and self.referencia.valor is not None
+            and not isinstance(self.referencia.valor, str)
+        ):
             raise ValueError("referencia.valor debe ser str")
         return self
 
@@ -99,9 +104,17 @@ class MovimientoEsperado(CBModel):
             raise ValueError("monto.valor debe ser Decimal")
         if not isinstance(self.descripcion.valor, str):
             raise ValueError("descripcion.valor debe ser str")
-        if self.referencia is not None and self.referencia.valor is not None and not isinstance(self.referencia.valor, str):
+        if (
+            self.referencia is not None
+            and self.referencia.valor is not None
+            and not isinstance(self.referencia.valor, str)
+        ):
             raise ValueError("referencia.valor debe ser str")
-        if self.tercero is not None and self.tercero.valor is not None and not isinstance(self.tercero.valor, str):
+        if (
+            self.tercero is not None
+            and self.tercero.valor is not None
+            and not isinstance(self.tercero.valor, str)
+        ):
             raise ValueError("tercero.valor debe ser str")
         return self
 

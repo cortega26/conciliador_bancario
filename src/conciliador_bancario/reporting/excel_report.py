@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -41,7 +41,7 @@ def generar_reporte_excel(
     wb.remove(wb.active)
 
     # Intento de determinismo: metadatos fijos. (openpyxl puede sobreescribir `modified` al guardar)
-    fixed = datetime(2000, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    fixed = datetime(2000, 1, 1, 0, 0, 0, tzinfo=UTC)
     wb.properties.created = fixed
     wb.properties.modified = fixed
 
@@ -92,11 +92,19 @@ def generar_reporte_excel(
             [
                 tx.id,
                 str(tx.fecha_operacion.valor),
-                str(tx.fecha_contable.valor) if tx.fecha_contable is not None and tx.fecha_contable.valor else "",
+                (
+                    str(tx.fecha_contable.valor)
+                    if tx.fecha_contable is not None and tx.fecha_contable.valor
+                    else ""
+                ),
                 str(tx.monto.valor),
                 tx.moneda,
                 _mask_cell(str(tx.descripcion.valor), mask=mask),
-                _mask_cell(str(tx.referencia.valor), mask=mask) if tx.referencia is not None else "",
+                (
+                    _mask_cell(str(tx.referencia.valor), mask=mask)
+                    if tx.referencia is not None
+                    else ""
+                ),
                 tx.origen.value,
                 _mask_cell(tx.archivo_origen, mask=mask),
                 tx.fila_origen or "",
@@ -156,10 +164,20 @@ def generar_reporte_excel(
 
     # Hallazgos
     ws_h = wb.create_sheet("Hallazgos")
-    h_headers = ["hallazgo_id", "severidad", "tipo", "mensaje", "entidad", "entidad_id", "detalles_json"]
+    h_headers = [
+        "hallazgo_id",
+        "severidad",
+        "tipo",
+        "mensaje",
+        "entidad",
+        "entidad_id",
+        "detalles_json",
+    ]
     h_rows: list[list[object]] = []
     for h in hallazgos:
-        detalles = json.dumps(h.detalles or {}, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        detalles = json.dumps(
+            h.detalles or {}, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        )
         h_rows.append(
             [
                 h.id,
@@ -174,4 +192,3 @@ def generar_reporte_excel(
     _ws_write_table(ws_h, h_headers, h_rows)
 
     wb.save(path)
-

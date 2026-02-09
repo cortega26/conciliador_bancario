@@ -37,11 +37,15 @@ def _campo(valor: Any, *, origen: OrigenDato, degrade: float = 0.0) -> CampoConC
         if score >= 0.85
         else (NivelConfianza.media if score >= 0.55 else NivelConfianza.baja)
     )
-    return CampoConConfianza(valor=valor, confianza=MetadataConfianza(score=score, nivel=nivel, origen=origen))
+    return CampoConConfianza(
+        valor=valor, confianza=MetadataConfianza(score=score, nivel=nivel, origen=origen)
+    )
 
 
 def _id(path: Path, fila: int, data_norm: dict[str, Any], prefix: str) -> str:
-    return f"{prefix}-" + sha256_json_estable({"file": path.name, "row": fila, "data": data_norm})[:12]
+    return (
+        f"{prefix}-" + sha256_json_estable({"file": path.name, "row": fila, "data": data_norm})[:12]
+    )
 
 
 def _as_text(v: Any) -> str:
@@ -66,7 +70,9 @@ def _build_header_map(header: tuple[Any, ...] | None) -> dict[str, int]:
     return {_keynorm(str(h)): idx for idx, h in enumerate(header) if h is not None}
 
 
-def _select_worksheet_with_columns(wb, required: list[list[str]]) -> tuple[Any, dict[str, int], tuple[Any, ...]]:
+def _select_worksheet_with_columns(
+    wb, required: list[list[str]]
+) -> tuple[Any, dict[str, int], tuple[Any, ...]]:
     """
     required: lista de grupos; cada grupo contiene alias aceptados.
     Se selecciona la primera hoja que contenga al menos 1 alias por grupo.
@@ -115,7 +121,9 @@ def cargar_transacciones_xlsx(
     c_ref = col("referencia", "ref", "comprobante", "folio", "nro_referencia")
     c_cuenta = col("cuenta", "nro_cuenta", "cuenta_origen")
 
-    audit.write(AuditEvent("ingestion", "XLSX banco cargado", {"archivo": path.name, "hoja": ws.title}))
+    audit.write(
+        AuditEvent("ingestion", "XLSX banco cargado", {"archivo": path.name, "hoja": ws.title})
+    )
 
     out: list[TransaccionBancaria] = []
     rows = ws.iter_rows(values_only=True)
@@ -125,12 +133,17 @@ def cargar_transacciones_xlsx(
             continue
         try:
             fecha_op = _as_date(row[c_fecha_op])
-            fecha_ct = _as_date(row[c_fecha_ct]) if (c_fecha_ct is not None and row[c_fecha_ct]) else None
+            fecha_ct = (
+                _as_date(row[c_fecha_ct]) if (c_fecha_ct is not None and row[c_fecha_ct]) else None
+            )
             monto: Decimal = parse_monto_clp(_as_text(row[c_monto]))
         except (ErrorParseo, IndexError) as e:
             raise ErrorIngestion(f"Fila {excel_row_idx}: parseo invalido: {e}") from e
 
-        moneda = (normalizar_texto(_as_text(row[c_moneda]) if c_moneda is not None else "") or cfg.moneda_default).upper()
+        moneda = (
+            normalizar_texto(_as_text(row[c_moneda]) if c_moneda is not None else "")
+            or cfg.moneda_default
+        ).upper()
         desc = normalizar_texto(_as_text(row[c_desc]))
         ref_raw = normalizar_texto(_as_text(row[c_ref]) if c_ref is not None else "")
         ref = normalizar_referencia(ref_raw) if ref_raw else ""
@@ -194,7 +207,9 @@ def cargar_movimientos_esperados_xlsx(
     c_ref = col("referencia", "ref", "folio", "nro_referencia")
     c_terc = col("tercero", "proveedor", "cliente")
 
-    audit.write(AuditEvent("ingestion", "XLSX esperados cargado", {"archivo": path.name, "hoja": ws.title}))
+    audit.write(
+        AuditEvent("ingestion", "XLSX esperados cargado", {"archivo": path.name, "hoja": ws.title})
+    )
 
     out: list[MovimientoEsperado] = []
     rows = ws.iter_rows(values_only=True)
@@ -208,7 +223,10 @@ def cargar_movimientos_esperados_xlsx(
         except (ErrorParseo, IndexError) as e:
             raise ErrorIngestion(f"Fila {excel_row_idx}: parseo invalido: {e}") from e
 
-        moneda = (normalizar_texto(_as_text(row[c_moneda]) if c_moneda is not None else "") or cfg.moneda_default).upper()
+        moneda = (
+            normalizar_texto(_as_text(row[c_moneda]) if c_moneda is not None else "")
+            or cfg.moneda_default
+        ).upper()
         desc = normalizar_texto(_as_text(row[c_desc]))
         ref_raw = normalizar_texto(_as_text(row[c_ref]) if c_ref is not None else "")
         ref = normalizar_referencia(ref_raw) if ref_raw else ""

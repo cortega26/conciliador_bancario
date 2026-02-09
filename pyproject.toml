@@ -14,10 +14,12 @@ keywords = ["conciliacion", "bancaria", "chile", "contabilidad", "cli"]
 dependencies = [
   "pydantic==2.7.4",
   "typer==0.12.3",
+  "click==8.1.7",
   "rich==13.7.1",
   "PyYAML==6.0.1",
   "openpyxl==3.1.2",
   "pypdf==4.2.0",
+  "defusedxml==0.7.1",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +27,8 @@ dev = [
   "pytest==8.2.0",
   "hypothesis==6.108.4",
   "ruff==0.4.10",
+  "black==24.10.0",
+  "bandit==1.7.8",
   "mypy==1.10.0",
   "types-PyYAML==6.0.12.20240808",
 ]
@@ -61,6 +65,22 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+ignore = [
+  # Black-compatible: don't fight long literals/URLs. Black doesn't reflow strings.
+  "E501",
+  # Small refactor suggestion with no practical benefit here.
+  "UP038",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer encourages Option(...) in defaults; this is intentional for CLI ergonomics.
+"src/conciliador_bancario/cli/app.py" = ["B008"]
+# Tests sometimes intentionally assert broad exceptions for contract/fail-closed behaviour.
+"tests/**/*.py" = ["B017"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
 
 [tool.mypy]
 python_version = "3.11"

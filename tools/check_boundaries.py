@@ -25,11 +25,15 @@ def _forbidden_needles() -> list[str]:
 
 def _git_ls_files(root: Path) -> list[Path]:
     if not (root / ".git").exists():
-        raise RuntimeError("No se encontro .git; este check esta pensado para correr en un working tree.")
+        raise RuntimeError(
+            "No se encontro .git; este check esta pensado para correr en un working tree."
+        )
     try:
         out = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
     except FileNotFoundError as e:
-        raise RuntimeError("git no esta disponible en PATH; no se puede listar archivos trackeados.") from e
+        raise RuntimeError(
+            "git no esta disponible en PATH; no se puede listar archivos trackeados."
+        ) from e
     paths: list[Path] = []
     for chunk in out.split(b"\x00"):
         if not chunk:
@@ -66,7 +70,9 @@ def scan_repo_for_forbidden_refs(*, root: Path) -> list[Finding]:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Check boundary rules: Core must not reference premium artifacts.")
+    ap = argparse.ArgumentParser(
+        description="Check boundary rules: Core must not reference premium artifacts."
+    )
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = ap.parse_args(argv)
 

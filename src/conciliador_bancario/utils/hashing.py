@@ -17,4 +17,3 @@ def sha256_archivo(path: Path) -> str:
 def sha256_json_estable(data: Any) -> str:
     dumped = json.dumps(data, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(dumped.encode("utf-8")).hexdigest()
-

@@ -1,0 +1,15 @@
+# Bandit config (SAST) - keep it high-signal and fail on real issues.
+#
+# Policy:
+# - Blocking: any finding reported in src/ (severity MEDIUM/HIGH).
+# - Informational: findings in tests/ are excluded from scanning.
+exclude_dirs:
+  - .venv
+  - build
+  - dist
+  - tests
+  - tools
+
+# Keep default test set. Skips should be justified and rare.
+skips: []
+

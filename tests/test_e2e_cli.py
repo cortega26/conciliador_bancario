@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import pytest
-
 import json
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from conciliador_bancario.cli import app
+from typer.testing import CliRunner
 
 
 def _write(path: Path, content: str) -> None:
@@ -90,7 +87,9 @@ def test_idempotencia_run_id(tmp_path: Path) -> None:
     cfg = tmp_path / "config.yaml"
     bank = tmp_path / "bank.csv"
     exp = tmp_path / "exp.csv"
-    _write(cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n")
+    _write(
+        cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n"
+    )
     _write(
         bank,
         "fecha_operacion,monto,descripcion\n05/01/2026,1000,TEST\n",
@@ -101,8 +100,36 @@ def test_idempotencia_run_id(tmp_path: Path) -> None:
     out1.mkdir()
     out2.mkdir()
 
-    r1 = runner.invoke(app, ["run", "--config", str(cfg), "--bank", str(bank), "--expected", str(exp), "--out", str(out1), "--dry-run"])
-    r2 = runner.invoke(app, ["run", "--config", str(cfg), "--bank", str(bank), "--expected", str(exp), "--out", str(out2), "--dry-run"])
+    r1 = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out1),
+            "--dry-run",
+        ],
+    )
+    r2 = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out2),
+            "--dry-run",
+        ],
+    )
     assert r1.exit_code == 0, r1.stdout
     assert r2.exit_code == 0, r2.stdout
     run_id_1 = json.loads((out1 / "run.json").read_text(encoding="utf-8"))["run_id"]
@@ -115,7 +142,9 @@ def test_run_crea_reporte_xlsx(tmp_path: Path) -> None:
     cfg = tmp_path / "config.yaml"
     bank = tmp_path / "bank.csv"
     exp = tmp_path / "exp.csv"
-    _write(cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n")
+    _write(
+        cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n"
+    )
     _write(
         bank,
         "\n".join(
@@ -139,6 +168,19 @@ def test_run_crea_reporte_xlsx(tmp_path: Path) -> None:
     out = tmp_path / "out"
     out.mkdir()
 
-    r = runner.invoke(app, ["run", "--config", str(cfg), "--bank", str(bank), "--expected", str(exp), "--out", str(out)])
+    r = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out),
+        ],
+    )
     assert r.exit_code == 0, r.stdout
     assert (out / "reporte_conciliacion.xlsx").exists()

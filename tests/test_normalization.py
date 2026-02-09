@@ -4,7 +4,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -64,4 +63,3 @@ def test_normalizacion_canoniza_descripcion_y_referencia() -> None:
     assert nexp.descripcion.valor == "Pago factura"
     assert nexp.referencia is not None and nexp.referencia.valor == "FAC-1001"
     assert nexp.tercero is not None and nexp.tercero.valor == "ACME"
-

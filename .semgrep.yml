@@ -1,0 +1,53 @@
+# Semgrep config - focused, low-noise rules for this repo.
+#
+# Policy:
+# - Blocking: all rules are severity ERROR.
+# - Scope: only Python files in src/ are scanned; tests/tools are excluded.
+rules:
+  - id: conciliador.python.security.avoid-eval
+    message: "Evite eval(): puede ejecutar codigo no confiable."
+    severity: ERROR
+    languages: [python]
+    pattern: eval(...)
+
+  - id: conciliador.python.security.avoid-exec
+    message: "Evite exec(): puede ejecutar codigo no confiable."
+    severity: ERROR
+    languages: [python]
+    pattern: exec(...)
+
+  - id: conciliador.python.security.subprocess-shell-true
+    message: "Evite subprocess con shell=True (inyeccion de comandos)."
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.run(..., shell=True, ...)
+          - pattern: subprocess.call(..., shell=True, ...)
+          - pattern: subprocess.check_call(..., shell=True, ...)
+          - pattern: subprocess.check_output(..., shell=True, ...)
+
+  - id: conciliador.python.security.yaml-load-unsafe
+    message: "Use yaml.safe_load() en vez de yaml.load() (riesgo de ejecucion)."
+    severity: ERROR
+    languages: [python]
+    pattern: yaml.load(...)
+
+  - id: conciliador.python.security.pickle-loads
+    message: "Evite pickle.loads/load con datos no confiables (RCE)."
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: pickle.loads(...)
+          - pattern: pickle.load(...)
+
+  - id: conciliador.python.security.weak-hash
+    message: "Evite hashes debiles (md5/sha1) para usos de seguridad."
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: hashlib.sha1(...)
+

@@ -14,4 +14,3 @@ def canonical_json_dumps(payload: dict[str, Any]) -> str:
     - Newline final para unix-friendliness.
     """
     return json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n"
-

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import importlib
 
-from typer.testing import CliRunner
-
 from conciliador_bancario.cli import app
+from typer.testing import CliRunner
 
 
 def test_cli_help_arranca() -> None:
@@ -27,4 +26,3 @@ def test_imports_modulos_base() -> None:
     ]
     for m in mods:
         importlib.import_module(m)
-

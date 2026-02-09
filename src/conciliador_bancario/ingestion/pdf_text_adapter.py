@@ -18,8 +18,13 @@ from conciliador_bancario.models import (
     TransaccionBancaria,
 )
 from conciliador_bancario.utils.hashing import sha256_json_estable
-from conciliador_bancario.utils.parsing import ErrorParseo, normalizar_referencia, normalizar_texto, parse_fecha_chile, parse_monto_clp
-
+from conciliador_bancario.utils.parsing import (
+    ErrorParseo,
+    normalizar_referencia,
+    normalizar_texto,
+    parse_fecha_chile,
+    parse_monto_clp,
+)
 
 _DATE_RE = re.compile(r"(?P<d>\d{1,2})[/-](?P<m>\d{1,2})[/-](?P<y>\d{2,4})")
 _AMOUNT_RE = re.compile(r"[-+]?\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|[-+]?\d+")
@@ -31,7 +36,9 @@ def _campo(valor: Any, *, notas: str | None = None, degrade: float = 0.0) -> Cam
     nivel = NivelConfianza.media if score >= 0.55 else NivelConfianza.baja
     return CampoConConfianza(
         valor=valor,
-        confianza=MetadataConfianza(score=score, nivel=nivel, origen=OrigenDato.pdf_texto, notas=notas),
+        confianza=MetadataConfianza(
+            score=score, nivel=nivel, origen=OrigenDato.pdf_texto, notas=notas
+        ),
     )
 
 
@@ -56,11 +63,17 @@ def cargar_transacciones_pdf_texto(
     """
     texto = extraer_texto_pdf(path)
     if len(texto.strip()) < 20:
-        audit.write(AuditEvent("ingestion", "PDF sin texto extraible (posible escaneado)", {"archivo": path.name}))
+        audit.write(
+            AuditEvent(
+                "ingestion", "PDF sin texto extraible (posible escaneado)", {"archivo": path.name}
+            )
+        )
         return ([], True)
 
-    lines = [normalizar_texto(l) for l in texto.splitlines() if normalizar_texto(l)]
-    audit.write(AuditEvent("ingestion", "PDF texto extraido", {"archivo": path.name, "lineas": len(lines)}))
+    lines = [norm for raw in texto.splitlines() if (norm := normalizar_texto(raw))]
+    audit.write(
+        AuditEvent("ingestion", "PDF texto extraido", {"archivo": path.name, "lineas": len(lines)})
+    )
 
     out: list[TransaccionBancaria] = []
     idx = 0
@@ -85,7 +98,12 @@ def cargar_transacciones_pdf_texto(
             break
 
         idx += 1
-        data_norm = {"fecha_operacion": str(fecha_op), "monto": str(monto), "descripcion": desc, "ref": ref or None}
+        data_norm = {
+            "fecha_operacion": str(fecha_op),
+            "monto": str(monto),
+            "descripcion": desc,
+            "ref": ref or None,
+        }
         tx_id = _id_tx(path, idx, data_norm)
         out.append(
             TransaccionBancaria(

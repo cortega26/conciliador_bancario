@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 
 from conciliador_bancario.pipeline import ejecutar_run, ejecutar_validate, generar_plantillas_init
 
-
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 
 
 @app.command("init")
-def cmd_init(out_dir: Path = typer.Option(Path("."), "--out-dir", help="Directorio de salida")) -> None:
+def cmd_init(
+    out_dir: Path = typer.Option(Path("."), "--out-dir", help="Directorio de salida")
+) -> None:
     generar_plantillas_init(out_dir)
     console.print(f"[green]Plantillas generadas en[/green] {out_dir}")
 
@@ -34,10 +34,10 @@ def cmd_validate(
         )
     except NotImplementedError as e:
         console.print(f"[red]No implementado:[/red] {e}")
-        raise typer.Exit(code=3)
+        raise typer.Exit(code=3) from e
     except Exception as e:  # noqa: BLE001
         console.print(f"[red]Error en validacion:[/red] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     if res["ok"]:
         console.print("[green]Validacion OK[/green]")
         raise typer.Exit(code=0)
@@ -53,7 +53,9 @@ def cmd_run(
     expected: Path = typer.Option(..., "--expected", exists=True, readable=True),
     out: Path = typer.Option(Path("./salida"), "--out", help="Directorio de salida"),
     mask: bool = typer.Option(True, "--mask", help="Enmascarar datos sensibles en reporte/logs"),
-    no_mask: bool = typer.Option(False, "--no-mask", help="Desactiva enmascaramiento (no recomendado)"),
+    no_mask: bool = typer.Option(
+        False, "--no-mask", help="Desactiva enmascaramiento (no recomendado)"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
@@ -77,10 +79,10 @@ def cmd_run(
         )
     except NotImplementedError as e:
         console.print(f"[red]No implementado:[/red] {e}")
-        raise typer.Exit(code=3)
+        raise typer.Exit(code=3) from e
     except Exception as e:  # noqa: BLE001
         console.print(f"[red]Error en run:[/red] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     console.print(f"[green]Run ID[/green]: {resultado.run_id}")
     if not dry_run:
         console.print(f"[green]Reporte[/green]: {out / 'reporte_conciliacion.xlsx'}")

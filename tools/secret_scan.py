@@ -33,11 +33,15 @@ _CONTENT_MARKERS = [
 
 def _git_ls_files(root: Path) -> list[Path]:
     if not (root / ".git").exists():
-        raise RuntimeError("No se encontro .git; este check esta pensado para correr en un working tree.")
+        raise RuntimeError(
+            "No se encontro .git; este check esta pensado para correr en un working tree."
+        )
     try:
         out = subprocess.check_output(["git", "ls-files", "-z"], cwd=root)
     except FileNotFoundError as e:
-        raise RuntimeError("git no esta disponible en PATH; no se puede listar archivos trackeados.") from e
+        raise RuntimeError(
+            "git no esta disponible en PATH; no se puede listar archivos trackeados."
+        ) from e
     paths: list[Path] = []
     for chunk in out.split(b"\x00"):
         if not chunk:
@@ -52,7 +56,9 @@ def _git_status_is_deleted(*, root: Path, rel: str) -> bool:
     Esto permite que el scan no bloquee cuando la correccion es precisamente eliminar el archivo.
     """
     try:
-        out = subprocess.check_output(["git", "status", "--porcelain", "--", rel], cwd=root).decode("utf-8")
+        out = subprocess.check_output(["git", "status", "--porcelain", "--", rel], cwd=root).decode(
+            "utf-8"
+        )
     except Exception:
         return False
     # Porcelain: " D file" (unstaged delete) o "D  file" (staged delete).
@@ -66,7 +72,12 @@ def scan_tracked_files_for_secrets(*, root: Path) -> list[SecretFinding]:
         if not path.exists():
             if _git_status_is_deleted(root=root, rel=rel):
                 continue
-            findings.append(SecretFinding(path=rel, reason="archivo trackeado falta en working tree (posible delete no aplicado)"))
+            findings.append(
+                SecretFinding(
+                    path=rel,
+                    reason="archivo trackeado falta en working tree (posible delete no aplicado)",
+                )
+            )
             continue
         name = path.name.lower()
         suffix = path.suffix.lower()
@@ -75,7 +86,9 @@ def scan_tracked_files_for_secrets(*, root: Path) -> list[SecretFinding]:
             findings.append(SecretFinding(path=rel, reason="archivo sensible trackeado"))
             continue
         if suffix in _FORBIDDEN_TRACKED_SUFFIXES:
-            findings.append(SecretFinding(path=rel, reason=f"extension sensible trackeada ({suffix})"))
+            findings.append(
+                SecretFinding(path=rel, reason=f"extension sensible trackeada ({suffix})")
+            )
             continue
 
         # Content scan (minimo) solo en archivos chicos para evitar penalidad.
@@ -89,14 +102,20 @@ def scan_tracked_files_for_secrets(*, root: Path) -> list[SecretFinding]:
 
         for marker in _CONTENT_MARKERS:
             if marker in data:
-                findings.append(SecretFinding(path=rel, reason=f"marker sensible detectado: {marker.decode('utf-8')}"))
+                findings.append(
+                    SecretFinding(
+                        path=rel, reason=f"marker sensible detectado: {marker.decode('utf-8')}"
+                    )
+                )
                 break
 
     return findings
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Simple secret scan: fail if sensitive files are tracked.")
+    ap = argparse.ArgumentParser(
+        description="Simple secret scan: fail if sensitive files are tracked."
+    )
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     args = ap.parse_args(argv)
 

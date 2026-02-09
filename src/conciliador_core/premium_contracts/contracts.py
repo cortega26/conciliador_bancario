@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 """
 CAPA PREMIUM (PAGO) - CONTRATOS (SIN IMPLEMENTACION)
@@ -36,7 +37,7 @@ class PremiumPlugin(Protocol):
     def plugin_info(self) -> PremiumPluginInfo:
         """Devuelve metadatos del plugin (sin side-effects)."""
 
-    def rule_pack(self) -> "PremiumRulePack":
+    def rule_pack(self) -> PremiumRulePack:
         """Devuelve un pack de capacidades premium (reglas/reportes/batch)."""
 
 
@@ -48,13 +49,13 @@ class PremiumRulePack(Protocol):
     Cada metodo puede devolver None si la capacidad no esta disponible en el plugin.
     """
 
-    def bank_rule_provider(self) -> "BankRuleProvider | None":
+    def bank_rule_provider(self) -> BankRuleProvider | None:
         """Reglas especificas por banco (premium)."""
 
-    def executive_report_renderer(self) -> "ExecutiveReportRenderer | None":
+    def executive_report_renderer(self) -> ExecutiveReportRenderer | None:
         """Reportes ejecutivos listos para cliente (premium)."""
 
-    def operational_batch_runner(self) -> "OperationalBatchRunner | None":
+    def operational_batch_runner(self) -> OperationalBatchRunner | None:
         """Batch operativo multi-cliente (premium)."""
 
 
@@ -71,14 +72,18 @@ class BankRuleProvider(Protocol):
     def supported_banks(self) -> set[str]:
         """Lista de bancos soportados por este pack (identificadores internos del plugin)."""
 
-    def apply_bank_specific_normalization(self, *, bank_id: str, raw: Mapping[str, Any]) -> Mapping[str, Any]:
+    def apply_bank_specific_normalization(
+        self, *, bank_id: str, raw: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
         """
         Normalizacion/mapeo especifico por banco.
 
         Disenado para ahorrar tiempo humano (premium). No implementado en el core.
         """
 
-    def propose_additional_matching_hints(self, *, bank_id: str, context: Mapping[str, Any]) -> Mapping[str, Any]:
+    def propose_additional_matching_hints(
+        self, *, bank_id: str, context: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
         """
         Entrega "hints" para matching (ej: reglas por banco, claves especiales).
 
@@ -94,7 +99,9 @@ class ExecutiveReportRenderer(Protocol):
     El core solo genera reportes tecnicos/auditables.
     """
 
-    def render(self, *, run_dir: Path, output_dir: Path, options: Mapping[str, Any] | None = None) -> list[Path]:
+    def render(
+        self, *, run_dir: Path, output_dir: Path, options: Mapping[str, Any] | None = None
+    ) -> list[Path]:
         """
         Genera artefactos (PDF/HTML/etc) orientados a presentacion ejecutiva.
 
@@ -111,6 +118,7 @@ class OperationalBatchRunner(Protocol):
     si se automatiza sin controles; por eso es premium y fuera del core.
     """
 
-    def run_batch(self, *, manifest_path: Path, output_dir: Path, options: Mapping[str, Any] | None = None) -> None:
+    def run_batch(
+        self, *, manifest_path: Path, output_dir: Path, options: Mapping[str, Any] | None = None
+    ) -> None:
         """Ejecuta una corrida batch en base a un manifiesto (disenado, no implementado)."""
-

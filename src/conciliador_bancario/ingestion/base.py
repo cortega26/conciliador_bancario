@@ -16,4 +16,3 @@ class ContextoIngestion:
     cfg: ConfiguracionCliente
     audit: JsonlAuditWriter
     archivo: Path
-

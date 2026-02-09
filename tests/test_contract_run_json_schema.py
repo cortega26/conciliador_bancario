@@ -4,10 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
-
 from conciliador_bancario.cli import app
 from conciliador_core.contracts.run_schema import RUN_JSON_SCHEMA_VERSION, validate_run_payload
+from typer.testing import CliRunner
 
 
 def test_validate_run_payload_rejects_extra_fields() -> None:
@@ -100,4 +99,3 @@ def test_run_json_is_validated_and_deterministic(tmp_path: Path) -> None:
 
     data = json.loads(b1.decode("utf-8"))
     assert data["schema_version"] == RUN_JSON_SCHEMA_VERSION
-

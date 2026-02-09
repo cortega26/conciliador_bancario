@@ -4,7 +4,6 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-
 from conciliador_bancario.audit.audit_log import NullAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
 from conciliador_bancario.ingestion.pdf_ocr_adapter import cargar_transacciones_pdf_ocr

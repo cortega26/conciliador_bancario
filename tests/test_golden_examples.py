@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from conciliador_bancario.cli import app
+from typer.testing import CliRunner
 
 
 def test_golden_examples_run_json(tmp_path: Path) -> None:
@@ -31,6 +30,7 @@ def test_golden_examples_run_json(tmp_path: Path) -> None:
     assert res.exit_code == 0, res.stdout
 
     got = json.loads((out / "run.json").read_text(encoding="utf-8"))
-    expected = json.loads((Path("tests") / "golden" / "examples_run.json").read_text(encoding="utf-8"))
+    expected = json.loads(
+        (Path("tests") / "golden" / "examples_run.json").read_text(encoding="utf-8")
+    )
     assert got == expected
-

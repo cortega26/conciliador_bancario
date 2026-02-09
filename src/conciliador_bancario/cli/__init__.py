@@ -4,4 +4,3 @@ from __future__ import annotations
 from conciliador_bancario.cli.app import app
 
 __all__ = ["app"]
-

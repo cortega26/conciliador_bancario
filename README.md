@@ -58,3 +58,17 @@ Transacciones provenientes de OCR se marcan con baja confianza y NO se autoconci
 - `docs/agregar_formato.md`
 - `walkthrough.md`
 - `mvp_checklist.md`
+
+## Calidad (dev/CI)
+
+Comandos (desde este repo):
+
+```powershell
+python -m black --check src tests tools
+python -m ruff check src tests tools
+python -m bandit -c .bandit.yml -r src
+# Semgrep (elige una):
+pipx run semgrep==1.95.0 scan --config .semgrep.yml --error --metrics=off src
+docker run --rm -v "${PWD}:/src" -w /src returntocorp/semgrep:1.95.0 semgrep scan --config .semgrep.yml --error --metrics=off src
+python -m pytest -q
+```

@@ -16,7 +16,9 @@ def generar_plantillas_init(out_dir: Path) -> None:
         encoding="utf-8",
     )
     (out_dir / "movimientos_esperados.csv").write_text(
-        (Path(__file__).parent / "templates" / "movimientos_esperados.csv").read_text(encoding="utf-8"),
+        (Path(__file__).parent / "templates" / "movimientos_esperados.csv").read_text(
+            encoding="utf-8"
+        ),
         encoding="utf-8",
     )
     (out_dir / "banco.csv").write_text(
@@ -42,7 +44,10 @@ def ejecutar_validate(
     enable_ocr: bool,
 ) -> dict[str, Any]:
     from conciliador_bancario.audit.audit_log import NullAuditWriter, configurar_logging
-    from conciliador_bancario.ingestion.detector import cargar_movimientos_esperados, cargar_transacciones_bancarias
+    from conciliador_bancario.ingestion.detector import (
+        cargar_movimientos_esperados,
+        cargar_transacciones_bancarias,
+    )
     from conciliador_bancario.normalization.normalizer import normalizar_lote
 
     configurar_logging(log_level)
@@ -94,15 +99,19 @@ def ejecutar_run(
 
     Reporting XLSX es fase posterior; en esta etapa, `--dry-run` es el modo recomendado.
     """
-    from conciliador_bancario import __version__
-    from conciliador_bancario.audit.audit_log import JsonlAuditWriter, configurar_logging
-    from conciliador_bancario.ingestion.detector import cargar_movimientos_esperados, cargar_transacciones_bancarias
-    from conciliador_bancario.matching.engine import conciliar
-    from conciliador_bancario.normalization.normalizer import normalizar_lote
-    from conciliador_bancario.utils.hashing import sha256_archivo, sha256_json_estable
-    from conciliador_bancario.models import MODELO_INTERNO_VERSION
     from conciliador_core.contracts.run_json_codec import canonical_json_dumps
     from conciliador_core.contracts.run_schema import RUN_JSON_SCHEMA_VERSION, validate_run_payload
+
+    from conciliador_bancario import __version__
+    from conciliador_bancario.audit.audit_log import JsonlAuditWriter, configurar_logging
+    from conciliador_bancario.ingestion.detector import (
+        cargar_movimientos_esperados,
+        cargar_transacciones_bancarias,
+    )
+    from conciliador_bancario.matching.engine import conciliar
+    from conciliador_bancario.models import MODELO_INTERNO_VERSION
+    from conciliador_bancario.normalization.normalizer import normalizar_lote
+    from conciliador_bancario.utils.hashing import sha256_archivo, sha256_json_estable
 
     configurar_logging(log_level)
     cfg = _cargar_config(config)

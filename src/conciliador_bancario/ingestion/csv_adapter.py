@@ -81,7 +81,9 @@ def cargar_transacciones_csv(
 ) -> list[TransaccionBancaria]:
     delimiter = _detectar_delimitador(path)
     audit.write(
-        AuditEvent("ingestion", "Detectado delimitador CSV", {"archivo": path.name, "delimiter": delimiter})
+        AuditEvent(
+            "ingestion", "Detectado delimitador CSV", {"archivo": path.name, "delimiter": delimiter}
+        )
     )
     with path.open("r", encoding="utf-8", errors="replace", newline="") as f:
         reader = csv.DictReader(f, delimiter=delimiter)
@@ -109,7 +111,11 @@ def cargar_transacciones_csv(
 
         faltantes = [
             n
-            for n, c in (("fecha_operacion", c_fecha_op), ("monto", c_monto), ("descripcion", c_desc))
+            for n, c in (
+                ("fecha_operacion", c_fecha_op),
+                ("monto", c_monto),
+                ("descripcion", c_desc),
+            )
             if c is None
         ]
         if faltantes:
@@ -158,7 +164,9 @@ def cargar_transacciones_csv(
                     bloquea_autoconcilia=False,
                     motivo_bloqueo_autoconcilia=None,
                     fecha_operacion=_campo(fecha_op, origen=origen),
-                    fecha_contable=_campo(fecha_ct_val, origen=origen, degrade=0.10) if fecha_ct_val else None,
+                    fecha_contable=(
+                        _campo(fecha_ct_val, origen=origen, degrade=0.10) if fecha_ct_val else None
+                    ),
                     monto=_campo(monto, origen=origen),
                     moneda=moneda,
                     descripcion=_campo(desc, origen=origen),
@@ -207,7 +215,9 @@ def cargar_movimientos_esperados_csv(
         c_terc = col("tercero", "proveedor", "cliente")
 
         faltantes = [
-            n for n, c in (("fecha", c_fecha), ("monto", c_monto), ("descripcion", c_desc)) if c is None
+            n
+            for n, c in (("fecha", c_fecha), ("monto", c_monto), ("descripcion", c_desc))
+            if c is None
         ]
         if faltantes:
             raise ErrorIngestion(f"CSV esperados sin columnas requeridas: {', '.join(faltantes)}")

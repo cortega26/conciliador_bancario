@@ -15,4 +15,3 @@ def test_xml_invalido_falla_fail_closed() -> None:
     )
     assert res["ok"] is False
     assert any("XML invalido" in e for e in res["errores"])
-

@@ -1,4 +1,4 @@
-# Guia para contadores (Chile)
+# Guía para contadores (Chile)
 
 ## Flujo mensual recomendado
 
@@ -9,20 +9,19 @@
 1. `concilia run --config ... --bank ... --expected ... --out <carpeta_salida>`
 1. Revise `reporte_conciliacion.xlsx`:
    - `Conciliados`: listo para cierre.
-   - `Pendientes`: requiere revision manual.
+   - `Pendientes`: requiere revisión manual.
    - `Sospechas`: duplicados/ambiguedades.
-   - `Auditoria`: explicacion por match.
+   - `Auditoría`: explicación por match.
 
-## Politica OCR (muy importante)
+## Política OCR (muy importante)
 
-Si la cartola es un PDF escaneado (sin texto), el sistema SOLO procesara via OCR si se ejecuta con:
+Si la cartola es un PDF escaneado (sin texto), el sistema SOLO procesará vía OCR si se ejecuta con:
 
 ```powershell
 concilia run ... --enable-ocr
 ```
 
-Y aun asi:
+Y aun así:
 - Se marca baja confianza.
 - No se autoconcilia.
-- Se exige revision humana.
-
+- Se exige revisión humana.

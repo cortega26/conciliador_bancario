@@ -1,10 +1,10 @@
 # Conciliador Bancario (MVP)
 
-CLI local (Chile-first) para conciliacion bancaria con enfoque:
+CLI local (Chile-first) para conciliación bancaria con enfoque:
 
-- Fail-closed: ante ambiguedad, NO concilia.
-- Cero errores silenciosos: validacion estricta, errores explicitos.
-- Auditoria completa: reglas, scores, explicaciones y hallazgos.
+- Fail-closed: ante ambigüedad, NO concilia.
+- Cero errores silenciosos: validación estricta, errores explícitos.
+- Auditoría completa: reglas, scores, explicaciones y hallazgos.
 - Idempotencia: misma entrada -> mismo output (sin timestamps variables).
 
 ## Estado del repo
@@ -14,7 +14,7 @@ CLI local (Chile-first) para conciliacion bancaria con enfoque:
 - `concilia validate` operativo (valida formatos y parsea entradas).
 - `concilia run` operativo (matching + `run.json`/`audit.jsonl` + `reporte_conciliacion.xlsx`).
 
-## Instalacion (desarrollo)
+## Instalación (desarrollo)
 
 ```powershell
 python -m venv .venv
@@ -23,7 +23,7 @@ pip install -e ".[pdf_ocr]"
 pytest
 ```
 
-## Instalacion (pipx)
+## Instalación (pipx)
 
 ```powershell
 pipx install .
@@ -31,7 +31,7 @@ pipx install .
 pipx inject conciliador-bancario pdf2image pytesseract Pillow
 ```
 
-## Uso rapido
+## Uso rápido
 
 ```powershell
 concilia init --out-dir .\\mi_cliente
@@ -45,11 +45,11 @@ concilia explain --run-dir .\\salida <match_id_o_hallazgo_id>
 - Banco: CSV / XLSX / XML / PDF (texto). PDF escaneado -> OCR solo con `--enable-ocr` + extras instalados.
 - Movimientos esperados: CSV / XLSX.
 
-## Politica critica: PDF OCR
+## Política crítica: PDF OCR
 
 Transacciones provenientes de OCR se marcan con baja confianza y NO se autoconcilian.
 
-## Documentacion
+## Documentación
 
 - `docs/guia_contadores.md`
 - `docs/guia_tecnica.md`

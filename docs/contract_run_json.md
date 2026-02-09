@@ -1,12 +1,12 @@
 # Contrato `run.json` (Core -> Premium)
 
 ## Objetivo
-`run.json` es el artefacto tecnico principal que el Core persiste en `run_dir/` y que Premium consume.
+`run.json` es el artefacto técnico principal que el Core persiste en `run_dir/` y que Premium consume.
 
 Metas:
 - Contrato versionado (campo obligatorio `schema_version`).
-- Validacion estricta en Core (fail-closed) antes de persistir.
-- Validacion consumer-friendly para Premium (compatibilidad por major y tolerancia a extras).
+- Validación estricta en Core (fail-closed) antes de persistir.
+- Validación consumer-friendly para Premium (compatibilidad por major y tolerancia a extras).
 
 ## Versionado
 - `schema_version`: SemVer `MAJOR.MINOR.PATCH` (ej: `1.0.0`).
@@ -15,9 +15,9 @@ Metas:
   - Rechaza payloads con fields extra (Pydantic `extra="forbid"`).
 - Premium:
   - Acepta solo `schema_version` con el mismo `MAJOR` (forward compatible).
-  - Ignora fields extra (Pydantic `extra="ignore"`), pero exige el set minimo requerido.
+  - Ignora fields extra (Pydantic `extra="ignore"`), pero exige el set mínimo requerido.
 
-## Estructura (minimo estable)
+## Estructura (mínimo estable)
 Top-level:
 - `schema_version` (str, SemVer) requerido.
 - `run_id` (str) requerido.
@@ -32,14 +32,14 @@ Top-level:
 - `mask` (bool)
 - `permitir_ocr` (bool)
 - `modelo_interno_version` (str)
-- `version` (str) version del paquete Core (auditabilidad).
+- `version` (str) versión del paquete Core (auditabilidad).
 
 `matches[]` requerido (campos usados por Premium):
 - `id` (str)
 - `estado` (str)
 - `score` (float)
 - `regla` (str)
-- `explicacion` (str)
+- `explicación` (str)
 - `transacciones_bancarias` (list[str], min 1)
 - `movimientos_esperados` (list[str], min 1)
 - `bloqueado_por_confianza` (bool)
@@ -57,10 +57,9 @@ Top-level:
 - Cada `tx_id` (en `match.transacciones_bancarias`) aparece a lo sumo en 1 match.
 - Cada `exp_id` (en `match.movimientos_esperados`) aparece a lo sumo en 1 match.
 
-## Serializacion canonica
-El Core persiste `run.json` con JSON canonico:
+## Serialización canónica
+El Core persiste `run.json` con JSON canónico:
 - `ensure_ascii=True`
 - `sort_keys=True`
 - `separators=(",", ":")`
 - newline final `\\n`
-

@@ -1,10 +1,10 @@
 # Boundary Checklist (Core)
 
-Checklist rapido antes de `commit`, `PR` o `release`.
+Checklist rápido antes de `commit`, `PR` o `release`.
 
 ## Pre-flight
 
-- [ ] Estas en el repo correcto: `conciliador_bancario` (Core).
+- [ ] Estás en el repo correcto: `conciliador_bancario` (Core).
 - [ ] No tocaste el Core para features premium (solo contratos/stubs).
 
 ## Guardrails
@@ -21,5 +21,4 @@ Checklist rapido antes de `commit`, `PR` o `release`.
 ## Data hygiene
 
 - [ ] No hay llaves/archivos sensibles trackeados (pem/key/p12/pfx/licencias).
-- [ ] Logs y reportes siguen usando masking y proteccion contra CSV/Excel injection.
-
+- [ ] Logs y reportes siguen usando masking y protección contra CSV/Excel injection.

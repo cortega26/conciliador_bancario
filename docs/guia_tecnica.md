@@ -1,9 +1,9 @@
-# Guia tecnica
+# Guía técnica
 
 ## Arquitectura por capas (MVP)
 
 - `ingestion/`: adaptadores por formato -> emiten modelos internos con `confidence`.
-- `normalization/`: normalizacion comun (texto/referencias).
+- `normalization/`: normalización común (texto/referencias).
 - `matching/`: motor determinista + explicable (fail-closed).
 - `reporting/`: reporte Excel profesional (auditable).
 - `audit/`: audit trail JSONL.
@@ -21,4 +21,3 @@ No se escriben timestamps variables en `run.json`.
 ## Seguridad
 
 - Logs/reporte pueden enmascarar RUT y cuentas (`--mask` por defecto).
-

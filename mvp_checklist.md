@@ -1,6 +1,6 @@
 # MVP Checklist (DoD)
 
-## Instalacion
+## Instalación
 - [ ] `pipx install .` funciona (script `concilia`).
 - [ ] Extras OCR instalables: `pip install .[pdf_ocr]`.
 
@@ -8,14 +8,14 @@
 - [ ] Ejemplo produce `reporte_conciliacion.xlsx` sin errores.
 - [ ] `run.json` + `audit.jsonl` se generan.
 
-## Politicas criticas
+## Políticas críticas
 - [ ] PDF OCR NO autoconcilia (bloqueo por confianza/origen).
-- [ ] XML tiene maxima confianza.
-- [ ] Ante ambiguedad -> pendiente (fail-closed).
+- [ ] XML tiene máxima confianza.
+- [ ] Ante ambigüedad -> pendiente (fail-closed).
 
 ## Calidad
 - [ ] `pytest` pasa 100%.
-- [ ] No hay errores silenciosos (excepciones explicitas).
+- [ ] No hay errores silenciosos (excepciones explícitas).
 - [ ] Reportes/logs enmascaran datos sensibles por defecto.
 - [ ] Golden datasets en `tests/golden/` cubren CSV/XLSX/XML/PDF texto/OCR stub.
 - [ ] `audit.jsonl` incluye `run_id` y `seq` (trazabilidad y determinismo).

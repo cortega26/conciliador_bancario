@@ -4,7 +4,7 @@ Objetivo: permitir que capacidades premium vivan como plugins privados (wheel/zi
 
 - dependa de implementaciones premium,
 - falle si no hay premium,
-- exponga IP (heuristicas por banco, automatizaciones, presentacion ejecutiva).
+- exponga IP (heurísticas por banco, automatizaciones, presentación ejecutiva).
 
 ## 1) Descubrimiento de plugins (propuesta)
 
@@ -13,7 +13,7 @@ Usar entry points de Python (packaging), por ejemplo:
 - Grupo: `conciliador_bancario.premium`
 - Cada entry point retorna un objeto que implementa `PremiumPlugin` (ver `src/conciliador_core/premium_contracts/`).
 
-Ejemplo (diseno):
+Ejemplo (diseño):
 
 ```toml
 [project.entry-points."conciliador_bancario.premium"]
@@ -22,12 +22,12 @@ Ejemplo (diseno):
 
 Nota: este repo no implementa el loader. Solo define el contrato.
 
-## 2) Activacion (propuesta)
+## 2) Activación (propuesta)
 
-- Flags CLI (diseno): `--enable-premium`, `--premium-plugin vendor_pack`
-- Config por cliente (diseno): `premium: { enabled: true, plugins: ["vendor_pack"] }`
+- Flags CLI (diseño): `--enable-premium`, `--premium-plugin vendor_pack`
+- Config por cliente (diseño): `premium: { enabled: true, plugins: ["vendor_pack"] }`
 
-Regla: si premium no esta habilitado, el core no debe intentar cargar nada.
+Regla: si premium no está habilitado, el core no debe intentar cargar nada.
 
 ## 3) Aislamiento y manejo de errores (propuesta)
 
@@ -35,7 +35,7 @@ El core debe tratar premium como opcional y potencialmente fallido:
 
 - Fallas al cargar plugin:
   - no deben romper el core por defecto,
-  - deben registrarse como hallazgos/auditoria tecnica (tipo "sistema").
+  - deben registrarse como hallazgos/auditoría técnica (tipo "sistema").
 - Fallas dentro de plugin:
   - no deben ocultarse,
   - deben quedar auditadas,
@@ -54,7 +54,7 @@ El core valida compatibilidad antes de activar capacidades premium.
 
 Capacidades premium posibles, todas opcionales:
 
-- `BankRuleProvider`: reglas por banco y normalizacion especifica.
+- `BankRuleProvider`: reglas por banco y normalización específica.
 - `ExecutiveReportRenderer`: reportes ejecutivos.
 - `OperationalBatchRunner`: batch operativo multi-cliente.
 
@@ -63,4 +63,3 @@ El core solo consume estas interfaces si:
 1. premium esta habilitado,
 2. un plugin compatible fue cargado,
 3. la capacidad existe.
-

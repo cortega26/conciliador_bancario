@@ -2,42 +2,41 @@
 
 ## Estado actual
 
-- Este repo (core) esta bajo licencia MIT (ver `LICENSE`).
+- Este repo (core) está bajo licencia MIT (ver `LICENSE`).
 
 ## Objetivo
 
 - Mantener el core OSS (MIT) completo y usable.
 - Distribuir premium bajo licencia comercial propietaria, sin exponer IP.
 
-## Opciones de distribucion premium (propuesta)
+## Opciones de distribución premium (propuesta)
 
 1) Wheel privado (recomendado)
-- Distribucion: Artifactory, GitHub Packages, feed privado, etc.
-- Ventajas: integracion limpia con entry points; versionado semver; instalacion reproducible.
-- Riesgos: gestion de credenciales y supply chain.
+- Distribución: Artifactory, GitHub Packages, feed privado, etc.
+- Ventajas: integración limpia con entry points; versionado semver; instalación reproducible.
+- Riesgos: gestión de credenciales y supply chain.
 
 2) ZIP firmado
-- Distribucion: canal controlado (entrega directa).
+- Distribución: canal controlado (entrega directa).
 - Ventajas: control fuerte de artefactos.
-- Riesgos: instalacion menos estandar; actualizaciones manuales.
+- Riesgos: instalación menos estándar; actualizaciones manuales.
 
-3) Repo privado (monorepo o submodulo)
-- Distribucion: git + CI/CD.
+3) Repo privado (monorepo o submódulo)
+- Distribución: git + CI/CD.
 - Ventajas: desarrollo controlado.
-- Riesgos: operaciones mas complejas en ambientes de clientes.
+- Riesgos: operaciones más complejas en ambientes de clientes.
 
-## Separacion legal/tecnica (propuesta)
+## Separación legal/técnica (propuesta)
 
 - Premium depende del core.
 - El core no depende de premium.
 - El core no incluye:
   - reglas por banco,
-  - heuristicas agresivas,
-  - presentacion ejecutiva,
+  - heurísticas agresivas,
+  - presentación ejecutiva,
   - batch operativo.
 
 ## Compliance (propuesta)
 
 - Versionar plugins con metadatos claros (vendor, version, compatibilidad).
-- Registrar en auditoria tecnica cuando premium este activo (sin exponer secretos).
-
+- Registrar en auditoría técnica cuando premium esté activo (sin exponer secretos).

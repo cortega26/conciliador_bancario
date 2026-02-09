@@ -51,6 +51,8 @@ Transacciones provenientes de OCR se marcan con baja confianza y NO se autoconci
 
 ## Documentación
 
+- [Manual de Usuario (RUNBOOK)](RUNBOOK.md)
+- [Glosario de Términos](GLOSARIO.md)
 - `docs/guia_contadores.md`
 - `docs/guia_tecnica.md`
 - `docs/agregar_formato.md`

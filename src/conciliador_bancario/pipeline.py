@@ -35,6 +35,31 @@ def _cargar_config(path: Path) -> ConfiguracionCliente:
     return ConfiguracionCliente.model_validate(data)
 
 
+def _apply_limit_overrides(
+    cfg: ConfiguracionCliente,
+    *,
+    max_input_bytes: int | None = None,
+    max_tabular_rows: int | None = None,
+    max_tabular_cells: int | None = None,
+    max_pdf_pages: int | None = None,
+    max_pdf_text_chars: int | None = None,
+    max_xml_movimientos: int | None = None,
+) -> ConfiguracionCliente:
+    updates = {
+        "max_input_bytes": max_input_bytes,
+        "max_tabular_rows": max_tabular_rows,
+        "max_tabular_cells": max_tabular_cells,
+        "max_pdf_pages": max_pdf_pages,
+        "max_pdf_text_chars": max_pdf_text_chars,
+        "max_xml_movimientos": max_xml_movimientos,
+    }
+    updates = {k: v for k, v in updates.items() if v is not None}
+    if not updates:
+        return cfg
+    lim = cfg.limites_ingesta.model_copy(update=updates)
+    return cfg.model_copy(update={"limites_ingesta": lim})
+
+
 def ejecutar_validate(
     *,
     config: Path,
@@ -42,6 +67,12 @@ def ejecutar_validate(
     expected: Path,
     log_level: str,
     enable_ocr: bool,
+    max_input_bytes: int | None = None,
+    max_tabular_rows: int | None = None,
+    max_tabular_cells: int | None = None,
+    max_pdf_pages: int | None = None,
+    max_pdf_text_chars: int | None = None,
+    max_xml_movimientos: int | None = None,
 ) -> dict[str, Any]:
     from conciliador_bancario.audit.audit_log import NullAuditWriter, configurar_logging
     from conciliador_bancario.ingestion.detector import (
@@ -54,6 +85,15 @@ def ejecutar_validate(
     cfg = _cargar_config(config)
     if enable_ocr:
         cfg = cfg.model_copy(update={"permitir_ocr": True})
+    cfg = _apply_limit_overrides(
+        cfg,
+        max_input_bytes=max_input_bytes,
+        max_tabular_rows=max_tabular_rows,
+        max_tabular_cells=max_tabular_cells,
+        max_pdf_pages=max_pdf_pages,
+        max_pdf_text_chars=max_pdf_text_chars,
+        max_xml_movimientos=max_xml_movimientos,
+    )
 
     # Validacion de existencia se hace por typer; aqui chequeamos formato soportado + parseo real.
     errores: list[str] = []
@@ -93,6 +133,12 @@ def ejecutar_run(
     dry_run: bool,
     log_level: str,
     enable_ocr: bool,
+    max_input_bytes: int | None = None,
+    max_tabular_rows: int | None = None,
+    max_tabular_cells: int | None = None,
+    max_pdf_pages: int | None = None,
+    max_pdf_text_chars: int | None = None,
+    max_xml_movimientos: int | None = None,
 ) -> ResultadoConciliacion:
     """
     Ejecuta pipeline end-to-end hasta matching + artefactos tecnicos (run.json + audit.jsonl).
@@ -119,6 +165,15 @@ def ejecutar_run(
     cfg = _cargar_config(config)
     if enable_ocr:
         cfg = cfg.model_copy(update={"permitir_ocr": True})
+    cfg = _apply_limit_overrides(
+        cfg,
+        max_input_bytes=max_input_bytes,
+        max_tabular_rows=max_tabular_rows,
+        max_tabular_cells=max_tabular_cells,
+        max_pdf_pages=max_pdf_pages,
+        max_pdf_text_chars=max_pdf_text_chars,
+        max_xml_movimientos=max_xml_movimientos,
+    )
 
     run_fingerprint = {
         "config_sha256": sha256_archivo(config),

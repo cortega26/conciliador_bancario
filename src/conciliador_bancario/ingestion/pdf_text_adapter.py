@@ -9,6 +9,7 @@ from typing import Any
 from pypdf import PdfReader
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
+from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -61,7 +62,43 @@ def cargar_transacciones_pdf_texto(
     Retorna (transacciones, parece_escaneado).
     Si el PDF no tiene texto extraible, se considera "parece_escaneado".
     """
-    texto = extraer_texto_pdf(path)
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="PDF banco",
+    )
+
+    reader = PdfReader(str(path))
+    enforce_counter(
+        path=path,
+        audit=audit,
+        name="max_pdf_pages",
+        value=len(reader.pages),
+        max_value=cfg.limites_ingesta.max_pdf_pages,
+        hints=LimitHints(cfg_path="limites_ingesta.max_pdf_pages", cli_flag="--max-pdf-pages"),
+        label="PDF banco",
+    )
+
+    parts: list[str] = []
+    total_chars = 0
+    for page in reader.pages:
+        t = page.extract_text() or ""
+        total_chars += len(t)
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_pdf_text_chars",
+            value=total_chars,
+            max_value=cfg.limites_ingesta.max_pdf_text_chars,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_pdf_text_chars", cli_flag="--max-pdf-text-chars"
+            ),
+            label="PDF banco",
+        )
+        parts.append(t)
+    texto = "\n".join(parts).strip()
     if len(texto.strip()) < 20:
         audit.write(
             AuditEvent(

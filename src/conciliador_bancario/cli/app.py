@@ -27,10 +27,26 @@ def cmd_validate(
     expected: Path = typer.Option(..., "--expected", exists=True, readable=True),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
+    max_input_bytes: int | None = typer.Option(None, "--max-input-bytes"),
+    max_tabular_rows: int | None = typer.Option(None, "--max-tabular-rows"),
+    max_tabular_cells: int | None = typer.Option(None, "--max-tabular-cells"),
+    max_pdf_pages: int | None = typer.Option(None, "--max-pdf-pages"),
+    max_pdf_text_chars: int | None = typer.Option(None, "--max-pdf-text-chars"),
+    max_xml_movimientos: int | None = typer.Option(None, "--max-xml-movimientos"),
 ) -> None:
     try:
         res = ejecutar_validate(
-            config=config, bank=bank, expected=expected, log_level=log_level, enable_ocr=enable_ocr
+            config=config,
+            bank=bank,
+            expected=expected,
+            log_level=log_level,
+            enable_ocr=enable_ocr,
+            max_input_bytes=max_input_bytes,
+            max_tabular_rows=max_tabular_rows,
+            max_tabular_cells=max_tabular_cells,
+            max_pdf_pages=max_pdf_pages,
+            max_pdf_text_chars=max_pdf_text_chars,
+            max_xml_movimientos=max_xml_movimientos,
         )
     except NotImplementedError as e:
         console.print(f"[red]No implementado:[/red] {e}")
@@ -59,6 +75,12 @@ def cmd_run(
     dry_run: bool = typer.Option(False, "--dry-run"),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
+    max_input_bytes: int | None = typer.Option(None, "--max-input-bytes"),
+    max_tabular_rows: int | None = typer.Option(None, "--max-tabular-rows"),
+    max_tabular_cells: int | None = typer.Option(None, "--max-tabular-cells"),
+    max_pdf_pages: int | None = typer.Option(None, "--max-pdf-pages"),
+    max_pdf_text_chars: int | None = typer.Option(None, "--max-pdf-text-chars"),
+    max_xml_movimientos: int | None = typer.Option(None, "--max-xml-movimientos"),
 ) -> None:
     if no_mask and mask:
         console.print("[red]Flags incompatibles:[/red] --mask y --no-mask")
@@ -76,6 +98,12 @@ def cmd_run(
             dry_run=dry_run,
             log_level=log_level,
             enable_ocr=enable_ocr,
+            max_input_bytes=max_input_bytes,
+            max_tabular_rows=max_tabular_rows,
+            max_tabular_cells=max_tabular_cells,
+            max_pdf_pages=max_pdf_pages,
+            max_pdf_text_chars=max_pdf_text_chars,
+            max_xml_movimientos=max_xml_movimientos,
         )
     except NotImplementedError as e:
         console.print(f"[red]No implementado:[/red] {e}")
@@ -91,17 +119,31 @@ def cmd_run(
 @app.command("explain")
 def cmd_explain(
     run_dir: Path = typer.Option(..., "--run-dir", exists=True, file_okay=False),
-    id: str = typer.Argument(..., help="ID de match o hallazgo"),
+    item_id: str = typer.Argument(..., help="ID de match o hallazgo"),
 ) -> None:
+    from json import JSONDecodeError
+
+    from conciliador_bancario.core.premium_contracts import validate_run_payload_for_consumer
+
     run_json = run_dir / "run.json"
-    data = json.loads(run_json.read_text(encoding="utf-8"))
+    if not run_json.exists():
+        console.print(f"[red]Falta run.json en run_dir:[/red] {run_json}")
+        raise typer.Exit(code=2)
+
+    try:
+        raw = json.loads(run_json.read_text(encoding="utf-8"))
+        data = validate_run_payload_for_consumer(raw)
+    except (OSError, UnicodeDecodeError, JSONDecodeError, ValueError) as e:
+        console.print(f"[red]run.json invalido (fail-closed):[/red] {e}")
+        raise typer.Exit(code=1) from e
+
     for m in data.get("matches", []):
-        if m["id"] == id:
+        if str(m.get("id") or "") == item_id:
             console.print_json(json.dumps(m, ensure_ascii=True, sort_keys=True))
             raise typer.Exit(code=0)
     for h in data.get("hallazgos", []):
-        if h["id"] == id:
+        if str(h.get("id") or "") == item_id:
             console.print_json(json.dumps(h, ensure_ascii=True, sort_keys=True))
             raise typer.Exit(code=0)
-    console.print(f"[red]No encontrado:[/red] {id}")
+    console.print(f"[red]No encontrado:[/red] {item_id}")
     raise typer.Exit(code=2)

@@ -1,0 +1,10 @@
+# pip-audit ignore list (one vulnerability ID per line).
+#
+# Format:
+#   PYSEC-YYYY-NNNN  # expires: YYYY-MM-DD  reason: short justification
+#
+# Policy:
+# - Prefer upgrading dependencies over ignoring vulnerabilities.
+# - If an ignore is necessary, always include an expiry and a reason.
+# - Expired ignores fail the gate (forces re-review).
+

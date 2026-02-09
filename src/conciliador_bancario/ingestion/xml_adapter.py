@@ -9,6 +9,7 @@ from defusedxml import ElementTree as ET
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -63,6 +64,14 @@ def cargar_transacciones_xml(
       </movimiento>
     </cartola>
     """
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="XML banco",
+    )
+
     try:
         tree = ET.parse(path)
     except ET.ParseError as e:
@@ -73,6 +82,17 @@ def cargar_transacciones_xml(
     cuenta_mask = enmascarar_cuenta(cuenta_raw) if cuenta_raw else None
 
     movs = list(root.findall(".//movimiento"))
+    enforce_counter(
+        path=path,
+        audit=audit,
+        name="max_xml_movimientos",
+        value=len(movs),
+        max_value=cfg.limites_ingesta.max_xml_movimientos,
+        hints=LimitHints(
+            cfg_path="limites_ingesta.max_xml_movimientos", cli_flag="--max-xml-movimientos"
+        ),
+        label="XML banco",
+    )
     audit.write(
         AuditEvent(
             "ingestion", "XML cartola cargado", {"archivo": path.name, "movimientos": len(movs)}

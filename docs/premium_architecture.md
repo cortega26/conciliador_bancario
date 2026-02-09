@@ -11,7 +11,7 @@ Objetivo: permitir que capacidades premium vivan como plugins privados (wheel/zi
 Usar entry points de Python (packaging), por ejemplo:
 
 - Grupo: `conciliador_bancario.premium`
-- Cada entry point retorna un objeto que implementa `PremiumPlugin` (ver `src/conciliador_core/premium_contracts/`).
+- Cada entry point retorna un objeto que implementa `PremiumPlugin` (ver `src/conciliador_bancario/core/premium_contracts/`).
 
 Ejemplo (diseño):
 

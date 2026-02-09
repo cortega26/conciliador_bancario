@@ -41,7 +41,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Bump patch (bump2version)
-        run: python -m bump2version patch
+        run: bump2version patch
 
       - name: Read new version
         id: ver

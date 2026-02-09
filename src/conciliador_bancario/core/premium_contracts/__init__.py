@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from conciliador_core.premium_contracts.contracts import (
+from .contracts import (
     BankRuleProvider,
     ExecutiveReportRenderer,
     OperationalBatchRunner,
@@ -8,7 +8,7 @@ from conciliador_core.premium_contracts.contracts import (
     PremiumPluginInfo,
     PremiumRulePack,
 )
-from conciliador_core.premium_contracts.run_json import (
+from .run_json import (
     RUN_JSON_SCHEMA_VERSION,
     SUPPORTED_RUN_JSON_SCHEMA_MAJOR,
     validate_run_payload_for_consumer,

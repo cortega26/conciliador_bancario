@@ -19,7 +19,7 @@ Riesgo si se viola: dependencia circular, leaks de features premium, builds no r
 
 ## Reglas (Core)
 
-- ✅ El Core puede definir **contratos/tipos** para extensiones (ej: `src/conciliador_core/premium_contracts/`).
+- ✅ El Core puede definir **contratos/tipos** para extensiones (ej: `src/conciliador_bancario/core/premium_contracts/`).
 - ✅ El Core genera artefactos técnicos estables (ej: `run.json`, `audit.jsonl`, `reporte_conciliacion.xlsx`) para integraciones externas.
 - ❌ El Core no debe importar ni referenciar código/paquetes premium (directo o indirecto).
 - ❌ El Core no agrega dependencias que existan solo por premium.
@@ -30,7 +30,7 @@ Riesgo si se viola: contaminación de licencias, “feature creep”, y comporta
 
 ## Contratos Core <-> Premium (estáticos y versionables)
 
-- ✅ Contrato de plugins (tipos): `conciliador_core.premium_contracts` (Protocol/Interfaces, sin lógica).
+- ✅ Contrato de plugins (tipos): `conciliador_bancario.core.premium_contracts` (Protocol/Interfaces, sin lógica).
 - ✅ Contrato por archivos: Premium puede leer los artefactos de salida del Core (`run.json`, `audit.jsonl`, XLSX técnico).
 - ✅ Contrato por CLI: Premium puede invocar el CLI del Core como “black box” si lo necesita.
 
@@ -58,7 +58,7 @@ Riesgo si se viola: un PR puede saltarse checks por error humano.
 
 Permitido:
 
-- ✅ Agregar un `Protocol` o dataclass de contrato en `src/conciliador_core/premium_contracts/`.
+- ✅ Agregar un `Protocol` o dataclass de contrato en `src/conciliador_bancario/core/premium_contracts/`.
 - ✅ Documentar en `walkthrough.md` hooks o futuras extensiones como **stubs**.
 
 Prohibido:

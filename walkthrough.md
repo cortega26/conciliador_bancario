@@ -52,4 +52,4 @@
   - Roadmap: `docs/premium_roadmap.md`
   - Arquitectura: `docs/premium_architecture.md`
   - Licensing: `docs/premium_licensing.md`
-  - Contratos: `src/conciliador_core/premium_contracts/`
+  - Contratos: `src/conciliador_bancario/core/premium_contracts/`

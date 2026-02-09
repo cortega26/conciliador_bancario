@@ -13,3 +13,16 @@ permitir_ocr: false
 mask_por_defecto: true
 moneda_default: "CLP"
 
+# Limites defensivos (fail-closed por defecto).
+# Puede overridearse en CLI con flags `--max-*`.
+limites_ingesta:
+  # Tamano maximo por archivo de entrada (banco/esperados/PDF/XML/XLSX/CSV).
+  max_input_bytes: 25000000
+  # Limites tabulares (CSV/XLSX).
+  max_tabular_rows: 200000
+  max_tabular_cells: 5000000
+  # PDF (texto u OCR).
+  max_pdf_pages: 200
+  max_pdf_text_chars: 5000000
+  # XML (movimientos).
+  max_xml_movimientos: 200000

@@ -184,3 +184,70 @@ def test_run_crea_reporte_xlsx(tmp_path: Path) -> None:
     )
     assert r.exit_code == 0, r.stdout
     assert (out / "reporte_conciliacion.xlsx").exists()
+
+
+def test_explain_fail_closed_valida_run_json(tmp_path: Path) -> None:
+    runner = CliRunner()
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "run.json").write_text('{"schema_version":"1.0.0"}', encoding="utf-8")
+
+    r = runner.invoke(app, ["explain", "--run-dir", str(out), "ANY"])
+    assert r.exit_code == 1
+    assert "run.json invalido" in r.stdout
+
+
+def test_explain_encuentra_match_por_id(tmp_path: Path) -> None:
+    runner = CliRunner()
+    cfg = tmp_path / "config.yaml"
+    bank = tmp_path / "bank.csv"
+    exp = tmp_path / "exp.csv"
+    _write(
+        cfg, "cliente: 'X'\npermitir_ocr: false\nmask_por_defecto: true\nmoneda_default: 'CLP'\n"
+    )
+    _write(
+        bank,
+        "\n".join(
+            [
+                "fecha_operacion,monto,moneda,descripcion,referencia",
+                "05/01/2026,1000,CLP,TEST,FAC-1",
+                "",
+            ]
+        ),
+    )
+    _write(
+        exp,
+        "\n".join(
+            [
+                "fecha,monto,moneda,descripcion,referencia",
+                "05/01/2026,1000,CLP,TEST,FAC-1",
+                "",
+            ]
+        ),
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+
+    r_run = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out),
+            "--dry-run",
+        ],
+    )
+    assert r_run.exit_code == 0, r_run.stdout
+
+    data = json.loads((out / "run.json").read_text(encoding="utf-8"))
+    match_id = data["matches"][0]["id"]
+
+    r = runner.invoke(app, ["explain", "--run-dir", str(out), match_id])
+    assert r.exit_code == 0, r.stdout
+    assert match_id in r.stdout

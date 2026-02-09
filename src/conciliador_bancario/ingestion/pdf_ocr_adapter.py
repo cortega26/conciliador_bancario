@@ -3,8 +3,11 @@
 from pathlib import Path
 from typing import Any
 
+from pypdf import PdfReader
+
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -44,6 +47,14 @@ def cargar_transacciones_pdf_ocr(
     OCR es un fallback controlado (baja confianza).
     Si OCR no esta disponible, se falla explicitamente (fail-closed).
     """
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="PDF banco (OCR)",
+    )
+
     try:
         import pytesseract  # type: ignore
         from pdf2image import convert_from_path  # type: ignore
@@ -52,11 +63,38 @@ def cargar_transacciones_pdf_ocr(
             "OCR no disponible. Instale extras: pip install -e '.[pdf_ocr]' y dependencias del sistema (poppler)."
         ) from e
 
+    # Limit pages before converting to images (expensive). Keep it after the deps check so
+    # missing OCR deps fails with a clean error even on invalid PDFs (contract test).
+    reader = PdfReader(str(path))
+    enforce_counter(
+        path=path,
+        audit=audit,
+        name="max_pdf_pages",
+        value=len(reader.pages),
+        max_value=cfg.limites_ingesta.max_pdf_pages,
+        hints=LimitHints(cfg_path="limites_ingesta.max_pdf_pages", cli_flag="--max-pdf-pages"),
+        label="PDF banco (OCR)",
+    )
+
     audit.write(AuditEvent("ingestion", "OCR iniciado", {"archivo": path.name}))
     images = convert_from_path(str(path))
     texto = []
+    total_chars = 0
     for im in images:
-        texto.append(pytesseract.image_to_string(im, lang="spa"))
+        chunk = pytesseract.image_to_string(im, lang="spa")
+        total_chars += len(chunk)
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_pdf_text_chars",
+            value=total_chars,
+            max_value=cfg.limites_ingesta.max_pdf_text_chars,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_pdf_text_chars", cli_flag="--max-pdf-text-chars"
+            ),
+            label="PDF banco (OCR)",
+        )
+        texto.append(chunk)
     full = "\n".join(texto)
 
     out: list[TransaccionBancaria] = []

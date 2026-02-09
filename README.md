@@ -106,6 +106,7 @@ Este repo tiene guardrails para bloquear regresiones:
 - Formato: **Black**
 - Lint: **Ruff**
 - SAST: **Bandit**
+- SCA (supply-chain): **pip-audit** (vulnerabilidades en dependencias; ver `.pip-audit-ignore.txt`)
 - SAST semántico: **Semgrep** (corre en CI sobre Ubuntu; en Windows requiere Docker/WSL)
 - Tests: **pytest** (incluye tests “golden” para outputs contractuales)
 
@@ -116,6 +117,7 @@ python -m pip install -e ".[dev]"
 python -m black --check src tests tools
 python -m ruff check src tests tools
 python -m bandit -c .bandit.yml -r src
+python tools/pip_audit_gate.py
 python -m pytest -q
 ```
 

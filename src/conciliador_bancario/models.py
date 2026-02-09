@@ -153,6 +153,23 @@ class Hallazgo(CBModel):
     detalles: dict[str, Any] = Field(default_factory=dict)
 
 
+class LimitesIngesta(CBModel):
+    """
+    Limites defensivos ante inputs hostiles o sobredimensionados.
+
+    Politica:
+    - Default: fail-closed con limites conservadores.
+    - Override: via config (`limites_ingesta`) o flags CLI (`--max-*`).
+    """
+
+    max_input_bytes: int = Field(default=25_000_000, ge=1)  # ~25 MB
+    max_tabular_rows: int = Field(default=200_000, ge=1)
+    max_tabular_cells: int = Field(default=5_000_000, ge=1)
+    max_pdf_pages: int = Field(default=200, ge=1)
+    max_pdf_text_chars: int = Field(default=5_000_000, ge=1)
+    max_xml_movimientos: int = Field(default=200_000, ge=1)
+
+
 class ConfiguracionCliente(CBModel):
     cliente: str = Field(min_length=1)
     rut_mask: str | None = None
@@ -162,6 +179,7 @@ class ConfiguracionCliente(CBModel):
     permitir_ocr: bool = False
     mask_por_defecto: bool = True
     moneda_default: Moneda = "CLP"
+    limites_ingesta: LimitesIngesta = Field(default_factory=LimitesIngesta)
 
 
 @dataclass(frozen=True)

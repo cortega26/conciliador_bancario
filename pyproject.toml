@@ -38,6 +38,7 @@ dev = [
   "ruff==0.4.10",
   "black==24.10.0",
   "bandit==1.7.8",
+  "pip-audit==2.10.0",
   "build==1.2.2",
   "twine==5.1.1",
   "bump2version==1.0.1",
@@ -73,6 +74,11 @@ exclude = [
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+filterwarnings = [
+  # openpyxl triggers a deprecation warning on Python 3.12; keep tests signal-focused.
+  "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated.*:DeprecationWarning:openpyxl\\.packaging\\.core",
+  "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated.*:DeprecationWarning:openpyxl\\.writer\\.excel",
+]
 
 [tool.ruff]
 line-length = 100
@@ -89,7 +95,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Typer encourages Option(...) in defaults; this is intentional for CLI ergonomics.
-"src/conciliador_bancario/cli/app.py" = ["B008"]
+"src/conciliador_bancario/cli/app.py" = ["B008", "UP007"]
 # Tests sometimes intentionally assert broad exceptions for contract/fail-closed behaviour.
 "tests/**/*.py" = ["B017"]
 

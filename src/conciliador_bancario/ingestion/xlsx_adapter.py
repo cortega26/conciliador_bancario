@@ -9,6 +9,7 @@ from openpyxl import load_workbook
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -97,6 +98,14 @@ def _select_worksheet_with_columns(
 def cargar_transacciones_xlsx(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[TransaccionBancaria]:
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="XLSX banco",
+    )
+
     wb = load_workbook(path, read_only=True, data_only=True)
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
@@ -128,9 +137,35 @@ def cargar_transacciones_xlsx(
     out: list[TransaccionBancaria] = []
     rows = ws.iter_rows(values_only=True)
     _ = next(rows, None)  # header
+    data_rows = 0
+    data_cells = 0
     for excel_row_idx, row in enumerate(rows, start=2):
         if not row or not any(v is not None and str(v).strip() for v in row):
             continue
+        data_rows += 1
+        data_cells += len(row)
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_tabular_rows",
+            value=data_rows,
+            max_value=cfg.limites_ingesta.max_tabular_rows,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_tabular_rows", cli_flag="--max-tabular-rows"
+            ),
+            label="XLSX banco",
+        )
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_tabular_cells",
+            value=data_cells,
+            max_value=cfg.limites_ingesta.max_tabular_cells,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_tabular_cells", cli_flag="--max-tabular-cells"
+            ),
+            label="XLSX banco",
+        )
         try:
             fecha_op = _as_date(row[c_fecha_op])
             fecha_ct = (
@@ -183,6 +218,14 @@ def cargar_transacciones_xlsx(
 def cargar_movimientos_esperados_xlsx(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[MovimientoEsperado]:
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="XLSX esperados",
+    )
+
     wb = load_workbook(path, read_only=True, data_only=True)
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
@@ -214,9 +257,35 @@ def cargar_movimientos_esperados_xlsx(
     out: list[MovimientoEsperado] = []
     rows = ws.iter_rows(values_only=True)
     _ = next(rows, None)  # header
+    data_rows = 0
+    data_cells = 0
     for excel_row_idx, row in enumerate(rows, start=2):
         if not row or not any(v is not None and str(v).strip() for v in row):
             continue
+        data_rows += 1
+        data_cells += len(row)
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_tabular_rows",
+            value=data_rows,
+            max_value=cfg.limites_ingesta.max_tabular_rows,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_tabular_rows", cli_flag="--max-tabular-rows"
+            ),
+            label="XLSX esperados",
+        )
+        enforce_counter(
+            path=path,
+            audit=audit,
+            name="max_tabular_cells",
+            value=data_cells,
+            max_value=cfg.limites_ingesta.max_tabular_cells,
+            hints=LimitHints(
+                cfg_path="limites_ingesta.max_tabular_cells", cli_flag="--max-tabular-cells"
+            ),
+            label="XLSX esperados",
+        )
         try:
             fecha = _as_date(row[c_fecha])
             monto: Decimal = parse_monto_clp(_as_text(row[c_monto]))

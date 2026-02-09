@@ -8,6 +8,7 @@ from typing import Any
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -79,6 +80,14 @@ def _id_exp(path: Path, fila: int, data_norm: dict[str, Any], id_externo: str | 
 def cargar_transacciones_csv(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[TransaccionBancaria]:
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="CSV banco",
+    )
+
     delimiter = _detectar_delimitador(path)
     audit.write(
         AuditEvent(
@@ -122,9 +131,35 @@ def cargar_transacciones_csv(
             raise ErrorIngestion(f"CSV banco sin columnas requeridas: {', '.join(faltantes)}")
 
         out: list[TransaccionBancaria] = []
+        data_rows = 0
+        data_cells = 0
         for i, row in enumerate(reader, start=2):  # 1=header
             if not any((v or "").strip() for v in row.values()):
                 continue
+            data_rows += 1
+            data_cells += len(row)
+            enforce_counter(
+                path=path,
+                audit=audit,
+                name="max_tabular_rows",
+                value=data_rows,
+                max_value=cfg.limites_ingesta.max_tabular_rows,
+                hints=LimitHints(
+                    cfg_path="limites_ingesta.max_tabular_rows", cli_flag="--max-tabular-rows"
+                ),
+                label="CSV banco",
+            )
+            enforce_counter(
+                path=path,
+                audit=audit,
+                name="max_tabular_cells",
+                value=data_cells,
+                max_value=cfg.limites_ingesta.max_tabular_cells,
+                hints=LimitHints(
+                    cfg_path="limites_ingesta.max_tabular_cells", cli_flag="--max-tabular-cells"
+                ),
+                label="CSV banco",
+            )
             try:
                 fecha_op: date = parse_fecha_chile(row[c_fecha_op] or "")
             except ErrorParseo as e:
@@ -182,6 +217,14 @@ def cargar_transacciones_csv(
 def cargar_movimientos_esperados_csv(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[MovimientoEsperado]:
+    enforce_file_size(
+        path=path,
+        max_bytes=cfg.limites_ingesta.max_input_bytes,
+        audit=audit,
+        hints=LimitHints(cfg_path="limites_ingesta.max_input_bytes", cli_flag="--max-input-bytes"),
+        label="CSV esperados",
+    )
+
     delimiter = _detectar_delimitador(path)
     audit.write(
         AuditEvent(
@@ -223,9 +266,35 @@ def cargar_movimientos_esperados_csv(
             raise ErrorIngestion(f"CSV esperados sin columnas requeridas: {', '.join(faltantes)}")
 
         out: list[MovimientoEsperado] = []
+        data_rows = 0
+        data_cells = 0
         for i, row in enumerate(reader, start=2):
             if not any((v or "").strip() for v in row.values()):
                 continue
+            data_rows += 1
+            data_cells += len(row)
+            enforce_counter(
+                path=path,
+                audit=audit,
+                name="max_tabular_rows",
+                value=data_rows,
+                max_value=cfg.limites_ingesta.max_tabular_rows,
+                hints=LimitHints(
+                    cfg_path="limites_ingesta.max_tabular_rows", cli_flag="--max-tabular-rows"
+                ),
+                label="CSV esperados",
+            )
+            enforce_counter(
+                path=path,
+                audit=audit,
+                name="max_tabular_cells",
+                value=data_cells,
+                max_value=cfg.limites_ingesta.max_tabular_cells,
+                hints=LimitHints(
+                    cfg_path="limites_ingesta.max_tabular_cells", cli_flag="--max-tabular-cells"
+                ),
+                label="CSV esperados",
+            )
             try:
                 fecha = parse_fecha_chile(row[c_fecha] or "")
             except ErrorParseo as e:

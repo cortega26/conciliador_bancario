@@ -263,6 +263,9 @@ Campos principales:
 - `permitir_ocr`: habilita OCR cuando el PDF es escaneado (recomendado dejar `false` y usar `--enable-ocr` solo cuando corresponda).
 - `mask_por_defecto`: enmascara datos sensibles en logs/reporte (recomendado `true`).
 - `moneda_default`: moneda por defecto si no viene en input (ej: `CLP`).
+- `limites_ingesta`: límites defensivos ante inputs hostiles o sobredimensionados (fail-closed).
+  - Override por config: `limites_ingesta.*`
+  - Override por CLI: flags `--max-*` (ej: `--max-input-bytes`, `--max-pdf-pages`)
 
 Configuración mínima recomendada:
 ```yaml

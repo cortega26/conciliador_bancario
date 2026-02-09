@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -27,12 +28,24 @@ def cmd_validate(
     expected: Path = typer.Option(..., "--expected", exists=True, readable=True),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
-    max_input_bytes: int | None = typer.Option(None, "--max-input-bytes"),
-    max_tabular_rows: int | None = typer.Option(None, "--max-tabular-rows"),
-    max_tabular_cells: int | None = typer.Option(None, "--max-tabular-cells"),
-    max_pdf_pages: int | None = typer.Option(None, "--max-pdf-pages"),
-    max_pdf_text_chars: int | None = typer.Option(None, "--max-pdf-text-chars"),
-    max_xml_movimientos: int | None = typer.Option(None, "--max-xml-movimientos"),
+    max_input_bytes: Optional[int] = typer.Option(
+        None, "--max-input-bytes", help="Limite maximo de tamano por archivo de entrada (bytes)"
+    ),
+    max_tabular_rows: Optional[int] = typer.Option(
+        None, "--max-tabular-rows", help="Limite maximo de filas (CSV/XLSX)"
+    ),
+    max_tabular_cells: Optional[int] = typer.Option(
+        None, "--max-tabular-cells", help="Limite maximo de celdas (CSV/XLSX)"
+    ),
+    max_pdf_pages: Optional[int] = typer.Option(
+        None, "--max-pdf-pages", help="Limite maximo de paginas PDF"
+    ),
+    max_pdf_text_chars: Optional[int] = typer.Option(
+        None, "--max-pdf-text-chars", help="Limite maximo de texto extraido de PDF (caracteres)"
+    ),
+    max_xml_movimientos: Optional[int] = typer.Option(
+        None, "--max-xml-movimientos", help="Limite maximo de nodos <movimiento> en XML"
+    ),
 ) -> None:
     try:
         res = ejecutar_validate(
@@ -75,12 +88,24 @@ def cmd_run(
     dry_run: bool = typer.Option(False, "--dry-run"),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
-    max_input_bytes: int | None = typer.Option(None, "--max-input-bytes"),
-    max_tabular_rows: int | None = typer.Option(None, "--max-tabular-rows"),
-    max_tabular_cells: int | None = typer.Option(None, "--max-tabular-cells"),
-    max_pdf_pages: int | None = typer.Option(None, "--max-pdf-pages"),
-    max_pdf_text_chars: int | None = typer.Option(None, "--max-pdf-text-chars"),
-    max_xml_movimientos: int | None = typer.Option(None, "--max-xml-movimientos"),
+    max_input_bytes: Optional[int] = typer.Option(
+        None, "--max-input-bytes", help="Limite maximo de tamano por archivo de entrada (bytes)"
+    ),
+    max_tabular_rows: Optional[int] = typer.Option(
+        None, "--max-tabular-rows", help="Limite maximo de filas (CSV/XLSX)"
+    ),
+    max_tabular_cells: Optional[int] = typer.Option(
+        None, "--max-tabular-cells", help="Limite maximo de celdas (CSV/XLSX)"
+    ),
+    max_pdf_pages: Optional[int] = typer.Option(
+        None, "--max-pdf-pages", help="Limite maximo de paginas PDF"
+    ),
+    max_pdf_text_chars: Optional[int] = typer.Option(
+        None, "--max-pdf-text-chars", help="Limite maximo de texto extraido de PDF (caracteres)"
+    ),
+    max_xml_movimientos: Optional[int] = typer.Option(
+        None, "--max-xml-movimientos", help="Limite maximo de nodos <movimiento> en XML"
+    ),
 ) -> None:
     if no_mask and mask:
         console.print("[red]Flags incompatibles:[/red] --mask y --no-mask")

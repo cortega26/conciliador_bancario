@@ -27,7 +27,7 @@ dependencies = [
   "rich==13.7.1",
   "PyYAML==6.0.1",
   "openpyxl==3.1.2",
-  "pypdf==4.2.0",
+  "pypdf==6.6.2",
   "defusedxml==0.7.1",
 ]
 
@@ -95,7 +95,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Typer encourages Option(...) in defaults; this is intentional for CLI ergonomics.
-"src/conciliador_bancario/cli/app.py" = ["B008"]
+"src/conciliador_bancario/cli/app.py" = ["B008", "UP007"]
 # Tests sometimes intentionally assert broad exceptions for contract/fail-closed behaviour.
 "tests/**/*.py" = ["B017"]
 

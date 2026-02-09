@@ -80,6 +80,25 @@ def test_limit_max_tabular_cells_csv(tmp_path: Path) -> None:
     assert "--max-tabular-cells" in str(e.value)
 
 
+def test_limit_max_tabular_rows_xlsx(tmp_path: Path) -> None:
+    from openpyxl import Workbook
+
+    p = tmp_path / "banco.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["fecha_operacion", "monto", "descripcion"])
+    ws.append(["05/01/2026", "1000", "A"])
+    ws.append(["05/01/2026", "1000", "B"])
+    wb.save(p)
+
+    cfg = _cfg(max_input_bytes=5_000_000, max_tabular_rows=1)
+    audit = JsonlAuditWriter(tmp_path / "audit.jsonl")
+    with pytest.raises(ErrorIngestion) as e:
+        cargar_transacciones_bancarias(p, cfg=cfg, audit=audit)
+    assert "max_tabular_rows" in str(e.value)
+    assert "--max-tabular-rows" in str(e.value)
+
+
 def test_limit_max_xml_movimientos(tmp_path: Path) -> None:
     p = tmp_path / "cartola.xml"
     p.write_text(
@@ -120,7 +139,9 @@ def test_limit_max_pdf_pages(tmp_path: Path) -> None:
     assert "--max-pdf-pages" in str(e.value)
 
 
-def test_limit_max_pdf_text_chars_via_patch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_limit_max_pdf_text_chars_via_patch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     class _FakePage:
         def extract_text(self) -> str:
             return "X" * 20
@@ -141,4 +162,3 @@ def test_limit_max_pdf_text_chars_via_patch(tmp_path: Path, monkeypatch: pytest.
         cargar_transacciones_pdf_texto(p, cfg=cfg, audit=audit)
     assert "max_pdf_text_chars" in str(e.value)
     assert "--max-pdf-text-chars" in str(e.value)
-

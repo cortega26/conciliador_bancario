@@ -55,7 +55,16 @@ def cargar_transacciones_pdf_ocr(
         label="PDF banco (OCR)",
     )
 
-    # Limit pages before converting to images (expensive).
+    try:
+        import pytesseract  # type: ignore
+        from pdf2image import convert_from_path  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        raise ErrorIngestion(
+            "OCR no disponible. Instale extras: pip install -e '.[pdf_ocr]' y dependencias del sistema (poppler)."
+        ) from e
+
+    # Limit pages before converting to images (expensive). Keep it after the deps check so
+    # missing OCR deps fails with a clean error even on invalid PDFs (contract test).
     reader = PdfReader(str(path))
     enforce_counter(
         path=path,
@@ -66,14 +75,6 @@ def cargar_transacciones_pdf_ocr(
         hints=LimitHints(cfg_path="limites_ingesta.max_pdf_pages", cli_flag="--max-pdf-pages"),
         label="PDF banco (OCR)",
     )
-
-    try:
-        import pytesseract  # type: ignore
-        from pdf2image import convert_from_path  # type: ignore
-    except Exception as e:  # noqa: BLE001
-        raise ErrorIngestion(
-            "OCR no disponible. Instale extras: pip install -e '.[pdf_ocr]' y dependencias del sistema (poppler)."
-        ) from e
 
     audit.write(AuditEvent("ingestion", "OCR iniciado", {"archivo": path.name}))
     images = convert_from_path(str(path))

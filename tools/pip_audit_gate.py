@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-
 _EXPIRES_RE = re.compile(r"\bexpires\s*[:=]\s*(\d{4}-\d{2}-\d{2})\b", re.IGNORECASE)
 
 
@@ -24,7 +23,7 @@ def _parse_ignore_file(path: Path) -> list[IgnoreEntry]:
         return []
 
     entries: list[IgnoreEntry] = []
-    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -63,7 +62,20 @@ def _parse_ignore_file(path: Path) -> list[IgnoreEntry]:
 
 
 def _run_pip_audit(*, ignore: list[IgnoreEntry]) -> int:
-    cmd = ["pip-audit"]
+    # Use module invocation to avoid relying on PATH / venv activation.
+    cache_dir = Path(__file__).resolve().parents[1] / ".pip-audit-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip_audit",
+        "--skip-editable",
+        "--cache-dir",
+        str(cache_dir),
+        "--progress-spinner",
+        "off",
+    ]
     for e in ignore:
         cmd += ["--ignore-vuln", e.vuln_id]
     # We intentionally audit the *installed environment* here (post-install gate).
@@ -72,7 +84,9 @@ def _run_pip_audit(*, ignore: list[IgnoreEntry]) -> int:
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="CI gate: supply-chain vulnerability scan (pip-audit).")
+    ap = argparse.ArgumentParser(
+        description="CI gate: supply-chain vulnerability scan (pip-audit)."
+    )
     ap.add_argument(
         "--ignore-file",
         type=Path,
@@ -87,4 +101,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

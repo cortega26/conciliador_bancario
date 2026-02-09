@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,9 +23,14 @@ def _audit_and_raise(
 ) -> None:
     # Best-effort: if audit logging fails, still fail-closed on the ingestion error.
     try:
-        audit.write(AuditEvent("ingestion_limit", "Limite de ingesta excedido", {"archivo": path.name, **details}))
-    except Exception:
-        pass
+        audit.write(
+            AuditEvent(
+                "ingestion_limit", "Limite de ingesta excedido", {"archivo": path.name, **details}
+            )
+        )
+    except Exception as e:  # noqa: BLE001
+        # No permitir que un error de auditoria enmascare el fail-closed de ingesta.
+        sys.stderr.write(f"[audit] failed to write ingestion_limit event: {e}\n")
     raise ErrorIngestion(message)
 
 
@@ -83,4 +89,3 @@ def enforce_counter(
             "cli_flag": hints.cli_flag,
         },
     )
-

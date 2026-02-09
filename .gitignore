@@ -12,3 +12,9 @@ build/
 salida/
 internals/
 
+# Workspace boundaries / secretos (defensa adicional contra contaminacion accidental)
+license.lic
+*.pem
+*.key
+*.p12
+*.pfx

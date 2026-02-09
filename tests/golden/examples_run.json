@@ -6,26 +6,26 @@
     "mask": true,
     "modelo_interno_version": "2",
     "permitir_ocr": false,
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "hallazgos": [
     {
       "detalles": {},
-      "entidad": "esperado",
-      "entidad_id": "EXP-002",
-      "id": "H-2063c7d31ebde6",
-      "mensaje": "Movimiento esperado sin match (pendiente).",
-      "severidad": "advertencia",
-      "tipo": "pendiente_esperado"
-    },
-    {
-      "detalles": {},
       "entidad": "banco",
       "entidad_id": "TX-6bc852f1da26",
-      "id": "H-542ae4abb1ad63",
+      "id": "H-19f57ce37abced",
       "mensaje": "Transaccion bancaria con match (ver Matches).",
       "severidad": "info",
       "tipo": "tx_con_match"
+    },
+    {
+      "detalles": {},
+      "entidad": "esperado",
+      "entidad_id": "EXP-002",
+      "id": "H-2c65c771778c0e",
+      "mensaje": "Movimiento esperado sin match (pendiente).",
+      "severidad": "advertencia",
+      "tipo": "pendiente_esperado"
     }
   ],
   "matches": [
@@ -33,7 +33,7 @@
       "bloqueado_por_confianza": false,
       "estado": "conciliado",
       "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto.",
-      "id": "M-639351ed39c571",
+      "id": "M-0feffd256700fc",
       "movimientos_esperados": [
         "EXP-001"
       ],
@@ -44,6 +44,6 @@
       ]
     }
   ],
-  "run_id": "b6b8c6bdf6eb7f97"
+  "run_id": "7243e846d9840fea",
+  "schema_version": "1.0.0"
 }
-

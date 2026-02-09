@@ -101,6 +101,8 @@ def ejecutar_run(
     from conciliador_bancario.normalization.normalizer import normalizar_lote
     from conciliador_bancario.utils.hashing import sha256_archivo, sha256_json_estable
     from conciliador_bancario.models import MODELO_INTERNO_VERSION
+    from conciliador_core.contracts.run_json_codec import canonical_json_dumps
+    from conciliador_core.contracts.run_schema import RUN_JSON_SCHEMA_VERSION, validate_run_payload
 
     configurar_logging(log_level)
     cfg = _cargar_config(config)
@@ -127,18 +129,17 @@ def ejecutar_run(
     resultado = conciliar(cfg=cfg, transacciones=txs, esperados=exps, audit=audit, run_id=run_id)
 
     run_json = out_dir / "run.json"
+    payload = validate_run_payload(
+        {
+            "schema_version": RUN_JSON_SCHEMA_VERSION,
+            "run_id": resultado.run_id,
+            "fingerprint": run_fingerprint,
+            "matches": [m.model_dump() for m in resultado.matches],
+            "hallazgos": [h.model_dump() for h in resultado.hallazgos],
+        }
+    )
     run_json.write_text(
-        json.dumps(
-            {
-                "run_id": resultado.run_id,
-                "fingerprint": run_fingerprint,
-                "matches": [m.model_dump() for m in resultado.matches],
-                "hallazgos": [h.model_dump() for h in resultado.hallazgos],
-            },
-            ensure_ascii=True,
-            sort_keys=True,
-            separators=(",", ":"),
-        ),
+        canonical_json_dumps(payload),
         encoding="utf-8",
     )
 

@@ -25,8 +25,9 @@ _FORBIDDEN_TRACKED_SUFFIXES = {
 }
 
 _CONTENT_MARKERS = [
-    b"BEGIN PRIVATE KEY",
-    b"BEGIN RSA PRIVATE KEY",
+    # Evita false-positive del propio scanner: no incluimos el marker completo como literal en el source.
+    (b"BEGIN " + b"PRIVATE KEY"),
+    (b"BEGIN RSA " + b"PRIVATE KEY"),
 ]
 
 

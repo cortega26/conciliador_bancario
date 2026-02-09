@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "conciliador-bancario"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI local para conciliacion bancaria (Chile-first) con auditoria y enfoque fail-closed."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,6 +45,10 @@ packages = ["src/conciliador_bancario", "src/conciliador_core"]
 include = [
   "src/conciliador_bancario/templates/*.yaml",
   "src/conciliador_bancario/templates/*.csv",
+]
+exclude = [
+  "**/__pycache__/**",
+  "**/*.pyc",
 ]
 
 [tool.pytest.ini_options]

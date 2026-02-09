@@ -1,3 +1,5 @@
-__all__ = ["__version__"]
+from __future__ import annotations
 
-__version__ = "0.2.0"
+from conciliador_bancario.version import __version__
+
+__all__ = ["__version__"]

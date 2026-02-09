@@ -1,0 +1,12 @@
+-r requirements.txt
+
+pytest==8.2.0
+hypothesis==6.108.4
+ruff==0.4.10
+black==24.10.0
+bandit==1.7.8
+build==1.2.2
+twine==5.1.1
+bump2version==1.0.1
+mypy==1.10.0
+types-PyYAML==6.0.12.20240808

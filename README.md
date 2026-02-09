@@ -177,8 +177,15 @@ Roadmap (alto nivel, sin promesas de fecha):
 
 ---
 
+## Versionado y releases
+
+- Source of truth: `src/conciliador_bancario/version.py`
+- Historial de cambios: `CHANGELOG.md`
+- Política (repo público): cada merge a `main` hace bump automático de `patch`, crea tag `vX.Y.Z` y (si está configurado) publica en PyPI.
+
+---
+
 ## Premium (opcional)
 
 Existe un repositorio premium separado orientado a productividad (revisión/agrupación/priorización), que **consume** el `run_dir` generado por este core.
 Este repo no incluye el código premium.
-

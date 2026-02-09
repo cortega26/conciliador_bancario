@@ -42,3 +42,9 @@ jobs:
 
       - name: Tests
         run: python -m pytest -q
+
+      - name: Build (sdist + wheel)
+        run: python -m build
+
+      - name: Verify dist (twine check)
+        run: python -m twine check dist/*

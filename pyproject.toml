@@ -4,13 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "conciliador-bancario"
-version = "0.2.0"
 description = "CLI local para conciliacion bancaria (Chile-first) con auditoria y enfoque fail-closed."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Conciliador Bancario Contributors" }]
 keywords = ["conciliacion", "bancaria", "chile", "contabilidad", "cli"]
+dynamic = ["version"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+urls = { "Repository" = "https://github.com/cortega26/conciliador_bancario", "Issues" = "https://github.com/cortega26/conciliador_bancario/issues" }
 dependencies = [
   "pydantic==2.7.4",
   "typer==0.12.3",
@@ -29,6 +38,9 @@ dev = [
   "ruff==0.4.10",
   "black==24.10.0",
   "bandit==1.7.8",
+  "build==1.2.2",
+  "twine==5.1.1",
+  "bump2version==1.0.1",
   "mypy==1.10.0",
   "types-PyYAML==6.0.12.20240808",
 ]
@@ -44,6 +56,9 @@ concilia = "conciliador_bancario.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/conciliador_bancario", "src/conciliador_core"]
+
+[tool.hatch.version]
+path = "src/conciliador_bancario/version.py"
 
 [tool.hatch.build]
 include = [

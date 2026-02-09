@@ -99,11 +99,13 @@ def ejecutar_run(
 
     Reporting XLSX es fase posterior; en esta etapa, `--dry-run` es el modo recomendado.
     """
-    from conciliador_core.contracts.run_json_codec import canonical_json_dumps
-    from conciliador_core.contracts.run_schema import RUN_JSON_SCHEMA_VERSION, validate_run_payload
-
     from conciliador_bancario import __version__
     from conciliador_bancario.audit.audit_log import JsonlAuditWriter, configurar_logging
+    from conciliador_bancario.core.contracts.run_json_codec import canonical_json_dumps
+    from conciliador_bancario.core.contracts.run_schema import (
+        RUN_JSON_SCHEMA_VERSION,
+        validate_run_payload,
+    )
     from conciliador_bancario.ingestion.detector import (
         cargar_movimientos_esperados,
         cargar_transacciones_bancarias,

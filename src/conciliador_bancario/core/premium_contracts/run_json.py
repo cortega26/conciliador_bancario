@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from conciliador_core.contracts.run_schema import (
+from ..contracts.run_schema import (
     RUN_JSON_SCHEMA_VERSION,
     validate_run_payload_for_consumer,
 )

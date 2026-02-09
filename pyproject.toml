@@ -55,16 +55,16 @@ pdf_ocr = [
 concilia = "conciliador_bancario.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/conciliador_bancario", "src/conciliador_core"]
+packages = ["src/conciliador_bancario"]
+include = [
+  "src/conciliador_bancario/templates/*.yaml",
+  "src/conciliador_bancario/templates/*.csv",
+]
 
 [tool.hatch.version]
 path = "src/conciliador_bancario/version.py"
 
 [tool.hatch.build]
-include = [
-  "src/conciliador_bancario/templates/*.yaml",
-  "src/conciliador_bancario/templates/*.csv",
-]
 exclude = [
   "**/__pycache__/**",
   "**/*.pyc",

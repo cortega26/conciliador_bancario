@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 from conciliador_bancario.cli import app
-from conciliador_core.contracts.run_schema import RUN_JSON_SCHEMA_VERSION, validate_run_payload
+from conciliador_bancario.core.contracts.run_schema import (
+    RUN_JSON_SCHEMA_VERSION,
+    validate_run_payload,
+)
 from typer.testing import CliRunner
 
 

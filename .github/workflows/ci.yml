@@ -167,7 +167,8 @@ jobs:
 
           git add src/conciliador_bancario/version.py .bumpversion.cfg CHANGELOG.md
           git commit -m "chore(release): v${{ steps.ver.outputs.version }} [skip release]"
-          git tag "v${{ steps.ver.outputs.version }}"
+          # Use an annotated tag so `git push --follow-tags` reliably pushes it.
+          git tag -a "v${{ steps.ver.outputs.version }}" -m "v${{ steps.ver.outputs.version }}"
 
       - name: Push
         if: steps.guard.outputs.proceed == 'true'

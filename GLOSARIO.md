@@ -5,8 +5,54 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 
 > Nota: cuando un término es general (no exclusivo del software), se indica explícitamente. Cuando un comportamiento es propio del software, se describe como tal.
 
+> Este glosario es una referencia puntual: no es necesario leerlo completo.
+> Use el índice A–Z para saltar directo a un término.
+
+## Índice de términos (A–Z)
+- [Ambigüedad](#ambiguedad)
+- [Artefacto (de salida)](#artefacto)
+- [Audit Trail / Auditoría](#auditoria)
+- [`audit.jsonl`](#auditjsonl)
+- [Autoconciliación](#autoconciliacion)
+- [Cartola / Extracto](#cartola)
+- [CLI](#cli)
+- [CLP](#clp)
+- [CSV](#csv)
+- [CSV/Excel Injection](#csv-excel-injection)
+- [Dry-run](#dry-run)
+- [E2E (End-to-End)](#e2e)
+- [Enmascaramiento (masking)](#masking)
+- [ERP](#erp)
+- [Fail-closed](#fail-closed)
+- [Fingerprint](#fingerprint)
+- [Golden datasets](#golden)
+- [Hallazgo](#hallazgo)
+- [Hash (SHA-256)](#hash)
+- [Idempotencia](#idempotencia)
+- [Ingestión](#ingestion)
+- [Match](#match)
+- [Movimientos esperados](#esperados)
+- [OCR](#ocr)
+- [PDF (texto vs escaneado)](#pdf)
+- [Pendiente (de conciliación)](#pendiente)
+- [Pipeline](#pipeline)
+- [Pydantic](#pydantic)
+- [`run_dir`](#run-dir)
+- [`run_id`](#run-id)
+- [`run.json`](#runjson)
+- [`schema_version` (del `run.json`)](#schema-version)
+- [Score](#score)
+- [SemVer](#semver)
+- [Typer](#typer)
+- [Venv (entorno virtual)](#venv)
+- [XLSX](#xlsx)
+- [XML](#xml)
+
 ## Ambigüedad
 <a id="ambiguedad"></a>
+
+- Audiencia: Usuario
+- Relacionado con: [Fail-closed](#fail-closed), [Hallazgo](#hallazgo), [Match](#match)
 
 **Definición:** Situación en la que una transacción del banco podría corresponder a más de un movimiento esperado (o viceversa), o no hay evidencia suficiente para elegir un único candidato.
 
@@ -30,6 +76,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 ## Audit Trail / Auditoría
 <a id="auditoria"></a>
 
+- Audiencia: Usuario
+- Relacionado con: [`audit.jsonl`](#auditjsonl), [`run.json`](#runjson), [`run_id`](#run-id)
+
 **Definición:** Registro de evidencia y decisiones para poder explicar qué se hizo y por qué.
 
 **En el software:** La auditoría se expresa en `audit.jsonl` (eventos) y en los campos de explicación/hallazgos dentro de `run.json` y el XLSX.
@@ -41,6 +90,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 ## `audit.jsonl`
 <a id="auditjsonl"></a>
 
+- Audiencia: Técnico
+- Relacionado con: [Audit Trail / Auditoría](#auditoria), [`run_dir`](#run-dir), [`run_id`](#run-id)
+
 **Definición:** Archivo de texto con eventos en formato JSON Lines (una línea = un objeto JSON).
 
 **En el software:** Registra eventos de ingestión/validación y otros mensajes técnicos. Incluye `seq` (secuencia determinista) y normalmente `run_id` para trazabilidad.
@@ -51,6 +103,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 
 ## Autoconciliación
 <a id="autoconciliacion"></a>
+
+- Audiencia: Usuario
+- Relacionado con: [Fail-closed](#fail-closed), [Match](#match), [OCR](#ocr), [Score](#score)
 
 **Definición:** Marcar un caso como conciliado automáticamente sin intervención humana.
 
@@ -106,6 +161,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 
 ## CSV/Excel Injection
 <a id="csv-excel-injection"></a>
+
+- Audiencia: Avanzado
+- Relacionado con: [CSV](#csv), [XLSX](#xlsx)
 
 **Definición:** Riesgo de seguridad donde un texto en una celda se interpreta como fórmula (por ejemplo comienza con `=`, `+`, `-`, `@`) al abrirlo en Excel.
 
@@ -261,6 +319,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 ## OCR
 <a id="ocr"></a>
 
+- Audiencia: Usuario
+- Relacionado con: [Autoconciliación](#autoconciliacion), [Fail-closed](#fail-closed), [PDF (texto vs escaneado)](#pdf)
+
 **Definición:** “Optical Character Recognition”: extraer texto desde una imagen (por ejemplo un PDF escaneado).
 
 **En el software:** Es opcional y se habilita explícitamente. Los datos por OCR se consideran de baja confianza y bloquean autoconciliación.
@@ -279,6 +340,20 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 **Ejemplo:** “Cartola digital” vs “foto escaneada del extracto”.
 
 **Advertencia común:** “Se ve bien en pantalla” no significa que el PDF tenga texto extraíble.
+
+## Pendiente (de conciliación) (Nuevo término)
+<a id="pendiente"></a>
+
+- Audiencia: Usuario
+- Relacionado con: [Ambigüedad](#ambiguedad), [Fail-closed](#fail-closed), [Hallazgo](#hallazgo), [Match](#match)
+
+**Definición:** Caso que el sistema no marca como conciliado automáticamente y que requiere revisión humana.
+
+**En el software:** Un match puede quedar con estado `pendiente` cuando la evidencia no es suficiente para autoconciliar (por ejemplo por ambigüedad o baja confianza). También puede aparecer como “pendiente” vía hallazgos (por ejemplo movimientos sin match).
+
+**Ejemplo:** Dos movimientos esperados compatibles con una transacción bancaria del mismo monto; el sistema deja el caso pendiente.
+
+**Advertencia común:** “Pendiente” no significa “error”; significa “no autoconciliado” (fail-closed) hasta que exista evidencia suficiente.
 
 ## Pipeline
 <a id="pipeline"></a>
@@ -326,6 +401,9 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 
 ## `run.json`
 <a id="runjson"></a>
+
+- Audiencia: Técnico
+- Relacionado con: [Fingerprint](#fingerprint), [`run_dir`](#run-dir), [`schema_version` (del `run.json`)](#schema-version)
 
 **Definición:** Artefacto técnico principal del core: contiene resultados de matching y hallazgos, más trazabilidad (`fingerprint`).
 
@@ -411,4 +489,3 @@ El objetivo es evitar ambigüedades y malos entendidos al usar el RUNBOOK.
 **Ejemplo:** `cartola_ok.xml` en datasets golden.
 
 **Advertencia común:** Un XML malformado o con estructura distinta falla explícitamente.
-

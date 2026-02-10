@@ -84,6 +84,21 @@ Puntos no negociables:
 - No “adivina” para maximizar autoconciliación (por diseño, prioriza control de daño).
 - No es SaaS: no hay telemetría ni envío de datos (todo corre local).
 
+### Casos borde (comportamiento fail-closed)
+
+Este core está diseñado para **no autoconciliar** cuando el riesgo de error sube o la evidencia es insuficiente. En esos casos genera **hallazgos** y deja trazabilidad en `run.json` y `audit.jsonl` para revisión humana.
+
+Ejemplos comunes:
+- Pago parcial: 1 factura pagada en 2+ transferencias.
+  - Si el ERP entrega **2+ movimientos esperados** (granularidad real de pago), el core puede conciliar cada transferencia contra su esperado (si no hay ambigüedad).
+  - Si el ERP entrega **1 esperado por el total** y el banco trae **2+ abonos**, el core no hace split/merge automático: queda como pendiente/hallazgo (fail-closed).
+- Pago agrupado: 2+ facturas pagadas con 1 transferencia (N esperados vs 1 banco). El core no agrupa automáticamente: requiere revisión.
+- Comisiones/retenciones/redondeos: si el monto bancario no calza exactamente con el esperado, se reporta discrepancia (no auto-match).
+- Reversas/chargebacks/abonos correctivos: se preservan como eventos separados; si generan ambigüedad, quedan como hallazgos.
+- OCR (PDF escaneado): siempre baja confianza y por defecto **no autoconcilia**.
+
+Si estos casos aparecen de forma recurrente y tu problema pasa a ser **tiempo humano de revisión**, revisa la sección **Premium** (este repo mantiene el core conservador por diseño).
+
 ---
 
 ## Quick Start (5 minutos)
@@ -248,5 +263,15 @@ Roadmap (alto nivel, sin promesas de fecha):
 
 ## Premium (opcional)
 
-Existe un repositorio premium separado orientado a productividad (revisión/agrupación/priorización), que **consume** el `run_dir` generado por este core.
-Este repo no incluye el código premium.
+Este repo OSS se mantiene intencionalmente **conservador** (fail-closed) y enfocado en riesgo/auditoría. El Premium (repo separado) está diseñado para capas de **productividad** que ahorran tiempo humano recurrente, sin cambiar la fuente de verdad del core: **consume** el `run_dir` (`run.json`, `audit.jsonl`, XLSX técnico) y trabaja sobre evidencia.
+
+Ejemplos de problemas que típicamente empujan a Premium:
+- Resolución asistida de casos N↔1 (pagos parciales y pagos agrupados), con agrupación y trazabilidad defendible.
+- Paquetes de reglas específicas por banco/ERP (reducción de fricción operacional) sin meter heurísticas frágiles en el core.
+- Heurísticas de auto-match más agresivas, pero controladas por umbrales, reglas explícitas y auditoría.
+- Reportes ejecutivos/listos para cliente y flujos operativos multi-cliente (automatización y presentación).
+
+Referencia (diseño; no implementado en este repo):
+- Roadmap: `docs/premium_roadmap.md`
+- Arquitectura: `docs/premium_architecture.md`
+- Licensing: `docs/premium_licensing.md`

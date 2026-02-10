@@ -63,3 +63,12 @@ No hay implementación en este repo; solo se describen objetivos, riesgos y depe
 - Valor percibido: control de calidad y rapidez en cierres.
 - Riesgos: falsos hallazgos por cambios de layout o reglas; requiere buena identidad de entidades.
 - Dependencias core: run_id/fingerprint determinista; auditoría.
+
+### 7) Resolución asistida de split/merge (pagos parciales y agrupados)
+
+- Nombre: `SplitMergeResolutionAssistant`
+- Problema: la realidad operacional genera casos N↔1 (una factura pagada en múltiples transferencias; múltiples facturas pagadas en una sola transferencia), además de neteos por comisiones/retenciones.
+- Por qué NO core: es ahorro de tiempo recurrente y tiende a requerir heurísticas por banco/ERP y flujos de revisión (zona premium).
+- Valor percibido: reduce pendientes repetitivos sin "adivinar"; propone agrupaciones y requiere confirmación humana.
+- Riesgos: false positives si se automatiza; complejidad de UX; requiere trazabilidad de por qué se sugiere un grupo/split.
+- Dependencias core: run.json/audit.jsonl explicables; identidad estable de transacciones; políticas fail-closed.

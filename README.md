@@ -3,6 +3,7 @@
 CLI local (Chile-first) para **conciliación bancaria** con enfoque **fail-closed**, **auditabilidad** y **salidas deterministas**.
 
 [![CI](https://github.com/cortega26/conciliador_bancario/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cortega26/conciliador_bancario/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/bankrecon.svg?label=PyPI)](https://pypi.org/project/bankrecon/)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Licencia](https://img.shields.io/github/license/cortega26/conciliador_bancario)
 
@@ -16,6 +17,34 @@ Entradas (por cliente)                    Proceso (core)                     Sal
   config_cliente.yaml   ┐                                                  ┌─ run.json          (resultado técnico + contrato)
   banco.csv|xlsx|xml|pdf ├─> ingestión -> normalización -> matching ->     ├─ audit.jsonl        (traza append-only, JSON Lines)
   esperados.csv|xlsx    ┘         validación estricta + auditoría          └─ reporte_conciliacion.xlsx (opcional; revisión humana)
+```
+
+```mermaid
+flowchart LR
+  subgraph Inputs[Entradas por cliente]
+    cfg[config_cliente.yaml]
+    bank[banco.csv / .xlsx / .xml / .pdf]
+    exp[movimientos_esperados.csv / .xlsx]
+  end
+
+  subgraph Core[Core (fail-closed, auditable, determinista)]
+    ing[Ingestión]
+    norm[Normalización]
+    match[Matching]
+    audit[audit.jsonl]
+  end
+
+  subgraph Outputs[Salidas por corrida (run_dir)]
+    run[run.json]
+    xlsx[reporte_conciliacion.xlsx\n(opcional)]
+  end
+
+  cfg --> ing
+  bank --> ing
+  exp --> ing
+  ing --> norm --> match --> run
+  match --> audit
+  match --> xlsx
 ```
 
 Puntos no negociables:
@@ -57,6 +86,16 @@ concilia --help
 OCR (opcional para PDFs escaneados):
 ```powershell
 pipx inject bankrecon pdf2image pytesseract Pillow
+```
+
+Flujo recomendado (primera vez):
+
+```mermaid
+flowchart TB
+  i[concilia init] --> v[concilia validate]
+  v --> d[concilia run --dry-run]
+  d --> r[concilia run]
+  r --> e[concilia explain]
 ```
 
 ### 2) Inicializar un “cliente”

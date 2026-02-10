@@ -4,6 +4,10 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-02-10
+### Changed
+- Bump automatico de version (patch).
+
 ## [0.2.2] - 2026-02-10
 ### Changed
 - Tests: hardening de normalización/validación en golden datasets (menos brittle ante cambios no contractuales).

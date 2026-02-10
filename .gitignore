@@ -19,3 +19,4 @@ license.lic
 *.key
 *.p12
 *.pfx
+*.code-workspace

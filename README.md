@@ -36,7 +36,7 @@ flowchart LR
 
   subgraph Outputs["Salidas por corrida (run_dir)"]
     run[run.json]
-    xlsx[reporte_conciliacion.xlsx\n(opcional)]
+    xlsx["reporte_conciliacion.xlsx<br/>(opcional)"]
   end
 
   cfg --> ing

@@ -17,5 +17,5 @@ jobs:
   noop:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Release automation is implemented in .github/workflows/ci.yml (job: release)."
-
+      - run: |
+          echo "Release automation is implemented in .github/workflows/ci.yml (job: release)."

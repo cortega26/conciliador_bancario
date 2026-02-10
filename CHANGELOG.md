@@ -4,6 +4,7 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-10
 ### Changed
 - Packaging/namespace: el código interno de contratos dejó de existir como paquete top-level separado; ahora vive en `conciliador_bancario.core` (impacta integraciones Premium).
 - Hardening: comando `concilia explain` ahora valida `run.json` (fail-closed) antes de procesarlo.

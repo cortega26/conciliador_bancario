@@ -17,6 +17,21 @@ Entrega resultados **auditables** y **conservadores**:
 - No hay “magia” silenciosa: errores y [hallazgos](GLOSARIO.md#hallazgo) son explícitos.
 - Misma entrada produce el mismo [`run.json`](GLOSARIO.md#runjson) (sin timestamps variables).
 
+### Modelo mental del CLI (lo minimo para operar)
+- `concilia init`: genera plantillas por cliente (config + CSVs ejemplo).
+- `concilia validate`: valida formato + parseo real (fail-closed) y entrega errores accionables si algo esta mal.
+- `concilia run`: ejecuta pipeline end-to-end y genera artefactos en `run_dir`:
+  - `run.json` (contrato tecnico)
+  - `audit.jsonl` (traza JSONL)
+  - `reporte_conciliacion.xlsx` (opcional; no se genera en `--dry-run`)
+- `concilia explain`: imprime un match/hallazgo puntual desde `run.json` (fail-closed si el contrato es invalido).
+
+### UX Contracts (anti-regresion)
+Este proyecto formaliza "lo que el usuario puede esperar" como contratos verificables (tests), para evitar regresiones:
+- Contratos: `docs/ux_contracts.md`
+- En particular: ambiguedad ⇒ no autoconcilia; OCR/PDF escaneado ⇒ bloqueante por defecto; errores explicitos; idempotencia;
+  auditabilidad.
+
 ### Qué NO intenta resolver (límites)
 - No reemplaza el criterio contable: **no decide por usted** en casos ambiguos.
 - No es un ERP ni un sistema contable.

@@ -103,6 +103,13 @@ Si estos casos aparecen de forma recurrente y tu problema pasa a ser **tiempo hu
 
 ## Quick Start (5 minutos)
 
+### Modelo mental del CLI
+
+- `concilia init`: genera plantillas por cliente (config + CSVs ejemplo).
+- `concilia validate`: valida inputs (formato + parseo real) antes de correr.
+- `concilia run`: ejecuta pipeline end-to-end y persiste artefactos tecnicos en `run_dir` (`run.json`, `audit.jsonl`, XLSX opcional).
+- `concilia explain`: inspecciona un match/hallazgo puntual desde `run.json` (fail-closed si el contrato es invalido).
+
 ### 1) Instalar (pipx, recomendado)
 
 ```powershell
@@ -210,6 +217,14 @@ El artefacto `run.json` es un **contrato versionado** para consumo por herramien
 - Especificación: `docs/contract_run_json.md`
 - Glosario de términos: `GLOSARIO.md`
 
+## UX Contracts (anti-regresion)
+
+Este repo trata la UX del CLI como un **contrato verificable**: ante ambiguedad o baja confianza, el core **no**
+autoconcilia, y siempre deja evidencia.
+
+- Contratos: `docs/ux_contracts.md`
+- Tests de contrato (referencia): `tests/test_e2e_cli.py`, `tests/test_golden_datasets.py`, `tests/test_audit_contract.py`
+
 ---
 
 ## Documentación
@@ -223,6 +238,7 @@ Referencia:
 - `docs/guia_tecnica.md`
 - `docs/agregar_formato.md`
 - `docs/contract_run_json.md`
+- `docs/ux_contracts.md`
 - `walkthrough.md`
 - `mvp_checklist.md`
 
@@ -231,7 +247,8 @@ Referencia:
 ## Público objetivo
 
 ### Sí
-- Estudios contables, PyMEs y equipos que necesitan un flujo **reproducible** de conciliación con evidencia.
+- Estudios contables (persona principal: **contador/a tradicional, multi-cliente, Excel-first**), PyMEs y equipos que
+  necesitan un flujo **reproducible** de conciliación con evidencia.
 - Usuarios no técnicos o semi-técnicos que puedan ejecutar comandos y preparar archivos (CSV/XLSX/PDF).
 
 ### No

@@ -71,6 +71,13 @@ Puntos no negociables:
 
 ---
 
+## Arquitectura / Flujo General
+
+![Arquitectura del Conciliador Bancario](docs/diagrams/conciliador_architecture.svg)
+
+Nota: el archivo fuente (`docs/diagrams/conciliador_architecture.puml`) es la fuente de verdad. El SVG se genera
+localmente con PlantUML (ver `docs/diagrams/RENDERING.md`).
+
 ## Qué hace (y qué no)
 
 ### Qué hace

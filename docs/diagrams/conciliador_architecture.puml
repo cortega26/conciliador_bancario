@@ -1,0 +1,63 @@
+@startuml conciliador_architecture
+!pragma layout smetana
+
+' Use local (vendored) includes instead of includeurl.
+!define RELATIVE_INCLUDE
+!include ./c4-plantuml/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+title Conciliador Bancario (Core) - Arquitectura / Flujo General\nfail-closed, audit-first, determinista
+
+Person(user, "Usuario", "Contador/a Excel-first o analista financiero. Opera por CLI.")
+
+ContainerDb(cfg, "config_cliente.yaml", "YAML (por cliente)", "Config y politicas (umbrales, OCR opt-in, limites).")
+ContainerDb(bank, "banco.(csv|xlsx|xml|pdf)", "Archivo", "Cartola / extracto bancario.")
+ContainerDb(exp, "movimientos_esperados.(csv|xlsx)", "Archivo", "Movimientos internos esperados (ERP/planilla).")
+
+System_Boundary(cb, "Conciliador Bancario (Core)") {
+  Container(cli, "CLI (concilia)", "Typer", "init / validate / run / explain")
+
+  Container_Boundary(core, "Core (fail-closed)") {
+    Component(ing, "Ingestion", "ingestion/*", "Adapters por formato (CSV/XLSX/XML/PDF texto/OCR opt-in).")
+    Component(norm, "Normalizacion", "normalization/*", "Normaliza campos (fecha/monto/texto/referencia) de forma estable.")
+    Component(match, "Matching", "matching/*", "Motor conservador y explicable. Ambiguedad => no autoconcilia.")
+    Component(audit, "Audit", "audit/*", "Emite eventos/hallazgos. Traza append-only con run_id + seq.")
+    Component(rep, "Reporting", "reporting/*", "XLSX tecnico (opcional; no se genera en --dry-run).")
+  }
+}
+
+ContainerDb(runjson, "run.json", "JSON canonico", "Resultado tecnico + contrato versionado (Core -> Premium).")
+ContainerDb(auditjsonl, "audit.jsonl", "JSON Lines", "Auditoria append-only (evidencia tecnica).")
+ContainerDb(xlsx, "reporte_conciliacion.xlsx", "XLSX", "Reporte tecnico para revision humana (opcional).")
+
+System_Ext(premium, "Premium (opcional)", "Repo separado. Consume run_dir para productividad (no cambia el Core).")
+
+Rel(user, cli, "Ejecuta", "CLI")
+Rel(user, cfg, "Configura", "YAML")
+Rel(user, bank, "Exporta/descarga", "CSV/XLSX/XML/PDF")
+Rel(user, exp, "Exporta", "CSV/XLSX")
+
+Rel(cli, ing, "Invoca pipeline", "validate/run")
+Rel(cfg, ing, "Insumo de config", "politicas + limites")
+Rel(bank, ing, "Insumo banco", "tabular/pdf")
+Rel(exp, ing, "Insumo esperados", "tabular")
+
+Rel(ing, norm, "Normaliza lote", "determinista")
+Rel(norm, match, "Candidatos normalizados")
+Rel(match, audit, "Eventos + hallazgos")
+Rel(match, runjson, "Persiste contrato", "schema_version + fingerprint")
+Rel(match, auditjsonl, "Persiste traza", "append-only")
+Rel(match, rep, "Genera reporte", "si no --dry-run")
+Rel(rep, xlsx, "Escribe", "XLSX tecnico")
+
+Rel(premium, runjson, "Consume", "contrato")
+Rel(premium, auditjsonl, "Consume", "evidencia")
+
+note right of match
+Fail-closed:
+- Ambiguedad => pendiente (no autoconcilia)
+- OCR / baja confianza => bloquea autoconciliacion
+end note
+
+@enduml
+

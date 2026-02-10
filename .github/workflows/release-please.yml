@@ -13,9 +13,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Guard: require RELEASE_PLEASE_TOKEN (fail-closed)
+      - name: "Guard: require RELEASE_PLEASE_TOKEN (fail-closed)"
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
         run: |
-          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
+          if [ -z "$RELEASE_PLEASE_TOKEN" ]; then
             echo "Missing required secret: RELEASE_PLEASE_TOKEN"
             echo "This must be a PAT or GitHub App token so that:"
             echo "- the release PR triggers CI, and"

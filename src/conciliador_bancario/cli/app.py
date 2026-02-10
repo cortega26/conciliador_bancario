@@ -15,7 +15,7 @@ console = Console()
 
 @app.command("init")
 def cmd_init(
-    out_dir: Path = typer.Option(Path("."), "--out-dir", help="Directorio de salida")
+    out_dir: Path = typer.Option(Path("."), "--out-dir", help="Directorio de salida"),
 ) -> None:
     generar_plantillas_init(out_dir)
     console.print(f"[green]Plantillas generadas en[/green] {out_dir}")

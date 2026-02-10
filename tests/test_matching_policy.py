@@ -53,7 +53,13 @@ def test_pdf_ocr_no_autoconcilia_aun_con_ref() -> None:
         origen=OrigenDato.pdf_ocr,
         fila_origen=1,
     )
-    res = conciliar(cfg=cfg, transacciones=[tx], esperados=[exp], audit=NullAuditWriter(), run_id="abcd1234abcd1234")  # type: ignore[arg-type]
+    res = conciliar(
+        cfg=cfg,
+        transacciones=[tx],
+        esperados=[exp],
+        audit=NullAuditWriter(),
+        run_id="abcd1234abcd1234",
+    )  # type: ignore[arg-type]
     assert len(res.matches) == 1
     assert res.matches[0].estado == EstadoMatch.pendiente
     assert res.matches[0].bloqueado_por_confianza is True
@@ -98,6 +104,8 @@ def test_fail_closed_si_ambiguedad_monto_fecha() -> None:
         referencia=None,
         tercero=None,
     )
-    res = conciliar(cfg=cfg, transacciones=[tx], esperados=[exp1, exp2], audit=NullAuditWriter(), run_id="r")  # type: ignore[arg-type]
+    res = conciliar(
+        cfg=cfg, transacciones=[tx], esperados=[exp1, exp2], audit=NullAuditWriter(), run_id="r"
+    )  # type: ignore[arg-type]
     assert res.matches == []
     assert any(h.tipo == "ambiguedad_monto_fecha" for h in res.hallazgos)

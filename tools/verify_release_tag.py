@@ -21,6 +21,7 @@ def _read_core_version() -> str:
 
     return __version__
 
+
 def _changed_files_in_tag_commit() -> set[str]:
     # Use `git show` (diff against first parent for merges) and only list filenames.
     out = _run(["git", "show", "-1", "--name-only", "--pretty="])

@@ -29,7 +29,9 @@ def test_pdf_sin_texto_se_considera_escaneado(monkeypatch, tmp_path: Path) -> No
     pdf = tmp_path / "x.pdf"
     pdf.write_bytes(b"%PDF-FAKE")
     cfg = ConfiguracionCliente(cliente="X")
-    txs, parece = pdf_text_adapter.cargar_transacciones_pdf_texto(pdf, cfg=cfg, audit=NullAuditWriter())  # type: ignore[arg-type]
+    txs, parece = pdf_text_adapter.cargar_transacciones_pdf_texto(
+        pdf, cfg=cfg, audit=NullAuditWriter()
+    )  # type: ignore[arg-type]
     assert txs == []
     assert parece is True
 
@@ -45,7 +47,9 @@ def test_pdf_texto_extraible_genera_transacciones(monkeypatch, tmp_path: Path) -
     pdf = tmp_path / "x.pdf"
     pdf.write_bytes(b"%PDF-FAKE")
     cfg = ConfiguracionCliente(cliente="X")
-    txs, parece = pdf_text_adapter.cargar_transacciones_pdf_texto(pdf, cfg=cfg, audit=NullAuditWriter())  # type: ignore[arg-type]
+    txs, parece = pdf_text_adapter.cargar_transacciones_pdf_texto(
+        pdf, cfg=cfg, audit=NullAuditWriter()
+    )  # type: ignore[arg-type]
     assert parece is False
     assert len(txs) == 1
     tx = txs[0]

@@ -2,6 +2,15 @@
 
 Este documento es para maintainers. El manual de usuarios está en `RUNBOOK.md`.
 
+## Checklist (pre-publish)
+
+- `pyproject.toml`: `[project].name = "bankrecon"`.
+- CI `main` verde.
+- `python -m build` produce `sdist` + `wheel`.
+- `python -m twine check dist/*` pasa.
+- Smoke en venv limpio: `pip install bankrecon==X.Y.Z` + `python -c "import bankrecon"` + `concilia --help`.
+- PyPI: Trusted Publisher configurado para `cortega26/conciliador_bancario` y workflow `.github/workflows/publish.yml`.
+
 ## 1. Pre-chequeos: repo correcto
 
 Confirme que está operando dentro del repo OSS real (no en el folder “padre” de un workspace multi-root):
@@ -59,8 +68,7 @@ En un entorno limpio:
 ```powershell
 python -m venv .pypi_smoke
 .\.pypi_smoke\Scripts\python -m pip install -U pip
-.\.pypi_smoke\Scripts\pip install "conciliador-bancario==<X.Y.Z>"
-.\.pypi_smoke\Scripts\python -c "import conciliador_bancario as cb; print(cb.__version__)"
+.\.pypi_smoke\Scripts\pip install "bankrecon==<X.Y.Z>"
+.\.pypi_smoke\Scripts\python -c "import bankrecon as br; print(br.__version__)"
 .\.pypi_smoke\Scripts\concilia --help
 ```
-

@@ -211,6 +211,10 @@ python -m pipx ensurepath
 ```
 2. Desde la carpeta del repo:
 ```powershell
+# Desde PyPI (recomendado):
+pipx install bankrecon
+
+# Desde el repo (desarrollo):
 pipx install .
 ```
 3. Verifique:
@@ -220,7 +224,7 @@ concilia --help
 
 OCR (opcional):
 ```powershell
-pipx inject conciliador-bancario pdf2image pytesseract Pillow
+pipx inject bankrecon pdf2image pytesseract Pillow
 ```
 Nota: en algunos sistemas también debe instalar `poppler` y `tesseract` a nivel del sistema operativo.
 

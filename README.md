@@ -46,13 +46,17 @@ Puntos no negociables:
 ### 1) Instalar (pipx, recomendado)
 
 ```powershell
+# Desde PyPI (recomendado):
+pipx install bankrecon
+
+# Desde el repo (desarrollo):
 pipx install .
 concilia --help
 ```
 
 OCR (opcional para PDFs escaneados):
 ```powershell
-pipx inject conciliador-bancario pdf2image pytesseract Pillow
+pipx inject bankrecon pdf2image pytesseract Pillow
 ```
 
 ### 2) Inicializar un “cliente”

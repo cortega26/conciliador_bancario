@@ -56,7 +56,7 @@ pdf_ocr = [
 concilia = "conciliador_bancario.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/conciliador_bancario"]
+packages = ["src/conciliador_bancario", "src/bankrecon"]
 include = [
   "src/conciliador_bancario/templates/*.yaml",
   "src/conciliador_bancario/templates/*.csv",

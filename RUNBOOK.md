@@ -437,34 +437,34 @@ Seguridad:
 
 ## 11. Preguntas Frecuentes (FAQ)
 
-### “Necesito internet para usarlo?”
+### “¿Necesito internet para usarlo?”
 No. Es una herramienta local. No envía telemetría.
 
-### “Por qué no concilia todo automáticamente?”
+### “¿Por qué no concilia todo automáticamente?”
 Porque está diseñado para ser conservador (fail-closed). Si hay ambigüedad o riesgo, deja pendiente para revisión humana.
 
-### “Puedo usarlo si mi banco exporta CSV con `;`?”
+### “¿Puedo usarlo si mi banco exporta CSV con `;`?”
 Sí. El sistema detecta automáticamente delimitadores comunes (`,`, `;`, tab, `|`).
 
-### “Qué formato de fecha debo usar?”
+### “¿Qué formato de fecha debo usar?”
 Recomendado: `dd/mm/aaaa` o `aaaa-mm-dd`.
 
-### “Qué pasa si mi monto tiene decimales?”
+### “¿Qué pasa si mi monto tiene decimales?”
 En CLP el sistema trabaja sin decimales en la salida. Si vienen decimales, se redondea a entero.
 
-### “Por qué mi PDF no funciona?”
+### “¿Por qué mi PDF no funciona?”
 Probablemente es un escaneo sin texto. Debe habilitar OCR (opcional) y aún así se bloquea autoconciliación por baja confianza.
 
-### “Dónde veo por qué quedó pendiente?”
+### “¿Dónde veo por qué quedó pendiente?”
 Revise `Hallazgos` en el XLSX o el arreglo `hallazgos` en `run.json`. Puede usar `concilia explain` con un `H-...`.
 
-### “Puedo desactivar el enmascaramiento?”
+### “¿Puedo desactivar el enmascaramiento?”
 Sí, con `--no-mask`, pero no es recomendado por seguridad. Además cambia el [`run_id`](GLOSARIO.md#run-id) (porque forma parte del [`fingerprint`](GLOSARIO.md#fingerprint)).
 
-### “Si ejecuto dos veces con los mismos archivos, cambia el resultado?”
+### “¿Si ejecuto dos veces con los mismos archivos, cambia el resultado?”
 `run.json` debería ser igual byte-a-byte para la misma entrada. El XLSX puede variar en binario por comportamiento de la librería, pero el contenido tabular es estable.
 
-### “Qué outputs debo guardar para auditoría?”
+### “¿Qué outputs debo guardar para auditoría?”
 Recomendado:
 - `run.json` (contrato versionado)
 - `audit.jsonl` (traza)

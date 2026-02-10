@@ -3,7 +3,7 @@ requires = ["hatchling==1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "conciliador-bancario"
+name = "bankrecon"
 description = "CLI local para conciliacion bancaria (Chile-first) con auditoria y enfoque fail-closed."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,7 +19,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
-urls = { "Repository" = "https://github.com/cortega26/conciliador_bancario", "Issues" = "https://github.com/cortega26/conciliador_bancario/issues" }
+urls = { "Homepage" = "https://github.com/cortega26/conciliador_bancario", "Repository" = "https://github.com/cortega26/conciliador_bancario", "Issues" = "https://github.com/cortega26/conciliador_bancario/issues", "Changelog" = "https://github.com/cortega26/conciliador_bancario/blob/main/CHANGELOG.md" }
 dependencies = [
   "pydantic==2.7.4",
   "typer==0.12.3",

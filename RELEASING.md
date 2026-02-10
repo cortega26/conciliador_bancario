@@ -27,17 +27,31 @@ Fuente de verdad de versión:
 
 Regla: el workflow `.github/workflows/publish.yml` publica cuando se pushea un tag `v*.*.*`.
 
-Regla operacional (anti-olvido): **cada push a `main` con CI verde** gatilla un release automático que:
-- hace bump automático de `patch`,
-- actualiza `CHANGELOG.md`,
-- crea tag `vX.Y.Z`,
-- y empuja el commit/tag.
+Regla operacional (anti-olvido): los releases se gestionan con **Release Please**:
+- abre un PR de release con bump semántico + `CHANGELOG.md` generado desde commits/PRs,
+- al mergear ese PR crea tag `vX.Y.Z`,
+- el push del tag dispara `.github/workflows/publish.yml` (Trusted Publishing a PyPI).
 
 No se deben crear tags de release manualmente: `publish.yml` falla (fail-closed) si el tag no coincide con `version.py`.
 
 ### Opción A: automático (release workflow)
 
-Un push a `main` con CI verde crea el commit de release, taggea y pushea (ver job `release` en `.github/workflows/ci.yml`).
+Un push a `main` hace que `Release Please` mantenga (o cree) un PR de release.
+
+Requisito (importante, fail-closed):
+- Configure un token que NO sea el `GITHUB_TOKEN` por defecto, porque:
+  - PRs creados con `GITHUB_TOKEN` no gatillan CI automáticamente.
+  - tags pusheados con `GITHUB_TOKEN` no gatillan `publish.yml`.
+- Use `RELEASE_PLEASE_TOKEN` (PAT classic con scope `repo`) como secret del repo.
+
+Workflow: `.github/workflows/release-please.yml`
+
+Convención mínima (para notas automáticas útiles):
+- `feat:` nueva funcionalidad (SemVer minor).
+- `fix:` corrección (SemVer patch).
+- `docs:` documentación (puede aparecer en changelog, según configuración).
+- `refactor:` refactor sin cambio funcional.
+- `chore:` tareas de mantenimiento (idealmente sin impactar usuario).
 
 ### Opción B: manual (control de patch/minor/major)
 

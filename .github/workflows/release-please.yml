@@ -1,0 +1,31 @@
+name: release-please
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard: require RELEASE_PLEASE_TOKEN (fail-closed)
+        run: |
+          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
+            echo "Missing required secret: RELEASE_PLEASE_TOKEN"
+            echo "This must be a PAT or GitHub App token so that:"
+            echo "- the release PR triggers CI, and"
+            echo "- the tag push triggers publish.yml (Trusted Publishing)."
+            exit 1
+          fi
+
+      - name: Release Please
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json

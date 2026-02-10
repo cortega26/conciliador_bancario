@@ -21,6 +21,11 @@ def _read_core_version() -> str:
 
     return __version__
 
+def _changed_files_in_tag_commit() -> set[str]:
+    # Use `git show` (diff against first parent for merges) and only list filenames.
+    out = _run(["git", "show", "-1", "--name-only", "--pretty="])
+    return {ln.strip() for ln in out.splitlines() if ln.strip()}
+
 
 def main(argv: list[str]) -> int:
     tag = None
@@ -60,13 +65,19 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    subject = _run(["git", "log", "-1", "--pretty=%s"])
-    if not subject.startswith(f"chore(release): v{expected_version}"):
+    # Fail-closed, but robust to merge strategies (squash vs merge commit):
+    # require that the tagged commit actually updates the release artifacts.
+    changed = _changed_files_in_tag_commit()
+    required = {
+        "src/conciliador_bancario/version.py",
+        "CHANGELOG.md",
+    }
+    if not required.issubset(changed):
         print(
-            "verify_release_tag: unexpected tag commit subject\n"
-            f"- got: {subject!r}\n"
-            f"- want prefix: 'chore(release): v{expected_version}'\n"
-            "Refuse to publish: releases must be produced by automation to avoid version drift.",
+            "verify_release_tag: tag commit does not update required release artifacts\n"
+            f"- required: {sorted(required)}\n"
+            f"- changed:  {sorted(changed)}\n"
+            "Refuse to publish: tags must be created from the release commit that bumps version.py and updates CHANGELOG.md.",
             file=sys.stderr,
         )
         return 1

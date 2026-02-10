@@ -50,7 +50,11 @@ def bump_changelog(path: Path, version: str, date: str) -> None:
     prefix, unreleased_body, rest = _split_sections(text)
     moved = unreleased_body.strip()
     if not moved:
-        moved = "### Changed\n- Bump automatico de version (patch).\n"
+        raise SystemExit(
+            "CHANGELOG: la seccion [Unreleased] esta vacia; se rechaza generar un release sin notas.\n"
+            "- Si estas migrando a Release Please: no uses tools/bump_changelog.py.\n"
+            "- Si estas usando el flujo antiguo/manual: agrega notas bajo [Unreleased] y reintenta."
+        )
     else:
         # Ensure a trailing newline for clean insertion.
         moved = moved.rstrip() + "\n"

@@ -6,43 +6,43 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
 ## [0.2.12] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.11] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.10] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.9] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.8] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.7] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.6] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.5] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.4] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.3] - 2026-02-10
 ### Changed
-- Bump automatico de version (patch).
+- Automatizacion de release: bump de patch (sin notas registradas).
 
 ## [0.2.2] - 2026-02-10
 ### Changed

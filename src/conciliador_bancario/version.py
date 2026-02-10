@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 
 # DO NOT EDIT BY HAND.
-# Esta version es administrada por tooling de release (bump2version).
-__version__ = "0.2.12"
+# Esta version es administrada por tooling de release (release-please / bump2version).
+__version__ = "0.2.12"  # x-release-please-version
 
 _SEMVER_RE = re.compile(r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
 

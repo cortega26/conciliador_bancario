@@ -19,49 +19,7 @@ Entradas (por cliente)                    Proceso (core)                     Sal
   esperados.csv|xlsx    ┘         validación estricta + auditoría          └─ reporte_conciliacion.xlsx (opcional; revisión humana)
 ```
 
-```mermaid
-flowchart TB
-  %% Layout notes (GitHub Mermaid):
-  %% - Avoid edge crossings by merging multiple inputs into a single invisible hub.
-  %% - Place outputs as a dedicated subgraph and fan-out from a single invisible hub.
-
-  classDef _hub fill:none,stroke:none,color:transparent;
-
-  subgraph Inputs["Entradas por cliente"]
-    direction TB
-    cfg["config_cliente.yaml"]
-    bank["banco.(csv | xlsx | xml | pdf)"]
-    exp["movimientos_esperados.(csv | xlsx)"]
-    in_hub(( ))
-  end
-
-  subgraph Core["Core (fail-closed, auditable, determinista)"]
-    direction TB
-    ing["Ingestión"]
-    norm["Normalización"]
-    match["Matching"]
-  end
-
-  subgraph Outputs["Salidas por corrida (run_dir)"]
-    direction TB
-    out_hub(( ))
-    run["run.json<br/>(resultado técnico + contrato)"]
-    audit["audit.jsonl<br/>(traza append-only, JSON Lines)"]
-    xlsx["reporte_conciliacion.xlsx<br/>(opcional; revisión humana)"]
-  end
-
-  class in_hub,out_hub _hub;
-
-  cfg --> in_hub
-  bank --> in_hub
-  exp --> in_hub
-  in_hub --> ing
-
-  ing --> norm --> match --> out_hub
-  out_hub --> run
-  out_hub --> audit
-  out_hub --> xlsx
-```
+Diagrama completo: ver **Arquitectura / Flujo General** (SVG) mas abajo.
 
 Puntos no negociables:
 - **Fail-closed:** ante ambigüedad o baja confianza, el sistema **no autoconcilia**.

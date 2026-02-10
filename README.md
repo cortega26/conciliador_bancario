@@ -21,20 +21,20 @@ Entradas (por cliente)                    Proceso (core)                     Sal
 
 ```mermaid
 flowchart LR
-  subgraph Inputs[Entradas por cliente]
+  subgraph Inputs["Entradas por cliente"]
     cfg[config_cliente.yaml]
     bank[banco.csv / .xlsx / .xml / .pdf]
     exp[movimientos_esperados.csv / .xlsx]
   end
 
-  subgraph Core[Core (fail-closed, auditable, determinista)]
+  subgraph Core["Core (fail-closed, auditable, determinista)"]
     ing[Ingestión]
     norm[Normalización]
     match[Matching]
     audit[audit.jsonl]
   end
 
-  subgraph Outputs[Salidas por corrida (run_dir)]
+  subgraph Outputs["Salidas por corrida (run_dir)"]
     run[run.json]
     xlsx[reporte_conciliacion.xlsx\n(opcional)]
   end

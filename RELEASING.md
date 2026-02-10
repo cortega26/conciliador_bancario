@@ -27,9 +27,17 @@ Fuente de verdad de versión:
 
 Regla: el workflow `.github/workflows/publish.yml` publica cuando se pushea un tag `v*.*.*`.
 
+Regla operacional (anti-olvido): **cada push a `main` con CI verde** gatilla un release automático que:
+- hace bump automático de `patch`,
+- actualiza `CHANGELOG.md`,
+- crea tag `vX.Y.Z`,
+- y empuja el commit/tag.
+
+No se deben crear tags de release manualmente: `publish.yml` falla (fail-closed) si el tag no coincide con `version.py`.
+
 ### Opción A: automático (release workflow)
 
-Si está habilitado `.github/workflows/release.yml`, un merge a `main` con CI verde crea el commit de release, taggea y pushea.
+Un push a `main` con CI verde crea el commit de release, taggea y pushea (ver job `release` en `.github/workflows/ci.yml`).
 
 ### Opción B: manual (control de patch/minor/major)
 

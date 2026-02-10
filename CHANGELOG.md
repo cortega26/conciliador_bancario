@@ -4,6 +4,12 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-02-10
+### Changed
+- Tests: hardening de normalización/validación en golden datasets (menos brittle ante cambios no contractuales).
+- Docs: mejoras de README (diagramas Mermaid y aclaraciones de flujo).
+- Repo hygiene: se incluyó `pyvenv.cfg` en el historial (no afecta el runtime del paquete).
+
 ## [0.2.1] - 2026-02-10
 ### Changed
 - Packaging/namespace: el código interno de contratos dejó de existir como paquete top-level separado; ahora vive en `conciliador_bancario.core` (impacta integraciones Premium).

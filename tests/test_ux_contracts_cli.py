@@ -79,8 +79,9 @@ def test_ux_contract_pdf_escaneado_requiere_opt_in_ocr(tmp_path: Path) -> None:
             str(Path("tests") / "golden" / "datasets" / "pdf_ocr" / "esperados.csv"),
         ],
     )
-    assert r.exit_code == 1
-    assert "OCR esta deshabilitado" in r.stdout
+    assert r.exit_code == 4
+    assert "OCR esta" in r.stdout
+    assert "deshabilitado" in r.stdout
 
 
 def test_ux_contract_campos_criticos_faltantes_error_explicito(tmp_path: Path) -> None:
@@ -122,7 +123,7 @@ def test_ux_contract_campos_criticos_faltantes_error_explicito(tmp_path: Path) -
             str(exp),
         ],
     )
-    assert r.exit_code == 1
+    assert r.exit_code == 4
     assert "CSV banco sin columnas requeridas: descripcion" in r.stdout
 
 

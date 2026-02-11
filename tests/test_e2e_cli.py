@@ -193,7 +193,7 @@ def test_explain_fail_closed_valida_run_json(tmp_path: Path) -> None:
     (out / "run.json").write_text('{"schema_version":"1.0.0"}', encoding="utf-8")
 
     r = runner.invoke(app, ["explain", "--run-dir", str(out), "ANY"])
-    assert r.exit_code == 1
+    assert r.exit_code == 5
     assert "run.json invalido" in r.stdout
 
 

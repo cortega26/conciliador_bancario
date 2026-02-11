@@ -21,6 +21,13 @@ from conciliador_bancario.models import (
     TransaccionBancaria,
 )
 
+BANK_SUPPORTED_SUFFIXES: tuple[str, ...] = (".csv", ".xlsx", ".xml", ".pdf")
+EXPECTED_SUPPORTED_SUFFIXES: tuple[str, ...] = (".csv", ".xlsx")
+
+
+def _format_supported_suffixes(suffixes: tuple[str, ...]) -> str:
+    return ", ".join(sorted(suffixes))
+
 
 def cargar_transacciones_bancarias(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
@@ -42,7 +49,10 @@ def cargar_transacciones_bancarias(
                 "Ejecute con --enable-ocr e instale extras."
             )
         return cargar_transacciones_pdf_ocr(path, cfg=cfg, audit=audit)
-    raise ErrorIngestion(f"Formato banco no soportado: {path.name}")
+    raise ErrorIngestion(
+        f"Formato banco no soportado: {path.name}. "
+        f"Soportados: {_format_supported_suffixes(BANK_SUPPORTED_SUFFIXES)}"
+    )
 
 
 def cargar_movimientos_esperados(
@@ -53,5 +63,14 @@ def cargar_movimientos_esperados(
         return cargar_movimientos_esperados_csv(path, cfg=cfg, audit=audit)
     if suf == ".xlsx":
         return cargar_movimientos_esperados_xlsx(path, cfg=cfg, audit=audit)
-    audit.write(AuditEvent("ingestion", "Formato esperados no soportado", {"archivo": path.name}))
-    raise ErrorIngestion(f"Formato esperados no soportado: {path.name}")
+    audit.write(
+        AuditEvent(
+            "ingestion",
+            "Formato de movimientos esperados no soportado",
+            {"archivo": path.name},
+        )
+    )
+    raise ErrorIngestion(
+        f"Formato de movimientos esperados no soportado: {path.name}. "
+        f"Soportados: {_format_supported_suffixes(EXPECTED_SUPPORTED_SUFFIXES)}"
+    )

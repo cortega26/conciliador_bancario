@@ -76,6 +76,8 @@ def ejecutar_validate(
 ) -> dict[str, Any]:
     from conciliador_bancario.audit.audit_log import NullAuditWriter, configurar_logging
     from conciliador_bancario.ingestion.detector import (
+        BANK_SUPPORTED_SUFFIXES,
+        EXPECTED_SUPPORTED_SUFFIXES,
         cargar_movimientos_esperados,
         cargar_transacciones_bancarias,
     )
@@ -97,9 +99,17 @@ def ejecutar_validate(
 
     # Validacion de existencia se hace por typer; aqui chequeamos formato soportado + parseo real.
     errores: list[str] = []
-    for p, etiqueta in ((bank, "bank"), (expected, "expected")):
-        if p.suffix.lower() not in (".csv", ".xlsx", ".xml", ".pdf"):
-            errores.append(f"Formato no soportado para {etiqueta}: {p.name}")
+    formatos_por_flag = {
+        "--bank": BANK_SUPPORTED_SUFFIXES,
+        "--expected": EXPECTED_SUPPORTED_SUFFIXES,
+    }
+    for p, flag in ((bank, "--bank"), (expected, "--expected")):
+        soportados = formatos_por_flag[flag]
+        if p.suffix.lower() not in soportados:
+            errores.append(
+                f"Formato no soportado para {flag}: {p.name}. "
+                f"Soportados: {', '.join(sorted(soportados))}"
+            )
     if errores:
         return {"ok": False, "errores": errores, "config": cfg.model_dump()}
 

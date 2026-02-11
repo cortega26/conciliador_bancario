@@ -15,3 +15,16 @@ def test_xml_invalido_falla_fail_closed() -> None:
     )
     assert res["ok"] is False
     assert any("XML invalido" in e for e in res["errores"])
+
+
+def test_validate_rechaza_formato_no_soportado_para_expected() -> None:
+    res = ejecutar_validate(
+        config=Path("examples/config_cliente.yaml"),
+        bank=Path("tests/golden/datasets/csv/banco_sucio.csv"),
+        expected=Path("tests/golden/datasets/pdf_text/cartola_digital.pdf"),
+        log_level="INFO",
+        enable_ocr=False,
+    )
+    assert res["ok"] is False
+    assert any("Formato no soportado para --expected" in e for e in res["errores"])
+    assert any(".csv, .xlsx" in e for e in res["errores"])

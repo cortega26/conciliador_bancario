@@ -2,6 +2,13 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.14](https://github.com/cortega26/conciliador_bancario/compare/v0.2.13...v0.2.14) (2026-02-11)
+
+
+### Bug Fixes
+
+* **release:** handle merge-tag file detection in verify_release_tag ([53910d2](https://github.com/cortega26/conciliador_bancario/commit/53910d28eca975dff08a71ae371e924c43c2d40a))
+
 ## [0.2.13](https://github.com/cortega26/conciliador_bancario/compare/v0.2.12...v0.2.13) (2026-02-11)
 
 

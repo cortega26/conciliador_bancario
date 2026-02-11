@@ -2,6 +2,13 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.13](https://github.com/cortega26/conciliador_bancario/compare/v0.2.12...v0.2.13) (2026-02-11)
+
+
+### Bug Fixes
+
+* trigger release please after migration ([8211401](https://github.com/cortega26/conciliador_bancario/commit/8211401da83ff9f14098cd19814ea47bcb5d910d))
+
 ## [Unreleased]
 
 ## [0.2.12] - 2026-02-10

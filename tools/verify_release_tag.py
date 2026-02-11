@@ -22,9 +22,10 @@ def _read_core_version() -> str:
     return __version__
 
 
-def _changed_files_in_tag_commit() -> set[str]:
-    # Use `git show` (diff against first parent for merges) and only list filenames.
-    out = _run(["git", "show", "-1", "--name-only", "--pretty="])
+def _changed_files_in_tag_commit(rev: str) -> set[str]:
+    # `git show` on merge commits can hide file lists unless `-m` is used.
+    # We explicitly request per-parent diffs and only keep filenames.
+    out = _run(["git", "show", "-m", "-1", "--name-only", "--pretty=", rev])
     return {ln.strip() for ln in out.splitlines() if ln.strip()}
 
 
@@ -68,7 +69,7 @@ def main(argv: list[str]) -> int:
 
     # Fail-closed, but robust to merge strategies (squash vs merge commit):
     # require that the tagged commit actually updates the release artifacts.
-    changed = _changed_files_in_tag_commit()
+    changed = _changed_files_in_tag_commit(tag)
     required = {
         "src/conciliador_bancario/version.py",
         "CHANGELOG.md",

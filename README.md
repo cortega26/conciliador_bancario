@@ -257,3 +257,7 @@ Referencia (diseño; no implementado en este repo):
 - Roadmap: `docs/premium_roadmap.md`
 - Arquitectura: `docs/premium_architecture.md`
 - Licensing: `docs/premium_licensing.md`
+
+---
+
+Built and maintained by **Carlos Ortega** — automation, data systems, and web technical hygiene consulting. Portfolio and services: **[tooltician.com](https://tooltician.com/)**.

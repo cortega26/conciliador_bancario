@@ -45,6 +45,14 @@ class CampoConConfianza(CBModel):
 
 Moneda = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
+# Id externo de movimientos esperados: proviene del archivo del cliente y viaja
+# hasta el reporte XLSX, donde un valor que empieza con = + - @ se convierte en
+# celda de formula viva. Se rechaza en la frontera en vez de depender de que el
+# renderizado lo sanee. Sin lookahead: pydantic compila `pattern` con el motor
+# de Rust, que no soporta aserciones de antecipacion.
+# ids reales (EXP-001, FAC-1001) no empiezan por ninguno de esos signos.
+IdExterno = Annotated[str, Field(pattern=r"^[^=+\-@\x00-\x1f\x7f][^\x00-\x1f\x7f]*$")]
+
 
 class TransaccionBancaria(CBModel):
     id: str = Field(min_length=1)
@@ -88,7 +96,7 @@ class TransaccionBancaria(CBModel):
 
 
 class MovimientoEsperado(CBModel):
-    id: str = Field(min_length=1)
+    id: IdExterno = Field(min_length=1)
     fecha: CampoConConfianza
     monto: CampoConConfianza
     moneda: Moneda = "CLP"

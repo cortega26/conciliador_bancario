@@ -19,7 +19,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | DONE (deviation — see below) |
 | 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | DONE (see deviations) |
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | DONE (see deviations) |
-| 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | TODO |
+| 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | DONE (see deviations) |
 | 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | TODO |
 | 008 | Bound `ref_exacta` by a date window | P2 | M | 001 | TODO |
 | 009 | Index the amount+date candidate scan (remove O(n^2)) | P2 | M | 008 | TODO |
@@ -77,6 +77,20 @@ REJECTED (with one-line rationale)
   gitignore does not apply to tracked paths, so the command reports nothing for
   it. The rules are correct: checked against paths *inside* the directories, all
   three resolve (`.gitignore:26-28`).
+- **006: a model-level `ValidationError` during ingestion is still classified as
+  exit 10 ("internal error"), not 4 (ingestion).** The new `IdExterno` pattern
+  makes a hostile id fail closed — the formula cell is never written — but the
+  user sees an internal-error message. **This gap is pre-existing, not introduced
+  here**: a bad `moneda` produces byte-identical output (exit 10, same message)
+  at `0704075`. Any `ValidationError` raised while an adapter builds a model
+  escapes `ErrorIngestion`'s classification. Fixing it means wrapping model
+  construction in the CSV/XLSX adapters, which this plan puts out of scope.
+  Worth its own plan; tracked as a real finding, not silently closed.
+- **006: the `IdExterno` pattern has no lookahead.** pydantic v2 compiles
+  `pattern` with the Rust regex engine, which rejects `(?![=+\-@])` at schema
+  build time. Expressed as a character class on the first character instead.
+  All id values in `examples/`, `templates/` and `tests/golden/datasets/**` were
+  checked first (`EXP-001`, `EXP-002` only) — none start with a rejected sign.
 
 ## Dependency notes
 

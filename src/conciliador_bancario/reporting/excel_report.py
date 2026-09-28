@@ -123,7 +123,7 @@ def generar_reporte_excel(
     for e in exps:
         exp_rows.append(
             [
-                e.id,
+                _mask_cell(e.id, mask=mask),
                 str(e.fecha.valor),
                 str(e.monto.valor),
                 e.moneda,
@@ -154,8 +154,8 @@ def generar_reporte_excel(
                 m.estado.value,
                 float(m.score),
                 m.regla,
-                ",".join(m.transacciones_bancarias),
-                ",".join(m.movimientos_esperados),
+                _mask_cell(",".join(m.transacciones_bancarias), mask=mask),
+                _mask_cell(",".join(m.movimientos_esperados), mask=mask),
                 bool(m.bloqueado_por_confianza),
                 _mask_cell(m.explicacion, mask=mask),
             ]
@@ -185,7 +185,7 @@ def generar_reporte_excel(
                 h.tipo,
                 _mask_cell(h.mensaje, mask=mask),
                 h.entidad,
-                h.entidad_id or "",
+                _mask_cell(h.entidad_id or "", mask=mask),
                 _mask_cell(detalles, mask=mask),
             ]
         )

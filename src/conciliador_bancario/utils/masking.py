@@ -26,12 +26,24 @@ def enmascarar_texto_sensible(texto: str) -> str:
     return out
 
 
+# Caracteres que Excel descarta antes de interpretar el contenido de una celda.
+_LIDER_SIN_SIGNIFICADO_RE = re.compile(r"^[\s\x00-\x1f\x7f]+")
+
+
 def prevenir_csv_injection(texto: str) -> str:
     """
     Previene injection de formulas en Excel/CSV.
-    Si el texto comienza con = + - @, se antepone apostrofe.
+
+    Si el primer caracter con significado (ignorando espacios y caracteres de
+    control) es = + - @, se antepone un apostrofe. Excel descarta el espacio
+    inicial antes de evaluar, de modo que inspeccionar solo t[0] dejaba pasar el
+    payload anteponiendo un unico espacio. El texto original se conserva tal
+    cual, espacio inicial incluido.
     """
     t = texto or ""
-    if t and t[0] in ("=", "+", "-", "@"):
+    if not t:
+        return t
+    lider = _LIDER_SIN_SIGNIFICADO_RE.sub("", t)
+    if lider and lider[0] in ("=", "+", "-", "@"):
         return "'" + t
     return t

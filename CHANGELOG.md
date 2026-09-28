@@ -18,9 +18,27 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
   corrida anterior es responsabilidad de quien ejecuta (copiar el `run_dir`).
 - Los fallos de CLI se registran en `audit_fallo.jsonl` en vez de `audit.jsonl`,
   para que toda linea del artefacto durable sea atribuible a un `run_id`.
+- La busqueda de candidatos por monto+fecha recorria todos los movimientos
+  esperados por cada transaccion bancaria: el matching era O(n*m) y crecia de
+  forma cuadratica (320 ms con n=2000, y el costo por fila se duplicaba en cada
+  aumento de tamano). Ahora indexa por monto y es lineal. Sin cambio de
+  resultados: verificado sobre 1080 casos generados (2501 matches, 46577
+  hallazgos), cero diferencias.
 
 ### Fixed
 
+- La regla `ref_exacta` no miraba las fechas: referencia y monto exactos con
+  **892 dias** de diferencia se conciltaban con score 1.0 y estado `conciliado`,
+  sin que nadie revisara el reporte. Una referencia reciclada de otro periodo
+  (un proveedor que repite un numero de factura) conciliaba contra el movimiento
+  equivocado. Ahora la coincidencia exige estar dentro de `ventana_dias_ref_exacta`;
+  fuera de la ventana no hay match y la fila queda `pendiente`. Dentro de la
+  ventana pero con desfase, el score baja a 0.80 y el match queda `sugerido`, con
+  el mismo conservatism que ya aplicaba `monto_fecha`. Nuevo knob configurable
+  (por defecto `7` dias, mas tolerante que `ventana_dias_monto_fecha` porque la
+  senal es mas fuerte). La rama referencia-coincide-pero-monto-difiere sigue
+  siendo `critica`: ahi la evidencia es un problema de datos, no un desfase de
+  liquidacion.
 - Un `id` repetido en el archivo de movimientos esperados hacia desaparecer una
   fila de la conciliacion sin generar hallazgo alguno (exit 0, reporte
   aparentemente completo). Se descarta la repeticion y se reporta como

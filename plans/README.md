@@ -21,14 +21,48 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | DONE (see deviations) |
 | 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | DONE (see deviations) |
 | 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | DONE |
-| 008 | Bound `ref_exacta` by a date window | P2 | M | 001 | TODO |
-| 009 | Index the amount+date candidate scan (remove O(n^2)) | P2 | M | 008 | TODO |
+| 008 | Bound `ref_exacta` by a date window | P2 | M | 001 | DONE |
+| 009 | Index the amount+date candidate scan (remove O(n^2)) | P2 | M | 008 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)
 
 ## Deviations from the plans (recorded by the executor)
 
+Plans 008 and 009 had table rows but no plan documents: the session that wrote
+the backlog was cut before authoring them, so they were implemented directly.
+The two design decisions below are the ones a maintainer may want to revisit.
+
+- **008: new config knob `ventana_dias_ref_exacta` (default 7).** Reusing
+  `ventana_dias_monto_fecha` would have coupled two independent policies under a
+  name that names only one of them. The default is deliberately *more* tolerant
+  than the monto+fecha default (3): a stronger signal should not be the more
+  brittle one, and a week covers ordinary invoice-to-settlement lag while still
+  refusing a recycled reference. Setting it to `0` requires same-day agreement.
+  `examples/config_cliente.yaml` was deliberately **not** touched — its sha256 is
+  part of the `run_id` fingerprint, so editing it would move every golden. The
+  key is documented in `RUNBOOK.md`, shipped in the `concilia init` template, and
+  `walkthrough.md` records the rule change.
+- **008: `delta != 0` also drops the score to 0.80 and lands the match as
+  `sugerido`,** mirroring the conservatism `monto_fecha` already documented. This
+  was not in the plan's one-line title, but bounding the window without
+  penalising an off-date match would still auto-reconcile at `conciliado` inside
+  the window, which is the same class of defect. The
+  reference-match/amount-mismatch branch deliberately stays `critica`: an
+  identical reference with a *different* amount is evidence of a data problem,
+  not settlement lag.
+- **008/009 verified not to move any golden.** Every `ref_exacta` match in all
+  six golden datasets has `delta == 0`, and `run_id` is unchanged (new field
+  defaults; example config untouched). Both confirmed by instrumenting the real
+  pipeline over every golden dataset before making the change.
+- **009: equivalence proven, not assumed.** Candidate order is what decides
+  tie-breaking and the ambiguity findings, so results were diffed across 1080
+  generated cases (40 seeds × 3 batch shapes × 9 window combinations, with
+  duplicate amounts, duplicate references and wide date deltas): 2501 matches and
+  46577 findings, zero differences. Two committed tests pin the failure mode an
+  index actually risks — a bucket holding an already-consumed expected — and
+  both pass against the pre-index engine, so they pin equivalence rather than
+  new behaviour.
 - **003: detection lives in `pipeline.py`, not in the two adapters.** The plan's
   own test requires a finding in `run.json`, but `ingestion/` has no `hallazgos`
   channel — a row dropped at ingestion is invisible to `conciliar`, which is the

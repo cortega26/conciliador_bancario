@@ -91,6 +91,11 @@ def _dias_diff(a: date, b: date) -> int:
     return abs((a - b).days)
 
 
+def _dentro_de_ventana(dias: int, ventana: int) -> bool:
+    """Ventana temporal compartida por ambas reglas de matching."""
+    return dias <= ventana
+
+
 def _bloqueado_por_confianza(
     cfg: ConfiguracionCliente, txs: list[TransaccionBancaria], exps: list[MovimientoEsperado]
 ) -> tuple[bool, str | None]:
@@ -156,14 +161,25 @@ def conciliar(
         if r:
             idx_exp_ref.setdefault(r, []).append(exp)
 
-    # 1) ref + monto exacto (unico)
+    # 1) ref + monto exacto (unico, dentro de la ventana temporal)
     for tx in transacciones:
         if tx.id in used_tx:
             continue
         r = _ref_tx(tx)
         if not r:
             continue
-        cands = [e for e in idx_exp_ref.get(r, []) if e.id not in used_exp]
+        tx_fecha = _valor_fecha_tx(tx)
+        # La ventana forma parte de la seleccion de candidatos, no un filtro
+        # posterior: asi una referencia reutilizada en otro periodo no genera
+        # una ambiguedad falsa ni un match fuera de periodo.
+        cands = [
+            e
+            for e in idx_exp_ref.get(r, [])
+            if e.id not in used_exp
+            and _dentro_de_ventana(
+                _dias_diff(tx_fecha, _valor_fecha_exp(e)), cfg.ventana_dias_ref_exacta
+            )
+        ]
         if len(cands) > 1:
             hid = _hallazgo_id(
                 run_id,
@@ -232,14 +248,24 @@ def conciliar(
             continue
 
         bloqueado, motivo = _bloqueado_por_confianza(cfg, [tx], [exp])
-        score = 1.0
+        delta = _dias_diff(tx_fecha, _valor_fecha_exp(exp))
+        # Mas conservador: delta != 0 baja el score y queda sugerido, igual que
+        # en la regla monto+fecha. Un match desplazado en el tiempo requiere
+        # revision humana aunque la referencia y el monto sean exactos.
+        score = 1.0 if delta == 0 else 0.80
         estado = (
             EstadoMatch.conciliado
             if (score >= cfg.umbral_autoconcilia and not bloqueado)
-            else EstadoMatch.pendiente
+            else EstadoMatch.sugerido
         )
         explicacion = f"Match por referencia exacta ({r}) y monto exacto."
+        if delta != 0:
+            explicacion += (
+                f" Desplazamiento temporal: {delta} dia(s) "
+                f"(ventana ref_exacta: +/-{cfg.ventana_dias_ref_exacta})."
+            )
         if bloqueado and motivo:
+            estado = EstadoMatch.pendiente
             explicacion += f" BLOQUEADO: {motivo}"
 
         mid = _match_id(run_id, [tx.id], [exp.id], "ref_exacta")
@@ -267,6 +293,7 @@ def conciliar(
                     "tx_ids": [tx.id],
                     "exp_ids": [exp.id],
                     "bloqueado_por_confianza": bloqueado,
+                    "delta_dias": delta,
                 },
             )
         )

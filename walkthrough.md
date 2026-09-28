@@ -33,8 +33,12 @@
   fail-closed si no hay dependencias.
 - FASE 4 implementada: normalización estable (sin heurísticas) para descripción/referencia/moneda.
 - FASE 5 implementada: matching conservador y explicable:
-  - `ref_exacta`: referencia exacta + monto exacto (solo si el candidato es único).
-  - `monto_fecha`: monto exacto + ventana de fecha (solo si el candidato es único). Más conservador: si `delta_dias != 0`
+  - `ref_exacta`: referencia exacta + monto exacto + dentro de `ventana_dias_ref_exacta`
+    (solo si el candidato es unico). La ventana es parte de la seleccion de candidatos,
+    no un filtro posterior: asi una referencia reciclada de otro periodo no genera ni una
+    ambiguedad falsa ni un match fuera de periodo. Con `delta_dias != 0` el score baja a
+    0.80 y queda `sugerido` (no autoconcilia), igual que `monto_fecha`.
+  - `monto_fecha`: monto exacto + ventana de fecha (solo si el candidato es unico). Más conservador: si `delta_dias != 0`
     el score baja (por defecto queda sugerido y no autoconcilia).
   - Fail-closed: ambigüedad por referencia o por monto+fecha genera hallazgo, no match.
   - Señal fuerte de riesgo: referencia coincide pero monto difiere => hallazgo crítico, no match.

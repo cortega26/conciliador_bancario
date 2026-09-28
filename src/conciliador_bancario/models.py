@@ -182,6 +182,11 @@ class ConfiguracionCliente(CBModel):
     cliente: str = Field(min_length=1)
     rut_mask: str | None = None
     ventana_dias_monto_fecha: int = Field(default=3, ge=0)
+    # Ventana de la regla ref_exacta (referencia + monto exactos). Es una senal
+    # mas fuerte que monto+fecha, asi que por defecto es mas tolerante: un
+    # desfase de liquidacion de una semana es normal, una referencia reciclada de
+    # otro periodo no lo es.
+    ventana_dias_ref_exacta: int = Field(default=7, ge=0)
     umbral_autoconcilia: float = Field(default=0.85, ge=0.0, le=1.0)
     umbral_confianza_campos: float = Field(default=0.80, ge=0.0, le=1.0)
     permitir_ocr: bool = False

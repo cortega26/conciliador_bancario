@@ -277,6 +277,7 @@ Campos principales:
 - `cliente`: nombre del cliente (requerido).
 - `rut_mask`: texto opcional para RUT enmascarado (si aplica).
 - `ventana_dias_monto_fecha`: ventana de días para matches por monto+fecha (conservador por defecto).
+- `ventana_dias_ref_exacta`: ventana de días para matches por referencia+monto exactos (por defecto `7`, más tolerante que la anterior porque la señal es más fuerte). Fuera de esa ventana la coincidencia no se concilia: la transacción queda `pendiente`.
 - `umbral_autoconcilia`: umbral de [score](GLOSARIO.md#score) para autoconciliar.
 - `umbral_confianza_campos`: umbral de confianza por campo para permitir autoconciliación.
 - `permitir_ocr`: habilita OCR cuando el PDF es escaneado (recomendado dejar `false` y usar `--enable-ocr` solo cuando corresponda).
@@ -290,6 +291,7 @@ Configuración mínima recomendada:
 ```yaml
 cliente: "Mi Cliente"
 ventana_dias_monto_fecha: 3
+ventana_dias_ref_exacta: 7
 umbral_autoconcilia: 0.85
 umbral_confianza_campos: 0.80
 permitir_ocr: false
@@ -368,6 +370,7 @@ El motor es determinista y conservador. En el estado actual (MVP) opera con regl
 
 ### Trade-offs principales
 - Subir `ventana_dias_monto_fecha` puede aumentar sugerencias, pero también riesgo de falsos positivos.
+- Subir `ventana_dias_ref_exacta` acepta referencias que llegan más tarde (liquidación demorada), pero también referencias recicladas de otro período. Bajarla a `0` exige que banco y esperado caigan el mismo día.
 - Bajar `umbral_autoconcilia` aumenta autoconciliación, pero incrementa riesgo.
 - Habilitar OCR permite procesar PDFs escaneados, pero baja confianza y bloquea autoconciliación.
 

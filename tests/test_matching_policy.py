@@ -232,3 +232,95 @@ def test_transaccion_banco_sin_match_queda_pendiente() -> None:
     assert pend[0].severidad == SeveridadHallazgo.advertencia
     assert pend[0].entidad == "banco"
     assert pend[0].entidad_id == "TX-9"
+
+
+def _tx_referencia(
+    monto: str, fecha: date, referencia: str, tx_id: str = "TX-1"
+) -> TransaccionBancaria:
+    conf = MetadataConfianza(score=0.9, nivel=NivelConfianza.alta, origen=OrigenDato.csv)
+    return TransaccionBancaria(
+        id=tx_id,
+        cuenta_mask=None,
+        banco=None,
+        bloquea_autoconcilia=False,
+        motivo_bloqueo_autoconcilia=None,
+        fecha_operacion=CampoConConfianza(valor=fecha, confianza=conf),
+        fecha_contable=None,
+        monto=CampoConConfianza(valor=Decimal(monto), confianza=conf),
+        moneda="CLP",
+        descripcion=CampoConConfianza(valor="Pago", confianza=conf),
+        referencia=CampoConConfianza(valor=referencia, confianza=conf),
+        archivo_origen="x.csv",
+        origen=OrigenDato.csv,
+        fila_origen=2,
+    )
+
+
+def _exp_referencia(exp_id: str, monto: str, fecha: date, referencia: str) -> MovimientoEsperado:
+    conf = MetadataConfianza(score=0.9, nivel=NivelConfianza.alta, origen=OrigenDato.csv)
+    return MovimientoEsperado(
+        id=exp_id,
+        fecha=CampoConConfianza(valor=fecha, confianza=conf),
+        monto=CampoConConfianza(valor=Decimal(monto), confianza=conf),
+        moneda="CLP",
+        descripcion=CampoConConfianza(valor="Pago", confianza=conf),
+        referencia=CampoConConfianza(valor=referencia, confianza=conf),
+        tercero=None,
+    )
+
+
+def test_referencia_exacta_no_concilia_fuera_de_ventana() -> None:
+    """
+    Referencia + monto exactos pero de otro periodo no se concilian.
+
+    Una referencia reutilizada entre periodos (p.ej. un proveedor que recicla un
+    numero de factura) hoy produce score 1.0 y estado conciliado sin que nadie
+    mire el reporte. Fuera de ventana no hay match: la fila queda pendiente y
+    visible, que es la unica lectura fail-closed.
+    """
+    cfg = ConfiguracionCliente(cliente="X", ventana_dias_monto_fecha=3)
+    tx = _tx_referencia("150000", date(2026, 1, 5), "FAC-1001")
+    # Misma referencia y mismo monto, pero 892 dias antes (~2.4 anos).
+    exp = _exp_referencia("EXP-1", "150000", date(2024, 1, 5), "FAC-1001")
+
+    res = conciliar(
+        cfg=cfg, transacciones=[tx], esperados=[exp], audit=NullAuditWriter(), run_id="r"
+    )  # type: ignore[arg-type]
+    assert res.matches == []
+    assert any(h.tipo == "pendiente_banco" for h in res.hallazgos)
+    assert any(h.tipo == "pendiente_esperado" for h in res.hallazgos)
+
+
+def test_referencia_exacta_dentro_de_ventana_no_autoconcilia_si_hay_delta() -> None:
+    """
+    Dentro de ventana pero con delta > 0 el match queda sugerido, no conciliado.
+
+    replica la politica ya documentada de la regla monto+fecha: una coincidencia
+    desplazada en el tiempo necesita revision humana.
+    """
+    cfg = ConfiguracionCliente(cliente="X", ventana_dias_monto_fecha=3)
+    tx = _tx_referencia("150000", date(2026, 1, 8), "FAC-1001")
+    exp = _exp_referencia("EXP-1", "150000", date(2026, 1, 5), "FAC-1001")
+
+    res = conciliar(
+        cfg=cfg, transacciones=[tx], esperados=[exp], audit=NullAuditWriter(), run_id="r"
+    )  # type: ignore[arg-type]
+    assert len(res.matches) == 1
+    match = res.matches[0]
+    assert match.regla == "ref_exacta"
+    assert match.estado == EstadoMatch.sugerido
+    assert match.score < cfg.umbral_autoconcilia
+
+
+def test_referencia_exacta_mismo_dia_sigue_conciliando() -> None:
+    """Control: el caso habitual (delta 0) no se toca."""
+    cfg = ConfiguracionCliente(cliente="X", ventana_dias_monto_fecha=3)
+    tx = _tx_referencia("150000", date(2026, 1, 5), "FAC-1001")
+    exp = _exp_referencia("EXP-1", "150000", date(2026, 1, 5), "FAC-1001")
+
+    res = conciliar(
+        cfg=cfg, transacciones=[tx], esperados=[exp], audit=NullAuditWriter(), run_id="r"
+    )  # type: ignore[arg-type]
+    assert len(res.matches) == 1
+    assert res.matches[0].estado == EstadoMatch.conciliado
+    assert res.matches[0].score == 1.0

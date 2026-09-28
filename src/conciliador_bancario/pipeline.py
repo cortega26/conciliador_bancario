@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,56 @@ from pydantic import ValidationError
 from yaml import YAMLError
 
 from conciliador_bancario.errors import ErrorConfiguracion, ErrorContrato, ErrorOperacionIO
-from conciliador_bancario.ingestion.base import ErrorIngestion
-from conciliador_bancario.models import ConfiguracionCliente, ResultadoConciliacion
+from conciliador_bancario.ingestion.base import (
+    ErrorIngestion,
+    IdDuplicado,
+    validar_ids_unicos,
+)
+from conciliador_bancario.models import (
+    ConfiguracionCliente,
+    Hallazgo,
+    ResultadoConciliacion,
+    SeveridadHallazgo,
+)
+
+
+def _hallazgos_id_duplicado(
+    run_id: str, *, tipo: str, entidad: str, id_duplicado: str, duplicados: list[IdDuplicado]
+) -> list[Hallazgo]:
+    """
+    Convierte duplicados descartados en hallazgos visibles de la corrida.
+
+    El id del hallazgo replica el esquema de matching/engine._hallazgo_id
+    (H-<sha256[:14]>); compartir esa funcion exigiria tocar el motor de
+    matching, fuera del alcance de este cambio.
+    """
+    from conciliador_bancario.utils.hashing import sha256_json_estable
+
+    detalles = {
+        "id": id_duplicado,
+        "filas_descartadas": [d.indice for d in duplicados],
+        "montos_descartados": [d.monto for d in duplicados],
+    }
+    hid = (
+        "H-"
+        + sha256_json_estable(
+            {"run_id": run_id, "tipo": tipo, "ent": entidad, "id": id_duplicado, "x": detalles}
+        )[:14]
+    )
+    return [
+        Hallazgo(
+            id=hid,
+            severidad=SeveridadHallazgo.advertencia,
+            tipo=tipo,
+            mensaje=(
+                f"Se descartó {len(duplicados)} fila(s) con id {id_duplicado!r} repetido. "
+                "Solo se concilia la primera aparicion; revise el archivo de entrada."
+            ),
+            entidad=entidad,  # type: ignore[arg-type]
+            entidad_id=id_duplicado,
+            detalles=detalles,
+        )
+    ]
 
 
 def generar_plantillas_init(out_dir: Path) -> None:
@@ -263,9 +312,62 @@ def ejecutar_run(
 
     txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)
     exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)
+
+    # Un id repetido hace que una fila desaparezca de la conciliacion sin dejar
+    # hallazgo: el motor marca el id como consumido y la segunda fila no vuelve a
+    # notificarse. Se descarta la repeticion y se reporta explicitamente.
+    txs, dups_tx = validar_ids_unicos(
+        txs,
+        obtener_id=lambda t: t.id,
+        obtener_monto=lambda t: str(t.monto.valor),
+        audit=audit,
+        label=f"banco {bank.name}",
+    )
+    exps, dups_exp = validar_ids_unicos(
+        exps,
+        obtener_id=lambda e: e.id,
+        obtener_monto=lambda e: str(e.monto.valor),
+        audit=audit,
+        label=f"esperados {expected.name}",
+    )
+
     txs, exps = normalizar_lote(cfg=cfg, transacciones=txs, esperados=exps)
 
+    # Defensa en profundidad: la normalizacion no debe alterar los ids. Si lo
+    # hiciera, un duplicado reintroducido aqui seria un defecto interno, no un
+    # problema de datos del cliente, y corresponde fallar cerrado.
+    if len({t.id for t in txs}) != len(txs) or len({e.id for e in exps}) != len(exps):
+        raise ErrorIngestion(
+            "Ids duplicados detectados despues de normalizar.",
+            details={"banco": bank.name, "esperados": expected.name},
+            hint="Reporte el problema; el lote no es consistente.",
+        )
+
     resultado = conciliar(cfg=cfg, transacciones=txs, esperados=exps, audit=audit, run_id=run_id)
+
+    hallazgos_duplicados: list[Hallazgo] = []
+    for tipo, entidad, duplicados in (
+        ("id_duplicado_esperado", "esperado", dups_exp),
+        ("id_duplicado_banco", "banco", dups_tx),
+    ):
+        por_id: dict[str, list[IdDuplicado]] = {}
+        for dup in duplicados:
+            por_id.setdefault(dup.id, []).append(dup)
+        for id_duplicado, grupo in por_id.items():
+            hallazgos_duplicados.extend(
+                _hallazgos_id_duplicado(
+                    run_id,
+                    tipo=tipo,
+                    entidad=entidad,
+                    id_duplicado=id_duplicado,
+                    duplicados=grupo,
+                )
+            )
+    if hallazgos_duplicados:
+        resultado = replace(
+            resultado,
+            hallazgos=sorted(resultado.hallazgos + hallazgos_duplicados, key=lambda h: h.id),
+        )
 
     run_json = out_dir / "run.json"
     try:

@@ -16,7 +16,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 |------|-------|----------|--------|------------|--------|
 | 001 | Characterize the untested fail-closed matching branches | P1 | S | — | DONE |
 | 002 | Fix single-separator amount parsing (10–100x money errors) | P1 | M | 001 | DONE |
-| 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | TODO |
+| 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | DONE (deviation — see below) |
 | 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | TODO |
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | TODO |
 | 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | TODO |
@@ -26,6 +26,33 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)
+
+## Deviations from the plans (recorded by the executor)
+
+- **003: detection lives in `pipeline.py`, not in the two adapters.** The plan's
+  own test requires a finding in `run.json`, but `ingestion/` has no `hallazgos`
+  channel — a row dropped at ingestion is invisible to `conciliar`, which is the
+  only producer of findings. The two requirements are mutually exclusive. The
+  shared helper `validar_ids_unicos` lives in `ingestion/base.py` as specified and
+  is called once per batch in `pipeline.py`, immediately after ingestion and
+  before normalization. This satisfies the plan's *intent* (fix at the ingestion
+  boundary, not in the engine, which stays untouched) and its test, and it makes
+  the CSV and XLSX paths symmetric by construction rather than by two parallel
+  edits — the plan's own top reviewer concern. It does **not** satisfy the done
+  criterion "both `csv_adapter.py` and `xlsx_adapter.py` call the new helper",
+  which is unsatisfiable alongside the `run.json` finding requirement without
+  changing adapter return types (`ingestion/detector.py` is out of scope).
+- **003: no separate "generated id ⇒ raise" branch.** The plan asked for one,
+  but a generated id is a hash over file+row+data, so two rows of one file can
+  never collide, and a client-supplied id may legitimately start with `EXP-` —
+  `examples/movimientos_esperados.csv` ships exactly that. A prefix test could
+  only ever misfire on valid data. Every duplicate is reported the same way.
+- **003: `filas_descartadas` is a data-row ordinal, not a file line number.**
+  `MovimientoEsperado` does not carry its source line, so an ordinal among
+  ingested data rows is the most precise reference available; documented on
+  `IdDuplicado`.
+- **002/003/004: `CHANGELOG.md` is out of scope in all three**, yet each asks for
+  an entry. Batched into one commit after the fact (see the table row 004 note).
 
 ## Dependency notes
 

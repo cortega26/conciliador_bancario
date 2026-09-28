@@ -8,7 +8,7 @@ from typing import Any
 from openpyxl import load_workbook
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
-from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
@@ -195,23 +195,26 @@ def cargar_transacciones_xlsx(
         tx_id = _id(path, excel_row_idx, data_norm, "TX")
 
         origen = OrigenDato.xlsx
-        out.append(
-            TransaccionBancaria(
-                id=tx_id,
-                cuenta_mask=enmascarar_cuenta(cuenta_raw) if cuenta_raw else None,
-                bloquea_autoconcilia=False,
-                motivo_bloqueo_autoconcilia=None,
-                fecha_operacion=_campo(fecha_op, origen=origen),
-                fecha_contable=_campo(fecha_ct, origen=origen, degrade=0.10) if fecha_ct else None,
-                monto=_campo(monto, origen=origen),
-                moneda=moneda,
-                descripcion=_campo(desc, origen=origen),
-                referencia=_campo(ref, origen=origen) if ref else None,
-                archivo_origen=path.name,
-                origen=origen,
-                fila_origen=excel_row_idx,
+        with error_de_fila(excel_row_idx):
+            out.append(
+                TransaccionBancaria(
+                    id=tx_id,
+                    cuenta_mask=enmascarar_cuenta(cuenta_raw) if cuenta_raw else None,
+                    bloquea_autoconcilia=False,
+                    motivo_bloqueo_autoconcilia=None,
+                    fecha_operacion=_campo(fecha_op, origen=origen),
+                    fecha_contable=(
+                        _campo(fecha_ct, origen=origen, degrade=0.10) if fecha_ct else None
+                    ),
+                    monto=_campo(monto, origen=origen),
+                    moneda=moneda,
+                    descripcion=_campo(desc, origen=origen),
+                    referencia=_campo(ref, origen=origen) if ref else None,
+                    archivo_origen=path.name,
+                    origen=origen,
+                    fila_origen=excel_row_idx,
+                )
             )
-        )
     return out
 
 
@@ -313,15 +316,16 @@ def cargar_movimientos_esperados_xlsx(
         exp_id = id_ext if id_ext else _id(path, excel_row_idx, data_norm, "EXP")
 
         origen = OrigenDato.xlsx
-        out.append(
-            MovimientoEsperado(
-                id=exp_id,
-                fecha=_campo(fecha, origen=origen),
-                monto=_campo(monto, origen=origen),
-                moneda=moneda,
-                descripcion=_campo(desc, origen=origen),
-                referencia=_campo(ref, origen=origen) if ref else None,
-                tercero=_campo(tercero, origen=origen, degrade=0.20) if tercero else None,
+        with error_de_fila(excel_row_idx):
+            out.append(
+                MovimientoEsperado(
+                    id=exp_id,
+                    fecha=_campo(fecha, origen=origen),
+                    monto=_campo(monto, origen=origen),
+                    moneda=moneda,
+                    descripcion=_campo(desc, origen=origen),
+                    referencia=_campo(ref, origen=origen) if ref else None,
+                    tercero=_campo(tercero, origen=origen, degrade=0.20) if tercero else None,
+                )
             )
-        )
     return out

@@ -8,7 +8,7 @@ from typing import Any
 from defusedxml import ElementTree as ET
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
-from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
@@ -123,22 +123,23 @@ def cargar_transacciones_xml(
             "referencia": ref or None,
         }
         tx_id = _id_tx(path, idx, data_norm)
-        out.append(
-            TransaccionBancaria(
-                id=tx_id,
-                cuenta_mask=cuenta_mask,
-                banco=banco or None,
-                bloquea_autoconcilia=False,
-                motivo_bloqueo_autoconcilia=None,
-                fecha_operacion=_campo(fecha_op),
-                fecha_contable=_campo(fecha_ct) if fecha_ct else None,
-                monto=_campo(monto),
-                moneda=moneda,
-                descripcion=_campo(desc),
-                referencia=_campo(ref) if ref else None,
-                archivo_origen=path.name,
-                origen=OrigenDato.xml,
-                fila_origen=idx,
+        with error_de_fila(idx):
+            out.append(
+                TransaccionBancaria(
+                    id=tx_id,
+                    cuenta_mask=cuenta_mask,
+                    banco=banco or None,
+                    bloquea_autoconcilia=False,
+                    motivo_bloqueo_autoconcilia=None,
+                    fecha_operacion=_campo(fecha_op),
+                    fecha_contable=_campo(fecha_ct) if fecha_ct else None,
+                    monto=_campo(monto),
+                    moneda=moneda,
+                    descripcion=_campo(desc),
+                    referencia=_campo(ref) if ref else None,
+                    archivo_origen=path.name,
+                    origen=OrigenDato.xml,
+                    fila_origen=idx,
+                )
             )
-        )
     return out

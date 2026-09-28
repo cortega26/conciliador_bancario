@@ -301,19 +301,28 @@ def conciliar(
         used_exp.add(exp.id)
 
     # 2) monto exacto + ventana fecha (unico)
+    # Index por monto: recorrer todos los esperados por cada transaccion es
+    # O(n*m) y domina el runtime en extractos grandes. El bucket se construye
+    # recorriendo `esperados` en el mismo orden (ya ordenado por id), asi que el
+    # orden de candidatos -- y por lo tanto el desempate y los hallazgos -- es
+    # identico al del escaneo lineal anterior.
+    idx_exp_monto: dict[Decimal, list[MovimientoEsperado]] = {}
+    for exp in esperados:
+        idx_exp_monto.setdefault(_valor_monto_exp(exp), []).append(exp)
+
     for tx in transacciones:
         if tx.id in used_tx:
             continue
         tx_fecha = _valor_fecha_tx(tx)
         tx_monto = _valor_monto_tx(tx)
-        cands: list[MovimientoEsperado] = []
-        for exp in esperados:
-            if exp.id in used_exp:
-                continue
-            if _valor_monto_exp(exp) != tx_monto:
-                continue
-            if _dias_diff(tx_fecha, _valor_fecha_exp(exp)) <= cfg.ventana_dias_monto_fecha:
-                cands.append(exp)
+        cands: list[MovimientoEsperado] = [
+            e
+            for e in idx_exp_monto.get(tx_monto, [])
+            if e.id not in used_exp
+            and _dentro_de_ventana(
+                _dias_diff(tx_fecha, _valor_fecha_exp(e)), cfg.ventana_dias_monto_fecha
+            )
+        ]
 
         if not cands:
             continue

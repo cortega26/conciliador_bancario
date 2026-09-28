@@ -324,3 +324,50 @@ def test_referencia_exacta_mismo_dia_sigue_conciliando() -> None:
     assert len(res.matches) == 1
     assert res.matches[0].estado == EstadoMatch.conciliado
     assert res.matches[0].score == 1.0
+
+
+def test_candidatos_por_monto_respetan_consumo_previo() -> None:
+    """
+    El indice por monto no puede alterar el desempate ni el consumo.
+
+    Caso de mayor riesgo al indexar: el bucket de un monto contiene un esperado
+    ya consumido por la regla anterior. Ese esperado debe quedar fuera de los
+    candidatos de la transaccion siguiente, o apareceria una ambiguedad falsa.
+    Este test fija comportamiento que es identico antes y despues del indice: es
+    una garantia de equivalencia, no una prueba de rendimiento.
+    """
+    cfg = ConfiguracionCliente(cliente="X", ventana_dias_monto_fecha=3)
+    fecha = date(2026, 1, 5)
+    # TX-1 se lleva a EXP-1 por ref_exacta (unica con referencia).
+    tx1 = _tx_referencia("150000", fecha, "FAC-1", tx_id="TX-1")
+    exp1 = _exp_referencia("EXP-1", "150000", fecha, "FAC-1")
+    # TX-2 sin referencia compite por monto contra ambos; solo EXP-2 queda libre.
+    tx2 = _tx_referencia("150000", fecha, "", tx_id="TX-2")
+    exp2 = _exp_referencia("EXP-2", "150000", fecha, "")
+
+    res = conciliar(
+        cfg=cfg,
+        transacciones=[tx1, tx2],
+        esperados=[exp1, exp2],
+        audit=NullAuditWriter(),
+        run_id="r",
+    )  # type: ignore[arg-type]
+    assert not [h for h in res.hallazgos if h.tipo == "ambiguedad_monto_fecha"]
+    assert len(res.matches) == 2
+    por_regla = {m.regla: m.movimientos_esperados for m in res.matches}
+    assert por_regla["ref_exacta"] == ["EXP-1"]
+    assert por_regla["monto_fecha"] == ["EXP-2"]
+
+
+def test_dos_esperados_mismo_monto_generan_ambiguedad() -> None:
+    """Control del indice: un bucket con >1 candidato sigue fallando cerrado."""
+    cfg = ConfiguracionCliente(cliente="X", ventana_dias_monto_fecha=3)
+    tx = _tx_referencia("150000", date(2026, 1, 5), "")
+    exp1 = _exp_referencia("EXP-1", "150000", date(2026, 1, 5), "")
+    exp2 = _exp_referencia("EXP-2", "150000", date(2026, 1, 5), "")
+
+    res = conciliar(
+        cfg=cfg, transacciones=[tx], esperados=[exp1, exp2], audit=NullAuditWriter(), run_id="r"
+    )  # type: ignore[arg-type]
+    assert res.matches == []
+    assert any(h.tipo == "ambiguedad_monto_fecha" for h in res.hallazgos)

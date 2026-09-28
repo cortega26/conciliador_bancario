@@ -15,7 +15,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 001 | Characterize the untested fail-closed matching branches | P1 | S | — | DONE |
-| 002 | Fix single-separator amount parsing (10–100x money errors) | P1 | M | 001 | TODO |
+| 002 | Fix single-separator amount parsing (10–100x money errors) | P1 | M | 001 | DONE |
 | 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | TODO |
 | 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | TODO |
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | TODO |

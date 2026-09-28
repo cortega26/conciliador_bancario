@@ -20,6 +20,14 @@ class JsonlAuditWriter:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._run_id = run_id
         self._seq = 0
+        # Invariante: con run_id el archivo es la traza determinista de ESA
+        # corrida (se trunca, igual que run.json) y 'seq' es clave valida. Sin
+        # run_id no hay corrida a la que atribuir el evento, asi que se agrega
+        # al log best-effort existente. Un OSError aqui lo convierte el pipeline
+        # en ErrorOperacionIO, que es el contrato ya establecido.
+        modo = "w" if run_id is not None else "a"
+        with self._path.open(modo, encoding="utf-8"):
+            pass
 
     def write(self, event: AuditEvent) -> None:
         payload: dict[str, Any] = {

@@ -107,9 +107,18 @@ def emit_failure_audit_best_effort(
     command: str,
     exc: Exception,
 ) -> None:
+    """
+    Registra el fallo de la invocacion CLI, sin tocar audit.jsonl.
+
+    audit.jsonl es la traza determinista de una corrida y se trunca en cada
+    ejecucion: toda linea debe poder atribuirse a un run_id. Este manejador no
+    puede calcular ese run_id (el run fallo antes de devolverlo), asi que escribe
+    en audit_fallo.jsonl, un log best-effort separado. Mezclar ambos en un mismo
+    archivo reintroducia lineas sin run_id en el artefacto durable.
+    """
     rendered = classify_cli_error(exc)
     try:
-        audit = JsonlAuditWriter(out_dir / "audit.jsonl")
+        audit = JsonlAuditWriter(out_dir / "audit_fallo.jsonl")
         audit.write(
             AuditEvent(
                 "cli_error",

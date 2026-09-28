@@ -17,7 +17,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | 001 | Characterize the untested fail-closed matching branches | P1 | S | — | DONE |
 | 002 | Fix single-separator amount parsing (10–100x money errors) | P1 | M | 001 | DONE |
 | 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | DONE (deviation — see below) |
-| 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | TODO |
+| 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | DONE (see deviations) |
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | TODO |
 | 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | TODO |
 | 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | TODO |
@@ -53,6 +53,18 @@ REJECTED (with one-line rationale)
   `IdDuplicado`.
 - **002/003/004: `CHANGELOG.md` is out of scope in all three**, yet each asks for
   an entry. Batched into one commit after the fact (see the table row 004 note).
+- **004: `test_ux_contracts_cli.py:179` was case (a)** — it asserted
+  `len(lines2) > len(lines1)`, i.e. cross-run **growth**, exactly the property
+  this plan removes. Rewritten to the new contract (run-scoped rewrite, `run_id`
+  on every line) with the reversal documented in its docstring, as Step 2 allows.
+- **004: CLI failures moved to `audit_fallo.jsonl`.** The done criterion is
+  "every line in `audit.jsonl` has a `run_id`", and `emit_failure_audit_best_effort`
+  runs *after* the run raised, so it cannot know the `run_id`. Writing it into the
+  run-scoped file would put an unattributable line in a deterministic artifact.
+  Step 4 explicitly permits a separate, clearly-named file; this is that route.
+  `tests/test_cli_error_boundary.py` (out of scope) asserted the old location and
+  had to move with it — the assertion was strengthened, not weakened: it now also
+  checks the run trail is fully attributed.
 
 ## Dependency notes
 

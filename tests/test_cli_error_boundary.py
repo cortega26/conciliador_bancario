@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from conciliador_bancario.cli import app
@@ -119,10 +120,17 @@ def test_cli_run_error_ingestion_emite_evento_cli_error(tmp_path: Path) -> None:
     assert r.exit_code == 4
     assert "CSV banco sin columnas requeridas: descripcion" in r.stdout
 
+    # El fallo de CLI se registra aparte: audit.jsonl es la traza por corrida y
+    # toda linea debe poder atribuirse a un run_id, que aqui no existe todavia.
+    fallos = out / "audit_fallo.jsonl"
+    assert fallos.exists()
+    assert any('"tipo":"cli_error"' in line for line in fallos.read_text().splitlines())
+
+    # La traza de la corrida sigue siendo utilizable y esta atribuida.
     audit_path = out / "audit.jsonl"
     assert audit_path.exists()
-    lines = audit_path.read_text(encoding="utf-8").splitlines()
-    assert any('"tipo":"cli_error"' in line for line in lines)
+    for line in audit_path.read_text(encoding="utf-8").splitlines():
+        assert "run_id" in json.loads(line)
 
 
 def test_cli_run_error_auditoria_fallida_no_oculta_error_principal(tmp_path: Path) -> None:

@@ -176,7 +176,16 @@ def test_ux_contract_idempotencia_run_json_byte_a_byte(tmp_path: Path) -> None:
     assert (out1 / "run.json").read_bytes() == (out2 / "run.json").read_bytes()
 
 
-def test_ux_contract_audit_jsonl_es_append_only_en_mismo_out_dir(tmp_path: Path) -> None:
+def test_ux_contract_audit_jsonl_es_por_corrida_en_mismo_out_dir(tmp_path: Path) -> None:
+    """
+    audit.jsonl queda acotado a una corrida.
+
+    Antes este test exigia que el archivo CRECIERA al repetir el comando en el
+    mismo --out (append-only entre corridas). Eso hacia que 'seq' se repitiera y
+    que el archivo dejara de ser funcion determinista de la entrada. Ahora la
+    trazabilidad entre corridas es responsabilidad de quien ejecuta: basta con
+    copiar el run_dir que interesa conservar.
+    """
     cfg = tmp_path / "config.yaml"
     bank = tmp_path / "bank.csv"
     exp = tmp_path / "expected.csv"
@@ -206,6 +215,7 @@ def test_ux_contract_audit_jsonl_es_append_only_en_mismo_out_dir(tmp_path: Path)
     assert r1.exit_code == 0, r1.stdout
     lines1 = (out / "audit.jsonl").read_text(encoding="utf-8").splitlines()
     assert lines1, "audit.jsonl vacio"
+    primera = (out / "audit.jsonl").read_bytes()
 
     r2 = runner.invoke(
         app,
@@ -224,4 +234,9 @@ def test_ux_contract_audit_jsonl_es_append_only_en_mismo_out_dir(tmp_path: Path)
     )
     assert r2.exit_code == 0, r2.stdout
     lines2 = (out / "audit.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(lines2) > len(lines1)
+
+    # La segunda corrida reescribe la traza en vez de acumularla, y ningun
+    # evento de la corrida anterior sobrevive.
+    assert len(lines2) == len(lines1)
+    assert (out / "audit.jsonl").read_bytes() == primera
+    assert all("run_id" in json.loads(line) for line in lines2)

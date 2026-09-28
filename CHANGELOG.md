@@ -2,6 +2,27 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.15](https://github.com/cortega26/conciliador_bancario/compare/v0.2.14...v0.2.15) (2026-09-28)
+
+
+### Bug Fixes
+
+* **audit:** scope audit.jsonl to a single run ([5a22b68](https://github.com/cortega26/conciliador_bancario/commit/5a22b680994e56992da8975800b547fe5e78f0d1))
+* **cli:** make --no-mask usable ([5577397](https://github.com/cortega26/conciliador_bancario/commit/5577397ab647e01beadb1580048467debbc5d6dc))
+* **deps:** clear the pip-audit supply-chain gate ([2cbf79f](https://github.com/cortega26/conciliador_bancario/commit/2cbf79f9049307c89820a4078c755df54aba9fa6))
+* **deps:** clear the pip-audit supply-chain gate ([837a4ee](https://github.com/cortega26/conciliador_bancario/commit/837a4eedcc8a3b187a703a18744cf45b1b2ae43f))
+* **ingestion:** classify schema violations as ingestion errors ([e691c11](https://github.com/cortega26/conciliador_bancario/commit/e691c114be51be7388e3ecefb77084ee15aa48ad))
+* **ingestion:** classify schema violations as ingestion errors ([636b020](https://github.com/cortega26/conciliador_bancario/commit/636b020a5ee699b346c60903dc448b74ead5435a))
+* **ingestion:** surface duplicate expected ids as a finding ([88f3846](https://github.com/cortega26/conciliador_bancario/commit/88f3846e03296944a006ef8d964998dfec9c801f))
+* **matching:** bound ref_exacta by a date window ([8d34248](https://github.com/cortega26/conciliador_bancario/commit/8d342486e7bafae2f3821c8af0e9daeb284165ae))
+* **parsing:** resolve single-separator amounts deterministically ([abb6a7c](https://github.com/cortega26/conciliador_bancario/commit/abb6a7c09b13c7b053beecae114f0b938eb3c264))
+* **reporting:** sanitize user-controlled id cells ([c390948](https://github.com/cortega26/conciliador_bancario/commit/c39094888d3c98f59f32b761e87bfab38271ce28))
+
+
+### Performance Improvements
+
+* **matching:** index the amount+date candidate scan ([7fe436c](https://github.com/cortega26/conciliador_bancario/commit/7fe436c62fd01d6a1ef93158ac3aa12dc4f5dce7))
+
 ## [Unreleased]
 
 ### Changed

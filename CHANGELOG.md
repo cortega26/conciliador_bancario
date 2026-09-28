@@ -2,6 +2,51 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING (parseo de montos):** un separador decimal aislado ya no se elimina.
+  `0,50` se ingeria como `50` (error de 100x) y `(1.234,56)` como `+1235`
+  (un credito contabilizado como debito); ambos en silencio, con exit 0. Ahora
+  `0,50`, `12,5`, `1.5` y `12.50` se rechazan con `ErrorParseo` nombrando el
+  valor, porque CLP no tiene centimos y adivinar seria conciliar mal. El
+  redondeo sigue siendo el default de `Decimal` (half-even).
+- **BREAKING (auditoria):** `audit.jsonl` pasa a estar acotado a una corrida.
+  Repetir el comando identico en el mismo `--out` ya no duplica la traza ni
+  reinicia `seq`, que antes no era clave unica. Conservar la traza de una
+  corrida anterior es responsabilidad de quien ejecuta (copiar el `run_dir`).
+- Los fallos de CLI se registran en `audit_fallo.jsonl` en vez de `audit.jsonl`,
+  para que toda linea del artefacto durable sea atribuible a un `run_id`.
+
+### Fixed
+
+- Un `id` repetido en el archivo de movimientos esperados hacia desaparecer una
+  fila de la conciliacion sin generar hallazgo alguno (exit 0, reporte
+  aparentemente completo). Se descarta la repeticion y se reporta como
+  `id_duplicado_esperado` / `id_duplicado_banco`, con el id, los ordinales de
+  fila y los montos descartados. Aplica igual para CSV y XLSX.
+- `--no-mask` fallaba con exit 2 y `Flags incompatibles: --mask y --no-mask`,
+  culpando al usuario por un defecto de cableado. Las tres invocaciones (sin
+  flag, `--mask`, `--no-mask`) ahora terminan en 0 y `--no-mask` produce un
+  reporte genuinamente sin enmascarar. El default sigue siendo enmascarar.
+
+### Security
+
+- Cuatro celdas de `reporte_conciliacion.xlsx` se escribian sin sanear, saltandose
+  el helper `_mask_cell` del propio archivo. Un `id` de `=cmd|'/c calc'!A1`
+  producia una celda de formula viva. Ahora se sanean en el renderizado y
+  `MovimientoEsperado.id` rechaza en la frontera valores que empiezan por
+  `=`, `+`, `-`, `@` o contienen caracteres de control.
+- `prevenir_csv_injection` solo inspeccionaba el primer caracter; un espacio
+  inicial bastaba para bypassear la guarda, ya que Excel lo descarta antes de
+  evaluar. Ahora ignora espacios y caracteres de control iniciales.
+- `.pypi_smoke/` (477 archivos, 11 binarios `.exe`, copia de pip 26.0.1) se
+  publicaba dentro del sdist de `bankrecon`, una herramienta de conciliacion
+  financiera. El target `sdist` ahora lo excluye; `RELEASING.md` indica crear
+  ese venv fuera del repositorio. Los archivos siguen versionados: purparlos o
+  reescribir la historia es una decision del mantenedor.
+
 ## [0.2.14](https://github.com/cortega26/conciliador_bancario/compare/v0.2.13...v0.2.14) (2026-02-11)
 
 
@@ -15,8 +60,6 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 ### Bug Fixes
 
 * trigger release please after migration ([8211401](https://github.com/cortega26/conciliador_bancario/commit/8211401da83ff9f14098cd19814ea47bcb5d910d))
-
-## [Unreleased]
 
 ## [0.2.12] - 2026-02-10
 ### Changed

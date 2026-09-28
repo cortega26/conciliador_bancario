@@ -6,7 +6,7 @@ from typing import Any
 from pypdf import PdfReader
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
-from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
@@ -134,23 +134,24 @@ def cargar_transacciones_pdf_ocr(
         idx += 1
         data_norm = {"fecha_operacion": str(fecha), "monto": str(monto), "descripcion": desc}
         tx_id = _id_tx(path, idx, data_norm)
-        out.append(
-            TransaccionBancaria(
-                id=tx_id,
-                cuenta_mask=None,
-                bloquea_autoconcilia=True,
-                motivo_bloqueo_autoconcilia="Transaccion proviene de PDF escaneado procesado por OCR: requiere revision humana.",
-                fecha_operacion=_campo(fecha, notas="OCR"),
-                fecha_contable=None,
-                monto=_campo(monto, notas="OCR"),
-                moneda=cfg.moneda_default,
-                descripcion=_campo(desc, notas="OCR", degrade=0.05),
-                referencia=None,
-                archivo_origen=path.name,
-                origen=OrigenDato.pdf_ocr,
-                fila_origen=idx,
+        with error_de_fila(idx):
+            out.append(
+                TransaccionBancaria(
+                    id=tx_id,
+                    cuenta_mask=None,
+                    bloquea_autoconcilia=True,
+                    motivo_bloqueo_autoconcilia="Transaccion proviene de PDF escaneado procesado por OCR: requiere revision humana.",
+                    fecha_operacion=_campo(fecha, notas="OCR"),
+                    fecha_contable=None,
+                    monto=_campo(monto, notas="OCR"),
+                    moneda=cfg.moneda_default,
+                    descripcion=_campo(desc, notas="OCR", degrade=0.05),
+                    referencia=None,
+                    archivo_origen=path.name,
+                    origen=OrigenDato.pdf_ocr,
+                    fila_origen=idx,
+                )
             )
-        )
     audit.write(AuditEvent("ingestion", "OCR finalizado", {"archivo": path.name, "txs": len(out)}))
     if not out:
         raise ErrorIngestion("OCR completado pero no se detectaron transacciones (heuristica).")

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
-from conciliador_bancario.ingestion.base import ErrorIngestion
+from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
@@ -192,25 +192,28 @@ def cargar_transacciones_csv(
             cuenta_mask = enmascarar_cuenta(cuenta_raw) if cuenta_raw else None
 
             origen = OrigenDato.csv
-            out.append(
-                TransaccionBancaria(
-                    id=tx_id,
-                    cuenta_mask=cuenta_mask,
-                    bloquea_autoconcilia=False,
-                    motivo_bloqueo_autoconcilia=None,
-                    fecha_operacion=_campo(fecha_op, origen=origen),
-                    fecha_contable=(
-                        _campo(fecha_ct_val, origen=origen, degrade=0.10) if fecha_ct_val else None
-                    ),
-                    monto=_campo(monto, origen=origen),
-                    moneda=moneda,
-                    descripcion=_campo(desc, origen=origen),
-                    referencia=_campo(ref, origen=origen) if ref else None,
-                    archivo_origen=path.name,
-                    origen=origen,
-                    fila_origen=i,
+            with error_de_fila(i):
+                out.append(
+                    TransaccionBancaria(
+                        id=tx_id,
+                        cuenta_mask=cuenta_mask,
+                        bloquea_autoconcilia=False,
+                        motivo_bloqueo_autoconcilia=None,
+                        fecha_operacion=_campo(fecha_op, origen=origen),
+                        fecha_contable=(
+                            _campo(fecha_ct_val, origen=origen, degrade=0.10)
+                            if fecha_ct_val
+                            else None
+                        ),
+                        monto=_campo(monto, origen=origen),
+                        moneda=moneda,
+                        descripcion=_campo(desc, origen=origen),
+                        referencia=_campo(ref, origen=origen) if ref else None,
+                        archivo_origen=path.name,
+                        origen=origen,
+                        fila_origen=i,
+                    )
                 )
-            )
         return out
 
 
@@ -321,15 +324,16 @@ def cargar_movimientos_esperados_csv(
             exp_id = _id_exp(path, i, data_norm, id_ext if id_ext else None)
 
             origen = OrigenDato.csv
-            out.append(
-                MovimientoEsperado(
-                    id=exp_id,
-                    fecha=_campo(fecha, origen=origen),
-                    monto=_campo(monto, origen=origen),
-                    moneda=moneda,
-                    descripcion=_campo(desc, origen=origen),
-                    referencia=_campo(ref, origen=origen) if ref else None,
-                    tercero=_campo(tercero, origen=origen, degrade=0.20) if tercero else None,
+            with error_de_fila(i):
+                out.append(
+                    MovimientoEsperado(
+                        id=exp_id,
+                        fecha=_campo(fecha, origen=origen),
+                        monto=_campo(monto, origen=origen),
+                        moneda=moneda,
+                        descripcion=_campo(desc, origen=origen),
+                        referencia=_campo(ref, origen=origen) if ref else None,
+                        tercero=_campo(tercero, origen=origen, degrade=0.20) if tercero else None,
+                    )
                 )
-            )
         return out

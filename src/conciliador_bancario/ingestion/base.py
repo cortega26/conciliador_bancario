@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
+
+from pydantic import ValidationError
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.models import ConfiguracionCliente
@@ -37,6 +40,54 @@ class IdDuplicado:
 
 
 _ItemT = TypeVar("_ItemT")
+
+# Un valor de un archivo del cliente puede ser largo o sensible; el mensaje de
+# error solo necesita identificar el problema, no reproducir la fila completa.
+_MAX_LEN_ERROR = 40
+_MAX_ERRORES_MOSTRADOS = 3
+
+
+def _recortar(valor: object) -> str:
+    texto = repr(valor)
+    if len(texto) > _MAX_LEN_ERROR:
+        return texto[: _MAX_LEN_ERROR - 3] + "..."
+    return texto
+
+
+def _detalle_validacion(exc: ValidationError) -> str:
+    """
+    Traduce un ValidationError de pydantic a un mensaje en español.
+
+    No se reutiliza el texto de pydantic porque está en inglés, y este repo
+    expone esos mensajes al operador. Se nombra el campo y el valor recibido:
+    un archivo con 5000 filas no se depura con "dato invalido".
+    """
+    errores = exc.errors()
+    if not errores:
+        return "dato invalido segun esquema"
+    partes = []
+    for err in errores[:_MAX_ERRORES_MOSTRADOS]:
+        loc = ".".join(str(p) for p in err.get("loc", ())) or "dato"
+        partes.append(f"{loc}={_recortar(err.get('input'))}")
+    extra = len(errores) - _MAX_ERRORES_MOSTRADOS
+    sufijo = f" (+{extra} mas)" if extra > 0 else ""
+    return "dato invalido segun esquema: " + ", ".join(partes) + sufijo
+
+
+@contextmanager
+def error_de_fila(fila: int) -> Iterator[None]:
+    """
+    Convierte un ValidationError de construccion de modelo en ErrorIngestion.
+
+    Sin esto, un dato del cliente que viola el esquema (moneda que no es ISO-3,
+    id con prefijo de formula) escapa como error interno: el operador ve un
+    fallo de la herramienta en vez de una fila que corregir, y con --debug un
+    traceback que no dice nada util. El numero de fila es lo que hace falta.
+    """
+    try:
+        yield
+    except ValidationError as e:
+        raise ErrorIngestion(f"Fila {fila}: {_detalle_validacion(e)}") from e
 
 
 def validar_ids_unicos(

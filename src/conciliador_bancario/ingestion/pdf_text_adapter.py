@@ -9,6 +9,7 @@ from typing import Any
 from pypdf import PdfReader
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
+from conciliador_bancario.ingestion.base import error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
 from conciliador_bancario.models import (
     CampoConConfianza,
@@ -142,23 +143,24 @@ def cargar_transacciones_pdf_texto(
             "ref": ref or None,
         }
         tx_id = _id_tx(path, idx, data_norm)
-        out.append(
-            TransaccionBancaria(
-                id=tx_id,
-                cuenta_mask=None,
-                bloquea_autoconcilia=False,
-                motivo_bloqueo_autoconcilia=None,
-                fecha_operacion=_campo(fecha_op),
-                fecha_contable=None,
-                monto=_campo(monto),
-                moneda=cfg.moneda_default,
-                descripcion=_campo(desc, degrade=0.10 if not desc else 0.0),
-                referencia=_campo(normalizar_referencia(ref), degrade=0.20) if ref else None,
-                archivo_origen=path.name,
-                origen=OrigenDato.pdf_texto,
-                fila_origen=idx,
+        with error_de_fila(idx):
+            out.append(
+                TransaccionBancaria(
+                    id=tx_id,
+                    cuenta_mask=None,
+                    bloquea_autoconcilia=False,
+                    motivo_bloqueo_autoconcilia=None,
+                    fecha_operacion=_campo(fecha_op),
+                    fecha_contable=None,
+                    monto=_campo(monto),
+                    moneda=cfg.moneda_default,
+                    descripcion=_campo(desc, degrade=0.10 if not desc else 0.0),
+                    referencia=_campo(normalizar_referencia(ref), degrade=0.20) if ref else None,
+                    archivo_origen=path.name,
+                    origen=OrigenDato.pdf_texto,
+                    fila_origen=idx,
+                )
             )
-        )
     if not out:
         audit.write(
             AuditEvent(

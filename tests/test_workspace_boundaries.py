@@ -29,3 +29,18 @@ def test_secret_scan_no_sensitive_tracked_files() -> None:
     mod = _load_module(root / "tools" / "secret_scan.py")
     findings = mod.scan_tracked_files_for_secrets(root=root)
     assert findings == [], f"Secret scan findings: {findings}"
+
+
+def test_gitignore_cubre_entornos_de_verificacion() -> None:
+    """
+    Guardia barata contra la omision original.
+
+    Los venv de verificacion de publicacion se crean junto al repo; sin regla
+    de ignore terminan versionados y despues en el sdist. El .gitignore no
+    basta para el build (hatchling empaqueta lo rastreado), pero sin el tampoco
+    hay barrera para el proximo `git add`.
+    """
+    root = Path(__file__).resolve().parents[1]
+    reglas = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+    for carpeta in (".pypi_smoke/", ".smoke_venv/"):
+        assert carpeta in reglas, f"Falta la regla de ignore para {carpeta}"

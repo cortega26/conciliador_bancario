@@ -71,6 +71,19 @@ exclude = [
   "**/*.pyc",
 ]
 
+# Entornos virtuales de verificacion creados dentro del repo (RELEASING.md, CI).
+# No son contenido del paquete: son venvs locales, con binarios .exe de Windows
+# y una copia propia de pip, que se terminaba publicando en el sdist.
+# La regla de .gitignore NO alcanza aqui: hatchling empaqueta lo que git rastrea.
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "**/.pypi_smoke/**",
+  "**/.smoke_venv/**",
+  "**/.hypothesis/**",
+  "**/dist/**",
+  "**/build/**",
+]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

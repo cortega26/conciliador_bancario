@@ -20,3 +20,9 @@ license.lic
 *.p12
 *.pfx
 *.code-workspace
+
+# Entornos de verificacion de publicacion (creados por RELEASING.md / CI).
+# Deben vivir FUERA del repo: si se commitean, terminan en el sdist.
+.pypi_smoke/
+.smoke_venv/
+.hypothesis/

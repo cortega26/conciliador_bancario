@@ -85,12 +85,16 @@ Nota: `publish.yml` requiere `permissions: id-token: write`.
 
 ## 4. Verificación post-publicación
 
-En un entorno limpio:
+En un entorno limpio. El venv debe crearse **fuera del repositorio**: si queda
+dentro, `hatchling` lo empaqueta en el sdist de la versión siguiente (los
+`.gitignore` no protegen el build, que empaqueta lo que git rastrea).
 
 ```powershell
-python -m venv .pypi_smoke
-.\.pypi_smoke\Scripts\python -m pip install -U pip
-.\.pypi_smoke\Scripts\pip install "bankrecon==<X.Y.Z>"
-.\.pypi_smoke\Scripts\python -c "import bankrecon as br; print(br.__version__)"
-.\.pypi_smoke\Scripts\concilia --help
+$smoke = Join-Path $env:TEMP "bankrecon_smoke"
+python -m venv $smoke
+& "$smoke\Scripts\python" -m pip install -U pip
+& "$smoke\Scripts\pip" install "bankrecon==<X.Y.Z>"
+& "$smoke\Scripts\python" -c "import bankrecon as br; print(br.__version__)"
+& "$smoke\Scripts\concilia" --help
+Remove-Item -Recurse -Force $smoke
 ```

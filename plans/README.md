@@ -18,7 +18,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | 002 | Fix single-separator amount parsing (10–100x money errors) | P1 | M | 001 | DONE |
 | 003 | Reject duplicate transaction/expected IDs at ingestion | P1 | M | 001 | DONE (deviation — see below) |
 | 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | DONE (see deviations) |
-| 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | TODO |
+| 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | DONE (see deviations) |
 | 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | TODO |
 | 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | TODO |
 | 008 | Bound `ref_exacta` by a date window | P2 | M | 001 | TODO |
@@ -65,6 +65,18 @@ REJECTED (with one-line rationale)
   `tests/test_cli_error_boundary.py` (out of scope) asserted the old location and
   had to move with it — the assertion was strengthened, not weakened: it now also
   checks the run trail is fully attributed.
+- **005: the wheel contains **4** `templates/` entries, not 3.** The extra one is
+  `templates/__init__.py`, a tracked package module. Verified pre-existing by
+  rebuilding the wheel with this plan's `pyproject.toml` change stashed (also 4),
+  so the count is unrelated to the fix. The plan's "3" simply omitted
+  `__init__.py`; the three data templates are all present and the wheel was
+  never affected by this issue. Not changed, per the plan's own instruction to
+  report rather than paper over a packaging discrepancy.
+- **005: the plan's `git check-ignore` verify cannot pass as written.**
+  `.pypi_smoke/` is still tracked (477 files, deliberately not removed), and
+  gitignore does not apply to tracked paths, so the command reports nothing for
+  it. The rules are correct: checked against paths *inside* the directories, all
+  three resolve (`.gitignore:26-28`).
 
 ## Dependency notes
 

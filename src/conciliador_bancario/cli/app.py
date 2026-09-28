@@ -106,9 +106,13 @@ def cmd_run(
     bank: Path = typer.Option(..., "--bank", exists=True, readable=True),
     expected: Path = typer.Option(..., "--expected", exists=True, readable=True),
     out: Path = typer.Option(Path("./salida"), "--out", help="Directorio de salida"),
-    mask: bool = typer.Option(True, "--mask", help="Enmascarar datos sensibles en reporte/logs"),
-    no_mask: bool = typer.Option(
-        False, "--no-mask", help="Desactiva enmascaramiento (no recomendado)"
+    mask: bool = typer.Option(
+        True,
+        "--mask/--no-mask",
+        help=(
+            "Enmascarar datos sensibles en reporte/logs. "
+            "--no-mask desactiva el enmascaramiento (no recomendado)."
+        ),
     ),
     dry_run: bool = typer.Option(False, "--dry-run"),
     log_level: str = typer.Option("INFO", "--log-level"),
@@ -134,14 +138,6 @@ def cmd_run(
     debug: bool = typer.Option(False, "--debug", help="Muestra traceback completo en errores."),
 ) -> None:
     try:
-        if no_mask and mask:
-            raise ErrorEntradaUsuario(
-                "Flags incompatibles: --mask y --no-mask.",
-                details={"flag_1": "--mask", "flag_2": "--no-mask"},
-                hint="Use solo una de las dos opciones.",
-            )
-        if no_mask:
-            mask = False
         try:
             out.mkdir(parents=True, exist_ok=True)
         except OSError as e:

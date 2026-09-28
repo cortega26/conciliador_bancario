@@ -20,7 +20,7 @@ every plan's drift check diffs against the `Planned at` SHA. An uncommitted
 | 004 | Make `audit.jsonl` run-scoped so `seq` is a valid trace key | P1 | S | — | DONE (see deviations) |
 | 005 | Remove `.pypi_smoke` from the published sdist | P1 | S | — | DONE (see deviations) |
 | 006 | Sanitize user-controlled IDs in the XLSX report | P1 | S | — | DONE (see deviations) |
-| 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | TODO |
+| 007 | Fix the `--mask`/`--no-mask` CLI wiring | P2 | S | — | DONE |
 | 008 | Bound `ref_exacta` by a date window | P2 | M | 001 | TODO |
 | 009 | Index the amount+date candidate scan (remove O(n^2)) | P2 | M | 008 | TODO |
 

@@ -10,7 +10,7 @@ import yaml
 from pydantic import ValidationError
 from yaml import YAMLError
 
-from conciliador_bancario.audit.atomic import CerrojoDeSalida, ErrorSalidaEnUso
+from conciliador_bancario.audit.atomic import CerrojoDeSalida, ErrorSalidaEnUso, escribir_atomico
 from conciliador_bancario.errors import ErrorConfiguracion, ErrorContrato, ErrorOperacionIO
 from conciliador_bancario.ingestion.base import (
     ErrorIngestion,
@@ -460,9 +460,9 @@ def ejecutar_run(
             ) from e
 
         try:
-            run_json.write_text(
-                canonical_json_dumps(payload),
-                encoding="utf-8",
+            escribir_atomico(
+                run_json,
+                lambda tmp: tmp.write_text(canonical_json_dumps(payload), encoding="utf-8"),
             )
         except OSError as e:
             raise ErrorOperacionIO(
@@ -476,7 +476,14 @@ def ejecutar_run(
 
             reporte = out_dir / "reporte_conciliacion.xlsx"
             try:
-                generar_reporte_excel(reporte, resultado, mask=mask, cfg=cfg)
+                # El `.xlsx` va por `escribir_atomico` y no directo: un `wb.save`
+                # interrupted deja un ZIP truncado al lado de un `run.json`
+                # completo, y esa combinacion es la peor posible porque parece
+                # una corrida exitosa. El temporal va en el mismo directorio
+                # porque `os.replace` solo es atomico en un mismo filesystem.
+                escribir_atomico(
+                    reporte, lambda tmp: generar_reporte_excel(tmp, resultado, mask=mask, cfg=cfg)
+                )
             except OSError as e:
                 raise ErrorOperacionIO(
                     "No se pudo escribir reporte_conciliacion.xlsx.",
@@ -486,4 +493,11 @@ def ejecutar_run(
 
         return resultado
     finally:
+        # El log se baja a disco **antes** de liberar el cerrojo: si se soltara
+        # primero, otra corrida podria empezar a truncar el audit.jsonl mientras
+        # este proceso todavia no lo ha volcado.
+        try:
+            audit.cerrar()
+        except (NameError, AttributeError):
+            pass
         cerrojo.liberar()

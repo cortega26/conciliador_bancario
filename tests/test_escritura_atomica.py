@@ -380,3 +380,174 @@ def test_tres_corridas_secuenciales_dan_el_mismo_resultado(cliente: dict[str, Pa
         if ln.strip()
     }
     assert len(rids) == 1, f"el audit log tiene {len(rids)} corridas mezcladas: {rids}"
+
+
+# --- La conexion real: los artefactos SI pasan por el helper ---------------
+#
+# Los tests de arriba verifican el helper aislado. Eso no demuestra nada sobre
+# los artefactos: un helper sin llamar desde produccion pasa todos sus tests
+# mientras los archivos se siguen escribiendo a pelo. Estos tests atacan el
+# punto de escritura, que es donde estaba el agujero.
+
+
+def test_un_xlsx_a_medias_no_deja_el_reporte_anterior_roto(tmp_path: Path) -> None:
+    """Si `wb.save` revienta a mitad, el `.xlsx` viejo queda intacto.
+
+    Un `wb.save` interrupted deja un ZIP truncado. Al lado de un `run.json`
+    completo, esa combinacion es la peor posible: parece una corrida exitosa y el
+    archivo se abre igual, con la mitad de las hojas.
+    """
+    from conciliador_bancario.reporting import excel_report
+
+    destino = tmp_path / "reporte_conciliacion.xlsx"
+    destino.write_bytes(b"CONTENIDO ANTERIOR INTACTO")
+
+    original = excel_report.generar_reporte_excel
+    calls = {"n": 0}
+
+    def falla_a_la_mitad(path, *args, **kwargs):
+        calls["n"] += 1
+        Path(path).write_bytes(b"ZIP A MEDIAS")
+        raise OSError("disco lleno")
+
+    excel_report.generar_reporte_excel = falla_a_la_mitad
+    try:
+        with pytest.raises(OSError):
+            escribir_atomico(destino, lambda tmp: falla_a_la_mitad(tmp))
+    finally:
+        excel_report.generar_reporte_excel = original
+
+    assert (
+        destino.read_bytes() == b"CONTENIDO ANTERIOR INTACTO"
+    ), "el reporte quedo roto: se escribio a destino sin pasar por el temporal"
+    assert not list(tmp_path.glob("*.tmp*")), "quedo un temporal sin limpiar"
+
+
+def test_el_temporal_se_limpia_si_la_escritura_falla(tmp_path: Path) -> None:
+    """Un temporal huerfano es basura, y ademas confunde al operador.
+
+    `run.json.tmp-1234` al lado del reporte no significa nada para quien no conoce
+    la implementacion, y el siguiente run podria interpretarlo como un resultado.
+    """
+    destino = tmp_path / "run.json"
+
+    def revienta(tmp: Path) -> None:
+        tmp.write_text("{}")
+        raise OSError("corte de luz")
+
+    with pytest.raises(OSError):
+        escribir_atomico(destino, revienta)
+
+    assert list(tmp_path.iterdir()) == [destino] or not list(
+        tmp_path.iterdir()
+    ), f"quedaron archivos: {list(tmp_path.iterdir())}"
+
+
+def test_el_temporal_no_se_ve_si_se_mira_antes_del_replace(tmp_path: Path) -> None:
+    """Mientras se escribe, el destino final todavia no existe.
+
+    Es la propiedad que hace que la atomicidad sirva: un lector concurrente ve el
+    archivo viejo completo o nada, nunca medio escrito.
+    """
+    destino = tmp_path / "run.json"
+    destino.write_text("VIEJO")
+    visto_en_medio: list = []
+
+    def observa(tmp: Path) -> None:
+        tmp.write_text("NUEVO")
+        visto_en_medio.append(destino.read_text())
+
+    escribir_atomico(destino, observa)
+    assert visto_en_medio == ["VIEJO"], "el destino cambio antes del replace"
+    assert destino.read_text() == "NUEVO"
+
+
+# --- La conexion, probada desde la conexion -------------------------------
+#
+# Los tres tests anteriores verifican el helper aislado, y por eso pasaban
+# aunque el pipeline lo dejara sin usar. Este test verifica lo unico que importa:
+# que la ruta de produccion **llame** al helper. Sin el, la proteccion existe en
+# el codigo y no existe en el producto, que es la forma que toma este bug.
+
+
+def test_el_pipeline_escribe_los_dos_artefactos_por_el_helper() -> None:
+    """`run.json` y el `.xlsx` tienen que pasar por `escribir_atomico`.
+
+    Se verifica el uso, no la implementacion: si alguien reemplaza la llamada por
+    un `write_text` a pelo, este test cae aunque el helper siga perfecto.
+    """
+    import inspect
+
+    from conciliador_bancario import pipeline
+
+    fuente = inspect.getsource(pipeline.ejecutar_run)
+    assert fuente.count("escribir_atomico(") >= 2, (
+        "esperaba dos llamadas a escribir_atomico (run.json y reporte), hay "
+        f"{fuente.count('escribir_atomico(')}: los artefactos se estan escribiendo "
+        "sin el temporal"
+    )
+    assert "run_json.write_text(" not in fuente, "run.json se escribe directo, sin atomicidad"
+    assert (
+        "generar_reporte_excel(reporte," not in fuente
+    ), "el .xlsx se guarda directo, sin atomicidad"
+
+
+def test_el_audit_se_vuelca_a_disco_antes_de_soltar_el_cerrojo() -> None:
+    """`cerrar()` va antes de `liberar()`.
+
+    Si se soltara el cerrojo primero, otra corrida podria truncar el audit.jsonl
+    mientras este proceso todavia no lo ha bajado a disco.
+    """
+    import inspect
+
+    from conciliador_bancario import pipeline
+
+    fuente = inspect.getsource(pipeline.ejecutar_run)
+    cerrar = fuente.index("audit.cerrar()")
+    liberar = fuente.index("cerrojo.liberar()")
+    assert cerrar < liberar, "el audit se cierra despues de liberar el cerrojo"
+
+
+def test_una_corrida_real_no_deja_temporales() -> None:
+    """De punta a punta: la corrida termina sin dejar basurita.
+
+    Un `.tmp` huerfano no es solo estetico: el siguiente run lo ve y no sabe que
+    es, y el operador que mire la carpeta no puede distinguirlo de un resultado.
+    """
+    import tempfile
+
+    from conciliador_bancario.cli import app
+    from typer.testing import CliRunner
+
+    with tempfile.TemporaryDirectory() as td:
+        raiz = Path(td)
+        ini = CliRunner().invoke(app, ["init", "--out-dir", str(raiz / "c")])
+        assert ini.exit_code == 0, ini.output
+        config = next((raiz / "c").rglob("*.yaml"))
+        d = config.parent
+        (d / "banco.csv").write_text(
+            "fecha_operacion,monto,descripcion,cuenta\n05/01/2026,150000,Pago,123\n",
+            encoding="utf-8",
+        )
+        (d / "esperados.csv").write_text(
+            "fecha,monto,descripcion\n05/01/2026,150000,Pago\n", encoding="utf-8"
+        )
+        res = CliRunner().invoke(
+            app,
+            [
+                "run",
+                "--config",
+                str(config),
+                "--bank",
+                str(d / "banco.csv"),
+                "--expected",
+                str(d / "esperados.csv"),
+                "--out",
+                str(d / "out"),
+            ],
+        )
+        assert res.exit_code == 0, res.output
+        sobras = [p.name for p in (d / "out").iterdir() if ".tmp" in p.name]
+        assert sobras == [], f"la corrida dejo temporales: {sobras}"
+        assert (d / "out" / "run.json").exists()
+        assert (d / "out" / "reporte_conciliacion.xlsx").exists()

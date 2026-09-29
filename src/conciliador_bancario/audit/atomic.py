@@ -21,6 +21,12 @@ destino.
    copy+delete, que no es atómico. Con esto, un proceso muerto a mitad de escritura
    deja el artefacto viejo intacto, no uno truncado.
 
+   **Que el helper exista no significa que los artefactos esten protegidos.** Este
+   helper estuvo meses escrito y probado, sin que `run.json` ni el `.xlsx` lo llamaran
+   una sola vez: la proteccion estaba en el codigo y no en el producto. Por eso
+   `tests/test_escritura_atomica.py` verifica el uso y no la implementacion, y por que
+   `audit.jsonl` queda fuera a proposito (ver `JsonlAuditWriter`).
+
 2. **`CerrojoDeSalida`**: un archivo con `O_EXCL` que dice "esta salida está en
    uso". Si existe y el proceso dueño sigue vivo, la segunda corrida **falla con un
    mensaje claro** en vez de pisar. Si el proceso ya no existe (un crash dejó el

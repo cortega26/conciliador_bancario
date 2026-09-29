@@ -89,7 +89,14 @@ muera o dos corridas colisionen.
 **Implementación**:
 - Helper `escribir_atomico(path, escribir_fn)`: escribir a `path.with_suffix(path.suffix + ".tmp-<pid>")`,
   luego `os.replace()` (atómico en el mismo filesystem en POSIX y Windows).
-- Aplicar a `run.json`, `audit.jsonl` y el `.xlsx` del reporte.
+- Aplicado a `run.json` y al `.xlsx` del reporte (conectado en #64; antes el helper
+  existía y no lo llamaba nadie, así que la protección estaba en el código y no en el
+  producto). Hay un test que verifica **el uso**, no la implementación.
+- **Excepción deliberada: `audit.jsonl` no lo usa.** Es un log que se anexa evento a
+  evento, y `os.replace` por evento sería O(n²). Un buffer en memoria sería peor: se
+  perdería toda la traza de la corrida que falló, que es justo cuando hace falta. Su
+  modo de fallo es una última línea truncada, no un archivo corrupto, y se detecta al
+  leerla. A cambio, se añade `fsync` al cerrar, antes de soltar el cerrojo.
 - `os.replace` no es un `shutil.move`: `move` puede hacer copy+delete si cruza
   filesystems, que **no** es atómico. El `.tmp` va junto al destino justamente
   para no cruzar filesystem.

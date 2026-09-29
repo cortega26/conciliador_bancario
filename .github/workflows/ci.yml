@@ -48,6 +48,14 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+      # Ratchet de cobertura: solo puede subir (fail_under en pyproject.toml).
+      # Se mide con ramas porque una linea cubierta puede esconder un `if` nunca
+      # tomado, que es donde viven los defaults de match/bloqueo/ventanas.
+      - name: Coverage floor (no puede bajar)
+        run: |
+          coverage run -m pytest -q
+          coverage report
+
       - name: Build (sdist + wheel)
         run: python -m build
 

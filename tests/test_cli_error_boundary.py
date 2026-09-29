@@ -239,3 +239,114 @@ def test_no_mask_producece_un_reporte_realmente_distinto(tmp_path: Path) -> None
     assert con_mask != sin_mask
     assert all(_CUENTA_LARGA not in d for d in con_mask)
     assert any(_CUENTA_LARGA in d for d in sin_mask)
+
+
+# ---------------------------------------------------------------------------
+# Frontera de errores de configuracion (exit 3)
+#
+# `_cargar_config` convierte un ValidationError del modelo en ErrorConfiguracion,
+# pero ese camino no tenia ninguna cobertura. Es el hermano del bug de
+# clasificacion que se corrigio en ingestion: un valor de config invalido debia
+# reportarse como error del cliente, no como fallo interno.
+# ---------------------------------------------------------------------------
+
+
+def test_config_con_valor_invalido_falla_como_configuracion(tmp_path: Path) -> None:
+    """Un valor fuera de esquema es exit 3, no un error interno."""
+    cfg = tmp_path / "config.yaml"
+    # ventana_dias_monto_fecha exige ge=0
+    _write(cfg, "cliente: 'X'\nventana_dias_monto_fecha: -5\n")
+    bank, exp = _write_min_bank_expected(tmp_path)
+
+    r = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+    assert r.exit_code == 3, r.stdout
+    assert "Error (configuracion)" in r.stdout
+    assert "ventana_dias_monto_fecha" in r.stdout
+
+
+def test_config_sin_cliente_obligatorio_falla_como_configuracion(tmp_path: Path) -> None:
+    """Falta el campo requerido: tambien es exit 3, con el campo nombrado."""
+    cfg = tmp_path / "config.yaml"
+    _write(cfg, "umbral_autoconcilia: 0.9\n")
+    bank, exp = _write_min_bank_expected(tmp_path)
+
+    r = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+    assert r.exit_code == 3, r.stdout
+    assert "Error (configuracion)" in r.stdout
+    assert "cliente" in r.stdout
+
+
+def test_config_json_invalido_falla_como_configuracion(tmp_path: Path) -> None:
+    """La rama .json de `_cargar_config` tambien existe y debia estar cubierta."""
+    cfg = tmp_path / "config.json"
+    _write(cfg, '{"cliente": "X", "ventana_dias_monto_fecha": ')
+    bank, exp = _write_min_bank_expected(tmp_path)
+
+    r = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(tmp_path / "out"),
+        ],
+    )
+    assert r.exit_code == 3, r.stdout
+    assert "JSON" in r.stdout
+
+
+def test_config_json_valido_se_acepta(tmp_path: Path) -> None:
+    """Un .json bien formado debe correr igual que un .yaml."""
+    cfg = tmp_path / "config.json"
+    _write(cfg, '{"cliente": "X", "permitir_ocr": false, "moneda_default": "CLP"}')
+    bank, exp = _write_min_bank_expected(tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+
+    r = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out),
+        ],
+    )
+    assert r.exit_code == 0, r.stdout
+    assert (out / "run.json").exists()

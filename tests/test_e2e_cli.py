@@ -251,3 +251,138 @@ def test_explain_encuentra_match_por_id(tmp_path: Path) -> None:
     r = runner.invoke(app, ["explain", "--run-dir", str(out), match_id])
     assert r.exit_code == 0, r.stdout
     assert match_id in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# `concilia init`: el primer comando de un usuario nuevo.
+#
+# Estava sin ninguna cobertura (pipeline.generar_plantillas_init y cmd_init, 0%).
+# Es el camino de onboarding y escribe la config con la que corre todo lo demas:
+# si la plantilla sale con un campo invalido o mal escrito, cada usuario nuevo
+# arranca con la herramienta rota y el error aparece lejos de su causa.
+# ---------------------------------------------------------------------------
+
+
+def test_init_genera_plantillas_usable(tmp_path: Path) -> None:
+    """Las plantillas se escriben y, ademas, son aceptadas por el propio core."""
+    runner = CliRunner()
+    res = runner.invoke(app, ["init", "--out-dir", str(tmp_path)])
+    assert res.exit_code == 0, res.stdout
+    assert "Plantillas generadas" in res.stdout
+
+    for nombre in ("config_cliente.yaml", "movimientos_esperados.csv", "banco.csv"):
+        destino = tmp_path / nombre
+        assert destino.exists(), f"falta la plantilla {nombre}"
+        assert destino.read_text(encoding="utf-8").strip(), f"plantilla vacia: {nombre}"
+
+
+def test_init_config_generada_es_valida_para_el_core(tmp_path: Path) -> None:
+    """
+    La config que entrega `init` tiene que pasar el modelo, sin campos inventados.
+
+    Es el contrato que hace util a la plantilla: si `generar_plantillas_init` o el
+    template se desincronizan de `ConfiguracionCliente` (extra="forbid"), este
+    test falla en vez de fallarle al usuario en su primer `concilia run`.
+    """
+    from conciliador_bancario.models import ConfiguracionCliente
+
+    runner = CliRunner()
+    res = runner.invoke(app, ["init", "--out-dir", str(tmp_path)])
+    assert res.exit_code == 0, res.stdout
+
+    import yaml
+
+    datos = yaml.safe_load((tmp_path / "config_cliente.yaml").read_text(encoding="utf-8"))
+    cfg = ConfiguracionCliente.model_validate(datos)  # extra="forbid": valida las claves
+    assert cfg.cliente
+    # Defaults que el motor lee: si `init` no los fija, el run aun funciona, pero
+    # la politica documentada (fail-closed, ventanas) debe quedar explicita.
+    assert cfg.umbral_confianza_campos > 0
+    assert cfg.ventana_dias_monto_fecha >= 0
+    assert cfg.limites_ingesta.max_input_bytes > 0
+
+
+def test_init_crea_el_directorio_si_no_existe(tmp_path: Path) -> None:
+    """`init` debe crear su destino, no fallar si el usuario eligio uno nuevo."""
+    destino = tmp_path / "anidado" / "cliente"
+    assert not destino.exists()
+
+    res = CliRunner().invoke(app, ["init", "--out-dir", str(destino)])
+    assert res.exit_code == 0, res.stdout
+    assert (destino / "config_cliente.yaml").exists()
+
+
+def test_init_es_idempotente(tmp_path: Path) -> None:
+    """Repetir `init` sobre el mismo directorio no debe fallar ni alterarlo."""
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", "--out-dir", str(tmp_path)]).exit_code == 0
+    antes = (tmp_path / "config_cliente.yaml").read_bytes()
+
+    res = runner.invoke(app, ["init", "--out-dir", str(tmp_path)])
+    assert res.exit_code == 0, res.stdout
+    assert (tmp_path / "config_cliente.yaml").read_bytes() == antes
+
+
+def test_init_sobre_destino_ocupado_por_un_archivo_falla_visible(tmp_path: Path) -> None:
+    """Un destino invalido se reporta como error de IO, no como exito."""
+    ocupado = tmp_path / "ya_existe"
+    ocupado.write_text("soy un archivo", encoding="utf-8")
+
+    res = CliRunner().invoke(app, ["init", "--out-dir", str(ocupado)])
+    assert res.exit_code == 6, res.stdout
+    assert "Error (io)" in res.stdout
+
+
+# ---------------------------------------------------------------------------
+# `explain`: caminos de error.
+#
+# Los dos casos felices ya estaban cubiertos (run.json valido, run.json que no
+# es JSON). Faltaban los errores que un usuario se encuentra en la practica:
+# apuntar a un directorio sin run.json, o pedir un id que no existe.
+# ---------------------------------------------------------------------------
+
+
+def test_explain_sin_run_json_falla_contrato(tmp_path: Path) -> None:
+    """Un run_dir sin run.json es el error mas comun; debe ser claro, no interno."""
+    vacio = tmp_path / "vacio"
+    vacio.mkdir()
+
+    r = CliRunner().invoke(app, ["explain", "--run-dir", str(vacio), "M-1"])
+    assert r.exit_code == 5, r.stdout
+    assert "Falta run.json" in r.stdout
+
+
+def test_explain_id_inexistente_falla_con_entrada(tmp_path: Path) -> None:
+    """Un id mal escrito es error del usuario (exit 2), no del run (exit 5)."""
+    cfg = tmp_path / "config.yaml"
+    bank = tmp_path / "bank.csv"
+    exp = tmp_path / "exp.csv"
+    out = tmp_path / "out"
+    out.mkdir()
+    _write(cfg, "cliente: 'X'\npermitir_ocr: false\nmoneda_default: 'CLP'\n")
+    _write(
+        bank,
+        "fecha_operacion,monto,moneda,descripcion,referencia\n05/01/2026,1000,CLP,Pago,FAC-1\n",
+    )
+    _write(exp, "fecha,monto,moneda,descripcion,referencia\n05/01/2026,1000,CLP,Pago,FAC-1\n")
+
+    r_run = CliRunner().invoke(
+        app,
+        [
+            "run",
+            "--config",
+            str(cfg),
+            "--bank",
+            str(bank),
+            "--expected",
+            str(exp),
+            "--out",
+            str(out),
+            "--dry-run",
+        ],
+    )
+    assert r_run.exit_code == 0, r_run.stdout
+
+    r = CliRunner().invoke(app, ["explain", "--run-dir", str(out), "M-no-existe"])
+    assert r.exit_code == 2, r.stdout
+    assert "M-no-existe" in r.stdout

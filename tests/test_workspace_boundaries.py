@@ -44,3 +44,71 @@ def test_gitignore_cubre_entornos_de_verificacion() -> None:
     reglas = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
     for carpeta in (".pypi_smoke/", ".smoke_venv/"):
         assert carpeta in reglas, f"Falta la regla de ignore para {carpeta}"
+
+
+def _pins_de_requirements(ruta: Path) -> dict[str, str]:
+    """Lee `nombre==version` de un requirements, resolviendo el `-r` encadenado."""
+    import re
+
+    pines: dict[str, str] = {}
+    pendientes = [ruta]
+    vistos: set[Path] = set()
+    while pendientes:
+        actual = pendientes.pop(0)
+        if actual in vistos:
+            continue
+        vistos.add(actual)
+        for linea in actual.read_text(encoding="utf-8").splitlines():
+            linea = linea.strip()
+            if not linea or linea.startswith("#"):
+                continue
+            if linea.startswith("-r"):
+                pendientes.insert(0, actual.parent / linea[2:].strip())
+                continue
+            m = re.match(r"^([A-Za-z0-9_.-]+)==([^\s;]+)", linea)
+            if m:
+                pines[m.group(1)] = m.group(2)
+    return pines
+
+
+def test_pyproject_y_requirements_declaran_los_mismos_pines() -> None:
+    """
+    pyproject.toml y requirements*.txt declaran la misma verdad, y pueden divergir.
+
+    Se desincronizan en silencio: un bump deja de aplicarse a quien instala con
+    `-r requirements.txt`, y nada en CI lo nota. Ya ocurrio en este repo al
+    actualizar pines con una expresion regular que solo reconocia los pines
+    entrecomillados de pyproject y dejo requirements intacto.
+    """
+    import tomllib
+
+    root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+    declarados: dict[str, str] = {}
+    for grupo in pyproject["project"].get("dependencies") or []:
+        declarados.update(_pins_de_requirements_text(grupo))
+    for extra in (pyproject["project"].get("optional-dependencies") or {}).values():
+        for grupo in extra:
+            declarados.update(_pins_de_requirements_text(grupo))
+    # hatchling es el backend de build, no una dependencia instalable.
+    declarados.pop("hatchling", None)
+
+    por_requirements = _pins_de_requirements(root / "requirements-dev.txt")
+
+    # Solo se comparan los que requirements*.txt declaran (no cubre pdf_ocr).
+    comun = set(declarados) & set(por_requirements)
+    assert comun, "no hay pines en comun: la lectura de requirements esta rota"
+    desalineados = {
+        k: (declarados[k], por_requirements[k])
+        for k in sorted(comun)
+        if declarados[k] != por_requirements[k]
+    }
+    assert not desalineados, f"pines desalineados pyproject vs requirements: {desalineados}"
+
+
+def _pins_de_requirements_text(grupo: str) -> dict[str, str]:
+    import re
+
+    m = re.match(r"^([A-Za-z0-9_.-]+)==([^\s;]+)$", grupo.strip())
+    return {m.group(1): m.group(2)} if m else {}

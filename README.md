@@ -150,6 +150,7 @@ concilia explain --run-dir .\salida H-<hallazgo_id>
 
 Este repo tiene guardrails para bloquear regresiones:
 - Formato: **Black**
+- Tipos: **mypy** (`src`, cero errores; ver `[tool.mypy]`)
 - Lint: **Ruff**
 - SAST: **Bandit**
 - SCA (supply-chain): **pip-audit** (vulnerabilidades en dependencias; ver `.pip-audit-ignore.txt`)
@@ -162,10 +163,28 @@ python -m pip install -e ".[dev]"
 
 python -m black --check src tests tools
 python -m ruff check src tests tools
+python -m mypy src
 python -m bandit -c .bandit.yml -r src
 python tools/pip_audit_gate.py
 python -m pytest -q
 ```
+
+### SBOM (PEP 770)
+
+El wheel incluye un SBOM CycloneDX en `bankrecon-*.dist-info/sboms/bankrecon.cdx.json`,
+la ubicación que standardize [PEP 770](https://peps.python.org/pep-0770/), de modo que
+los consumidores obtienen el inventario sin instalar el paquete ni resolver dependencias.
+
+Alcance, deliberadamente acotado: contiene las **dependencias runtime directas** con sus
+versiones exactas, y nada más. El árbol transitivo completo no se incluye, porque
+dependería de una resolución concreta y se volvería viejo en silencio. Quien necesite el
+árbol completo tiene dos fuentes en este repo: `requirements.txt` con los pines directos, y
+**pip-audit** en CI, que resuelve e inspecciona el entorno entero.
+
+`tests/test_sbom.py` falla si el SBOM se desincroniza de `requirements.txt`, si aparece un
+`timestamp`/`serialNumber` (rompería el determinismo del build) o si el pin de hatchling
+baja de la versión que soporta `sbom-files`.
+
 
 Semgrep (opcional local):
 ```powershell

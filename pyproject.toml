@@ -69,6 +69,11 @@ include = [
   "src/conciliador_bancario/templates/*.yaml",
   "src/conciliador_bancario/templates/*.csv",
 ]
+# PEP 770: hatchling coloca el archivo en .dist-info/sboms/ del wheel, que es
+# donde los consumidores lo esperan. Sin esto el SBOM seria solo un archivo del
+# repo que nadie encuentra. El contenido lo mantiene tests/test_sbom.py en
+# sync con requirements.txt.
+sbom-files = ["sbom/bankrecon.cdx.json"]
 
 [tool.hatch.version]
 path = "src/conciliador_bancario/version.py"

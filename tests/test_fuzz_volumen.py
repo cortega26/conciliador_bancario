@@ -43,9 +43,19 @@ from conciliador_bancario.models import ConfiguracionCliente
 
 from tools.fuzzvolumen import budgets, escribir_csv, escribir_xml, iter_volumenes
 
-SLOW = pytest.mark.skipif(
+# ## Por que hay dos marcas y no una
+#
+# `slow` **selecciona** el test para el job `volumen` de CI, y `skipif` lo apaga en
+# el resto. Con una sola marca, el job de CI tendria que quitar el skip a mano, que
+# es un paso que alguien olvida y que nadie revisa.
+#
+# Antes de que existiera el job, estos tests se saltaban en todas partes: trece
+# tests que existian, que muerden cuando corren, y que nadie ejecutaba nunca. La
+# cobertura era aparente.
+SLOW = pytest.mark.slow
+_requiere_slow = pytest.mark.skipif(
     not os.environ.get("BR_SLOW"),
-    reason="test de volumen: correr con BR_SLOW=1 (cuesta ~30s)",
+    reason="test de volumen: lo corre el job `volumen` de CI (BR_SLOW=1)",
 )
 
 
@@ -61,6 +71,7 @@ def _rss_mb() -> int:
 
 
 @SLOW
+@_requiere_slow
 @pytest.mark.parametrize("filas", [10, 5_000], ids=["minimo", "mediano"])
 def test_filas_por_debajo_del_limite_entran(tmp_path: Path, filas: int) -> None:
     """Un archivo de tamaño normal se procesa entero, sin avisos ni cortes."""
@@ -70,6 +81,7 @@ def test_filas_por_debajo_del_limite_entran(tmp_path: Path, filas: int) -> None:
 
 
 @SLOW
+@_requiere_slow
 def test_justo_encima_del_limite_de_filas_falla(tmp_path: Path) -> None:
     """Una fila más que el límite falla, y el mensaje dice cómo subirlo.
 
@@ -96,6 +108,7 @@ def test_justo_encima_del_limite_de_filas_falla(tmp_path: Path) -> None:
 
 
 @SLOW
+@_requiere_slow
 def test_justo_por_debajo_del_limite_de_filas_entra(tmp_path: Path) -> None:
     """El borde inferior también: el límite es inclusivo, no `menor que`."""
     cfg = _cfg()
@@ -109,6 +122,7 @@ def test_justo_por_debajo_del_limite_de_filas_entra(tmp_path: Path) -> None:
 
 
 @SLOW
+@_requiere_slow
 def test_el_limite_de_filas_no_acepta_override_de_una_palabra(tmp_path: Path) -> None:
     """Un límite de 0 o negativo tiene que ser imposible, no "todo entra".
 
@@ -126,6 +140,7 @@ def test_el_limite_de_filas_no_acepta_override_de_una_palabra(tmp_path: Path) ->
 
 
 @SLOW
+@_requiere_slow
 @pytest.mark.parametrize("nombre,filas", list(iter_volumenes()), ids=lambda v: str(v))
 def test_el_default_de_filas_es_alcanzable(tmp_path: Path, nombre: str, filas: int) -> None:
     """El default de 200k tiene que ser alcanzable en tiempo razonable.
@@ -156,6 +171,7 @@ def test_el_default_de_filas_es_alcanzable(tmp_path: Path, nombre: str, filas: i
 
 
 @SLOW
+@_requiere_slow
 def test_la_memoria_no_explota_con_el_default_de_filas(tmp_path: Path) -> None:
     """100k filas no pueden pasar de ~1.5 GB de RSS.
 
@@ -173,6 +189,7 @@ def test_la_memoria_no_explota_con_el_default_de_filas(tmp_path: Path) -> None:
 
 
 @SLOW
+@_requiere_slow
 def test_celdas_no_filas_es_lo_que_cuenta(tmp_path: Path) -> None:
     """El límite de celdas responde a columnas, no a filas.
 
@@ -205,6 +222,7 @@ def test_celdas_no_filas_es_lo_que_cuenta(tmp_path: Path) -> None:
 
 
 @SLOW
+@_requiere_slow
 def test_el_limite_de_xml_se_puede_alcanzar(tmp_path: Path) -> None:
     """`max_xml_movimientos` corta, y el mensaje dice cómo subirlo."""
     cfg = _cfg()

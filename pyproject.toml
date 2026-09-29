@@ -98,6 +98,9 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
+markers = [
+    "slow: tests que miden tiempo o memoria con el default real; se corren con BR_SLOW=1 (job `volumen` de CI)",
+]
 addopts = "-q"
 testpaths = ["tests"]
 filterwarnings = [

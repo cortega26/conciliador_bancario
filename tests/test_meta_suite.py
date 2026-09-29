@@ -634,3 +634,71 @@ def test_main_falla_cuando_hay_un_extra_activado(
     assert (
         "extras activados con permiso" in salida
     ), f"un opt-in usado tiene que quedar registrado, no pasar en silencio:\n{salida}"
+
+
+# --- Los tests de volumen tienen que correr en CI ----------------------------
+
+
+def test_los_tests_lentos_se_ejecutan_en_ci() -> None:
+    """Un `@pytest.mark.slow` que ningun job corre es decoracion.
+
+    ## Que paso
+
+    `tests/test_fuzz_volumen.py` tenia trece tests marcados con `skipif(not BR_SLOW)`.
+    `BR_SLOW` no lo definiaba nadie: ni en el workflow, ni en el Makefile, ni en
+    ningun lado. Los trece tests se saltaban en todas partes, para siempre.
+
+    Eran cobertura **aparente**: el archivo existia, los tests existian, y cada uno
+    moria cuando alguien lo ejecutaba a mano con la variable puesta. Nadie lo
+    noto porque un test saltado no rompe nada.
+
+    ## Por que hace falta un test y nosolo discipline
+
+    La纪律 de "agregar un job cuando agregas un test lento" no sobrevive a que
+    alguien growth tired. Un test que afirma la condicion es lo unico que la
+    sostiene: cuando se agregue un `@pytest.mark.slow` nuevo, este test sigue
+    verde **porque el job existe**, y si el job se borra, este test se cae.
+
+    Se verifica que el workflow menciona la marca **y** que define la variable que
+    los tests miran. Las dos, porque con una sola el otro extremo se rompe igual.
+    """
+    import glob
+
+    lentos = []
+    for ruta in glob.glob("tests/test_*.py"):
+        fuente = Path(ruta).read_text(encoding="utf-8")
+        if "pytest.mark.slow" in fuente or "SLOW = pytest.mark.slow" in fuente:
+            lentos.append(ruta)
+
+    assert lentos, (
+        "ningun test usa pytest.mark.slow: o el marker se elimino y con el los "
+        "tests de volumen quedaron sin ejecutar, o el marker cambio de nombre"
+    )
+
+    workflows = list(Path(".github/workflows").glob("*.yml")) + list(
+        Path(".github/workflows").glob("*.yaml")
+    )
+    texto = "\n".join(w.read_text(encoding="utf-8") for w in workflows)
+
+    assert "-m slow" in texto, (
+        f"hay tests marcados como lentos ({lentos}) pero ningun job corre "
+        "`-m slow`: se van a saltar para siempre"
+    )
+    assert "BR_SLOW" in texto, (
+        "el job corre `-m slow` pero no define BR_SLOW, y los tests se saltan "
+        "por el `skipif` de todos modos"
+    )
+
+
+def test_el_marker_slow_esta_registrado() -> None:
+    """Un marker sin registrar en `pyproject.toml` produce un warning en cada corrida.
+
+    No rompe nada hoy, y por eso nadie lo nota. Un warning que aparece en cada push
+    es ruido que entrena a ignorar warnings, que es exactamente lo contrario de lo
+    que un warning debería hacer.
+    """
+    pyproject = (Path("pyproject.toml")).read_text(encoding="utf-8")
+    assert "markers" in pyproject and "slow" in pyproject, (
+        "el marker `slow` no esta registrado en pyproject.toml: pytest va a "
+        "advertir en cada corrida y nadie lo va a leer"
+    )

@@ -162,6 +162,11 @@ RAPIDOS = {"formato", "lint", "mypy", "changelog", "bandit", "tests"}
 SOLO_EN_CI = {
     "wheel_smoke": "instala el wheel publicado en un venv limpio",
     "pdf_ocr": "tesseract + poppler: el unico gate que prueba el camino OCR real",
+    "volumen": (
+        "corre los tests de volumen con el default real de los limites. Antes "
+        "no existia este job y los 13 tests se saltaban siempre (BR_SLOW sin "
+        "definir): cobertura aparente, nadie los ejecutaba nunca"
+    ),
     "CodeQL": "analisis de CodeQL sobre Actions",
 }
 

@@ -127,6 +127,28 @@ Se eligio un hallazgo y no un campo nuevo en el contrato: `run.json` tiene esque
 versionado, y `hallazgos` ya esta en el contrato, ya sale en el reporte y ya queda
 en el audit log.
 
+## A11 — Tests de volumen sin ejecutar (nuevo, de la revisión) — **HECHO**
+
+`tests/test_fuzz_volumen.py` tenia 13 tests con `skipif(not BR_SLOW)`, y `BR_SLOW`
+**no lo definia nadie**: ni en el workflow, ni en el Makefile, ni en ningun lado.
+Se saltaban en todas partes, para siempre.
+
+Eran cobertura **aparente**: el archivo existia, los tests existian, y cada uno
+moria cuando alguien los ejecutaba a mano con la variable puesta. Nadie lo noto
+porque un test saltado no rompe nada.
+
+- [x] Job `volumen` en `ci.yml` que corre `-m slow` con `BR_SLOW=1`
+- [x] Marker `slow` registrado en `pyproject.toml` (pytest advertia en cada corrida)
+- [x] Doble marca: `slow` selecciona, `skipif` apaga. Con una sola, el job
+      tendria que quitar el skip a mano, que es un paso que alguien olvida
+- [x] Segundo paso del job imprime la medicion, para que si el default sube la
+      cifra nueva quede registrada sin reproducirla en local
+- [x] Job declarado en `SOLO_EN_CI` de preflight (el meta-suite lo exigio)
+- [x] **Gate que impide la recaida**: si hay tests `slow` y ningun job corre
+      `-m slow`, o el job no define `BR_SLOW`, el meta-suite falla
+- [x] Prueba de mordida: borrando el job entero → 1 test cae; borrando solo los
+      comandos `-m slow` → 1 test cae
+
 ## Cierre
 
 - [ ] `pytest` verde (suite completa)

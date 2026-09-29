@@ -130,13 +130,18 @@ jobs:
       - name: El golden OCR no debe quedar en skip
         # El golden con stubs debe seguir pasando; lo que no puede pasar es que
         # los tests de integracion se salten por falta de toolchain.
+        # Solo `if`: con `bash -e`, un `grep -q` suelto que no coincide devuelve
+        # 1 y tumbaria el step en el caso de exito. La condicion de un `if` esta
+        # exenta de -e, asi que aca el camino correcto sale con 0.
         run: |
           out=$(python -m pytest tests/test_ingestion_pdf_ocr.py -q -rs 2>&1)
           echo "$out"
-          echo "$out" | grep -q "Requiere extras \[pdf_ocr\]" && {
+          if echo "$out" | grep -q "Requiere extras \[pdf_ocr\]"; then
             echo "::error::los tests de integracion OCR se saltaron: toolchain incompleta"
             exit 1
-          }
+          else
+            echo "OK: los tests de integracion OCR corrieron de verdad"
+          fi
 
   release:
     # Deprecated:

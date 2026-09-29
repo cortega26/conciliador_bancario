@@ -37,6 +37,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 # El lookahead en vez de un `\S` consumido: la regla tambien se usa para
@@ -88,9 +89,13 @@ def validar(pr: Pr) -> list[str]:
     if pr.estado != "OPEN":
         raise ErrorDeMerge(f"el PR #{pr.numero} esta en estado {pr.estado}, no OPEN")
     if pr.mergeable != "MERGEABLE":
+        extra = (
+            "GitHub sigue sin calcularlo; se suelen resolver unos segundos. " "Reintentar."
+            if pr.mergeable == "UNKNOWN"
+            else "puede tener conflictos o estar desactualizado"
+        )
         raise ErrorDeMerge(
-            f"el PR #{pr.numero} no es mergeable (GitHub dice {pr.mergeable!r}); "
-            "puede tener conflictos o estar desactualizado"
+            f"el PR #{pr.numero} no es mergeable (GitHub dice {pr.mergeable!r}); {extra}"
         )
     if pr.checks_fallidos:
         raise ErrorDeMerge(
@@ -141,42 +146,82 @@ def _gh(*args: str) -> str:
     return proc.stdout
 
 
-def obtener_pr(numero: int) -> Pr:
-    datos = json.loads(
-        _gh(
-            "pr",
-            "view",
-            str(numero),
-            "--json",
-            "number,title,state,mergeable,headRefName,statusCheckRollup",
+def obtener_pr(numero: int, *, intentos: int = 6, espera_s: float = 3.0) -> Pr:
+    """El PR desde la API, esperando a que GitHub calcule `mergeable`.
+
+    `mergeable` devuelve `UNKNOWN` durante un instante despues de que la rama
+    base se mueve: GitHub todavia no resolvio el merge. Tomar `UNKNOWN` como
+    "no mergeable" deja al operador con un error sin salida justo despues de
+    cada push a main, que es el caso normal.
+
+    Es la misma trampa que en `await_ci`: **lo que todavia no se sabe no es una
+    respuesta negativa**. Se reintenta un rato y, si no se resuelve, se falla
+    con el estado real a la vista.
+    """
+    ultimo: Pr | None = None
+    for intento in range(intentos):
+        datos = json.loads(
+            _gh(
+                "pr",
+                "view",
+                str(numero),
+                "--json",
+                "number,title,state,mergeable,headRefName,statusCheckRollup",
+            )
         )
-    )
-    pendientes: list[str] = []
-    fallidos: list[str] = []
-    ok = 0
-    for check in datos.get("statusCheckRollup") or []:
-        nombre = check.get("name") or check.get("context") or "?"
-        estado = (check.get("conclusion") or check.get("status") or "").upper()
-        if estado in ("SUCCESS", "NEUTRAL", "SKIPPED"):
-            ok += 1
-        elif estado in ("PENDING", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED"):
-            pendientes.append(nombre)
-        elif estado:
-            fallidos.append(f"{nombre} ({estado})")
-    return Pr(
-        numero=int(datos["number"]),
-        titulo=datos["title"],
-        estado=datos["state"],
-        mergeable=datos.get("mergeable") or "UNKNOWN",
-        rama=datos["headRefName"],
-        checks_ok=ok > 0,
-        checks_pendientes=pendientes,
-        checks_fallidos=fallidos,
-    )
+        pendientes: list[str] = []
+        fallidos: list[str] = []
+        ok = 0
+        for check in datos.get("statusCheckRollup") or []:
+            nombre = check.get("name") or check.get("context") or "?"
+            estado = (check.get("conclusion") or check.get("status") or "").upper()
+            if estado in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+                ok += 1
+            elif estado in ("PENDING", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED"):
+                pendientes.append(nombre)
+            elif estado:
+                fallidos.append(f"{nombre} ({estado})")
+        ultimo = Pr(
+            numero=int(datos["number"]),
+            titulo=datos["title"],
+            estado=datos["state"],
+            mergeable=datos.get("mergeable") or "UNKNOWN",
+            rama=datos["headRefName"],
+            checks_ok=ok > 0,
+            checks_pendientes=pendientes,
+            checks_fallidos=fallidos,
+        )
+        if ultimo.mergeable != "UNKNOWN":
+            return ultimo
+        if intento < intentos - 1:
+            time.sleep(espera_s)
+    assert ultimo is not None
+    return ultimo
 
 
 def _run(*args: str) -> None:
-    subprocess.run(args, check=True)
+    """Ejecuta un comando de git, con un error legible si falla.
+
+    Un `CalledProcessError` con el comando entero no dice que paso. Y `git
+    merge` falla, entre otras cosas, cuando el arbol tiene cambios sin commitear,
+    que es un caso que conviene nombrar.
+    """
+    p = subprocess.run(list(args), capture_output=True, text=True)
+    if p.returncode == 0:
+        return
+    detalle = (p.stderr or p.stdout or "").strip()
+    if "merge" in args and "CONFLICT" in detalle.upper():
+        raise ErrorDeMerge(
+            "el merge tiene conflictos. Resolverlos a mano; este script no automatiza "
+            f"conflictos.\n{detalle}"
+        )
+    raise ErrorDeMerge(f"{' '.join(args)} fallo:\n{detalle}")
+
+
+def arbol_limpio() -> list[str]:
+    """Cambios sin commitear. Un merge con el arbol sucio puede perder trabajo."""
+    p = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+    return [ln for ln in p.stdout.splitlines() if ln.strip()]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -188,6 +233,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Valida y muestra el mensaje, sin mergear ni pushear.",
     )
     args = parser.parse_args(argv)
+
+    try:
+        sucio = arbol_limpio()
+    except subprocess.CalledProcessError:
+        sucio = []
+    if sucio and not args.dry_run:
+        raise ErrorDeMerge(
+            "el arbol tiene cambios sin commitear, y `git merge` fallaria o podria "
+            "perder trabajo:\n  " + "\n  ".join(sucio[:10]) + "\n\n"
+            "Commitea o mandalos a stash antes de mergear."
+        )
 
     try:
         pr = obtener_pr(args.numero)

@@ -65,6 +65,14 @@ def _valor_monto_exp(exp: MovimientoEsperado) -> Decimal:
     return v
 
 
+def _moneda_tx(tx: TransaccionBancaria) -> str:
+    return tx.moneda
+
+
+def _moneda_exp(exp: MovimientoEsperado) -> str:
+    return exp.moneda
+
+
 def _conf_score(c: CampoConConfianza) -> float:
     return float(c.confianza.score)
 
@@ -209,6 +217,52 @@ def conciliar(
         if len(cands) != 1:
             continue
         exp = cands[0]
+        # La moneda se compara **antes** que el monto, y por la misma razon que en
+        # la regla de monto+fecha: referencia y numero iguales no son el mismo
+        # dinero si las divisas no coinciden. `1000 USD` contra `1000 CLP` con la
+        # misma referencia es el caso mas peligroso de los dos, porque la
+        # referencia es la senal mas fuerte que hay y el operador la leeria como
+        # prueba de que el movimiento es el correcto.
+        if _moneda_tx(tx) != _moneda_exp(exp):
+            hid = _hallazgo_id(
+                run_id,
+                "referencia_coincide_moneda_difiere",
+                "banco",
+                tx.id,
+                {
+                    "exp_id": exp.id,
+                    "ref": r,
+                    "moneda_tx": _moneda_tx(tx),
+                    "moneda_exp": _moneda_exp(exp),
+                },
+            )
+            h = Hallazgo(
+                id=hid,
+                severidad=SeveridadHallazgo.critica,
+                tipo="referencia_coincide_moneda_difiere",
+                mensaje=(
+                    "Referencia y monto coinciden pero la moneda no. No se concilia "
+                    "(fail-closed)."
+                ),
+                entidad="banco",
+                entidad_id=tx.id,
+                detalles={
+                    "tx_id": tx.id,
+                    "exp_id": exp.id,
+                    "referencia": r,
+                    "moneda_tx": _moneda_tx(tx),
+                    "moneda_exp": _moneda_exp(exp),
+                },
+            )
+            hallazgos.append(h)
+            audit.write(
+                AuditEvent(
+                    "hallazgo",
+                    "Referencia coincide pero la moneda difiere",
+                    {"hallazgo_id": hid, "tx_id": tx.id, "exp_id": exp.id, "ref": r},
+                )
+            )
+            continue
         if _valor_monto_tx(tx) != _valor_monto_exp(exp):
             hid = _hallazgo_id(
                 run_id,
@@ -306,9 +360,21 @@ def conciliar(
     # recorriendo `esperados` en el mismo orden (ya ordenado por id), asi que el
     # orden de candidatos -- y por lo tanto el desempate y los hallazgos -- es
     # identico al del escaneo lineal anterior.
-    idx_exp_monto: dict[Decimal, list[MovimientoEsperado]] = {}
+    # Index por monto **y moneda**.
+    #
+    # El monto solo no alcanza: 1000 USD y 1000 CLP son el mismo numero y no son
+    # el mismo dinero. Con el index por monto, una transaccion en dolares se
+    # conciliaba contra un movimiento esperado en pesos con estado `conciliado`,
+    # y el error era de ~950x con exit 0. Se comprobo antes de arreglarlo.
+    #
+    # Se indexa por la tupla (moneda, monto) para el emparejamiento, y por monto
+    # solo para poder distinguir "no hay candidato" de "hay candidato pero en otra
+    # moneda", que es un dato que vale la pena reportar.
+    idx_exp_monto: dict[tuple[str, Decimal], list[MovimientoEsperado]] = {}
+    idx_exp_por_monto: dict[Decimal, list[MovimientoEsperado]] = {}
     for exp in esperados:
-        idx_exp_monto.setdefault(_valor_monto_exp(exp), []).append(exp)
+        idx_exp_monto.setdefault((_moneda_exp(exp), _valor_monto_exp(exp)), []).append(exp)
+        idx_exp_por_monto.setdefault(_valor_monto_exp(exp), []).append(exp)
 
     for tx in transacciones:
         if tx.id in used_tx:
@@ -317,7 +383,7 @@ def conciliar(
         tx_monto = _valor_monto_tx(tx)
         cands = [
             e
-            for e in idx_exp_monto.get(tx_monto, [])
+            for e in idx_exp_monto.get((_moneda_tx(tx), tx_monto), [])
             if e.id not in used_exp
             and _dentro_de_ventana(
                 _dias_diff(tx_fecha, _valor_fecha_exp(e)), cfg.ventana_dias_monto_fecha
@@ -325,6 +391,56 @@ def conciliar(
         ]
 
         if not cands:
+            # Mismo numero, otra moneda. No es un match (fallar en silencio aqui
+            # seria peor que no hacer nada), pero tampoco es "no hay nada": es
+            # exactamente el caso donde un cliente que contabiliza en dolares
+            # tiene el banco en pesos, o al reves. Se reporta como critico.
+            otras = [
+                e
+                for e in idx_exp_por_monto.get(tx_monto, [])
+                if e.id not in used_exp and _moneda_exp(e) != _moneda_tx(tx)
+            ]
+            if otras:
+                hid = _hallazgo_id(
+                    run_id,
+                    "monto_coincide_moneda_difiere",
+                    "banco",
+                    tx.id,
+                    {"cands": [e.id for e in otras], "moneda_tx": _moneda_tx(tx)},
+                )
+                hallazgos.append(
+                    Hallazgo(
+                        id=hid,
+                        severidad=SeveridadHallazgo.critica,
+                        tipo="monto_coincide_moneda_difiere",
+                        mensaje=(
+                            "El monto coincide pero la moneda no. No se concilia "
+                            "(fail-closed): mismo numero no es mismo dinero."
+                        ),
+                        entidad="banco",
+                        entidad_id=tx.id,
+                        detalles={
+                            "tx_id": tx.id,
+                            "moneda_tx": _moneda_tx(tx),
+                            "monto_tx": str(tx_monto),
+                            "candidatos": [
+                                {
+                                    "exp_id": e.id,
+                                    "moneda": _moneda_exp(e),
+                                    "monto": str(_valor_monto_exp(e)),
+                                }
+                                for e in otras
+                            ],
+                        },
+                    )
+                )
+                audit.write(
+                    AuditEvent(
+                        "hallazgo",
+                        "Monto coincide pero moneda difiere",
+                        {"hallazgo_id": hid, "tx_id": tx.id, "moneda_tx": _moneda_tx(tx)},
+                    )
+                )
             continue
         if len(cands) > 1:
             hid = _hallazgo_id(

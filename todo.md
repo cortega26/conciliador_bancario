@@ -118,74 +118,27 @@ de verificacion, no del test:
 Con PID, que es garantizado distinto entre procesos, el reporte cae en 4 tests y
 `run.json` en 9. **Un test de mordida que no muerde no demuestra que el test sirva.**
 
-## A8 — Re-verificar el commit sin revisión (H12) — PROC
+## A8 — Re-verificar el commit sin revisión (H12) — PROC — **HECHO**
 
-- [ ] Re-verificar la suite del gate bidireccional desde la rama actual
-- [ ] Confirmar que el árbol coincide con lo que se commiteó
-- [ ] Si cambió algo, corregirlo en un PR nuevo
+El commit `ae00436` (gate de entorno bidireccional) entró a `main` sin revisión
+humana: se commiteó en `main` por error y el push lo llevó directo. Es el único
+cambio de la serie sin PR.
 
-## A9 — Mergear release 0.2.21 — PROC — **HECHO**
+Un commit ya mergeado no se puede "revisar": lo que sí se puede es **re-verificar
+desde cero** y dejar constancia, y si algo cambió respecto a lo que se commiteó,
+corregirlo en un PR nuevo.
 
-- [x] `await_ci.py 47` (los 6 checks esperados, no "ninguno pendiente")
-- [x] `merge_pr.py 47`
-- [x] Esperar `verify_published` en el workflow → `success`
-- [x] Instalación limpia en venv nuevo y comprobar que H14 (moneda) está dentro:
-      `1000 USD vs 1000 CLP -> 0 matches, critico monto_coincide_moneda_difiere`
+- [x] Los 27 tests de `test_meta_suite.py` pasan
+- [x] El gate sigue siendo **bidireccional**: `extras_activados()` y
+      `venv_actualizado()` ambos vacíos con el venv limpio
+- [x] `pines_por_extra()` lee `pdf_ocr` con 3 paquetes, y `dev` con 15 pines
+- [x] La normalización guion/guion bajo sigue en `normalizar_extra()`
+- [x] El commit original sigue intacto: el diff contra `HEAD` son **solo adiciones
+      posteriores** (el job `volumen` y sus tests), ninguna reescritura
 
-**Evidencia del retardo de PyPI**: `verify_published` dio success y el índice
-simple todavía no listaba 0.2.21. `pip download` loSirvio a los ~30s. Es el
-retardo que ya documenta `tools/verify_published.py`: la API de PyPI responde
-antes de que el índice sirva los archivos, y `pip` lee el índice. **Ausencia en
-el índice no es ausencia de publicación**, y `esperar_indice` existe justamente
-por eso.
-
-## A10 — Diferencia de sumas (nuevo, de la revisión) — **HECHO**
-
-Lo报告中 por la revisión como "el control compensatorio estándar contra una fila
-perdida, y hoy la unica defensa es la visibilidad por ítem". Medido antes de
-arreglarlo: 2 tx de 150.000 contra 1 exp de 150.000 daba 1 match, 1 pendiente
-(el recuento cuadra, `1 + 1 == 2`) y **la diferencia de 150.000 no se reportaba
-en ninguna parte**.
-
-- [x] Calcular Σ banco, Σ esperados y Σ conciliado en el motor
-- [x] Emitir hallazgo `diferencia_de_sumas` con los tres totales y la diferencia
-- [x] Severidad `advertencia`, **no** `critica`: un banco y un libro deben poder
-      diferir (comisiones, un chequeo sin respaldo). Tratarlo como error haria
-      la herramienta inservible para su caso de uso normal
-- [x] Solo cuando hay diferencia: una conciliación cuadrada no genera ruido, o el
-      hallazgo se vuelve ruido y entrena a ignorarse
-- [x] Test del falso negativo: `+100.000` contra `-100.000` da 200.000, no 0
-- [x] Prueba de mordida: sin calcular → 7 caen; firmando sumas → 1 cae;
-      severidad crítica → 1 cae
-- [x] Goldens actualizados **con verificacion previa**: se comprobo que los
-      matches no cambian, que no se pierde ningun hallazgo, y que el numero
-      (250.000) coincide con el calculo manual
-
-Se eligio un hallazgo y no un campo nuevo en el contrato: `run.json` tiene esquema
-versionado, y `hallazgos` ya esta en el contrato, ya sale en el reporte y ya queda
-en el audit log.
-
-## A11 — Tests de volumen sin ejecutar (nuevo, de la revisión) — **HECHO**
-
-`tests/test_fuzz_volumen.py` tenia 13 tests con `skipif(not BR_SLOW)`, y `BR_SLOW`
-**no lo definia nadie**: ni en el workflow, ni en el Makefile, ni en ningun lado.
-Se saltaban en todas partes, para siempre.
-
-Eran cobertura **aparente**: el archivo existia, los tests existian, y cada uno
-moria cuando alguien los ejecutaba a mano con la variable puesta. Nadie lo noto
-porque un test saltado no rompe nada.
-
-- [x] Job `volumen` en `ci.yml` que corre `-m slow` con `BR_SLOW=1`
-- [x] Marker `slow` registrado en `pyproject.toml` (pytest advertia en cada corrida)
-- [x] Doble marca: `slow` selecciona, `skipif` apaga. Con una sola, el job
-      tendria que quitar el skip a mano, que es un paso que alguien olvida
-- [x] Segundo paso del job imprime la medicion, para que si el default sube la
-      cifra nueva quede registrada sin reproducirla en local
-- [x] Job declarado en `SOLO_EN_CI` de preflight (el meta-suite lo exigio)
-- [x] **Gate que impide la recaida**: si hay tests `slow` y ningun job corre
-      `-m slow`, o el job no define `BR_SLOW`, el meta-suite falla
-- [x] Prueba de mordida: borrando el job entero → 1 test cae; borrando solo los
-      comandos `-m slow` → 1 test cae
+**Conclusión**: el cambio está verificado por tests que muerden y no ha sido
+alterado. Sigue sin revisión humana — eso no se puede recuperar — pero la verificación
+técnica está hecha y documentada.
 
 ## Cierre
 

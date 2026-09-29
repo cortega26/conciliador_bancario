@@ -73,14 +73,30 @@ una por el título del PR y otra por cada commit individual. Con un PR de 3
 commits son 4 líneas, dos de ellas duplicadas.
 
 Por eso se mergea localmente con un cuerpo sin tipo, en vez de dejar que GitHub
-lo redacte:
+lo redacte. **Y se usa `tools/merge_pr.py`, que arma el mensaje solo:**
 
 ```bash
-# En vez de: gh pr merge <n> --merge
-git checkout main && git pull --ff-only
-git merge --no-ff <rama> -m "Merge PR #<n>: <titulo del PR sin prefijo de tipo>"
-git push
+# Resuelve el numero y el titulo por la API, verifica los checks y rechaza
+# un titulo que todavia tenga prefijo de tipo, antes de tocar main.
+python tools/merge_pr.py <n> --dry-run   # valida y muestra el mensaje
+python tools/merge_pr.py <n>             # mergea y pushea
 ```
+
+El script existe por dos incidentes concretos, uno de los cuales fue omitir este
+archivo:
+
+1. Un PR se mergeo con un mensaje escrito a mano que decia "PR #29" cuando el
+   #29 era otro PR. El numero correcto nunca se llego a existir, porque ese PR
+   nunca se abrio. Con `merge_pr.py` el numero sale de la API, asi que no puede
+   quedar apuntando a otro.
+2. Varios PRs se mergearon con `gh pr merge --merge`, que deja que GitHub
+   redacte el cuerpo con el titulo del PR. De ahi las 7 entradas duplicadas de
+   0.2.17. `check_changelog_commits.py` las detecta despues; `merge_pr.py` las
+   evita antes.
+
+El procedimiento manual sigue abajo para cuando el script no aplique, pero la
+comprobacion de que el PR exista y tenga los checks en verde no es opcional:
+un merge sin revisar no es revisable.
 
 La alternativa sería mergear con squash, pero eso destruiría el historial
 granular con la explicación de cada commit, que es justamente lo que hace

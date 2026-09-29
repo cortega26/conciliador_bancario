@@ -60,10 +60,15 @@ Una conciliación con un hallazgo de severidad `crítica` (por ejemplo, un monto
 coincide pero la moneda no) **termina con exit 0**. La información está en `run.json` y en
 el reporte, pero el código de salida dice que todo bien.
 
-Por qué no se cambió: los códigos de salida tienen un contrato (`0` = conciliación hecha,
-`4` = error de ingesta) y cualquier automatización que use el exit code empezaría a fallar
-por algo que sí se concilió. Es una decisión abierta, escrita en `spec.md` §5.1, no un
-olvido.
+Por qué no se cambió el código de salida: `0` significa "la conciliación se completó", y
+una conciliación con movimientos pendientes es el caso normal de todo contador; romper
+`0` para eso haría que la herramienta no sirviera para su uso, y rompería la
+automatización que hoy funciona.
+
+Lo que **no** se permite es que sea invisible. `concilia run` avisa por pantalla con el
+detalle de cada hallazgo crítico, y `--fail-on-critico` da exit 7 para quien quiera el
+exit estricto en automatización. El aviso sale con y sin el flag: el flag cambia el
+código de salida, no la visibilidad.
 
 ### El PDF texto se puede autoconciliar con un umbral bajo
 

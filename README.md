@@ -157,6 +157,14 @@ Este repo tiene guardrails para bloquear regresiones:
 - SAST semántico: **Semgrep** (corre en CI sobre Ubuntu; en Windows requiere Docker/WSL)
 - Tests: **pytest** (incluye tests “golden” para outputs contractuales)
 
+El escaneo de supply-chain cubre **todo lo que el repo declara**: el entorno
+instalado (runtime + dev) y, por separado, cada extra opcional de
+`pyproject.toml`. Los extras se auditan aparte a proposito: no se instalan en el
+job de tests, y si no se escanean explicitamente quedan fuera del alcance del
+gate. Eso ya paso una vez, con Pillow en el extra `pdf-ocr`, que llego a tener 33
+vulnerabilidades conocidas mientras el gate reportaba limpio. Un gate que no
+mira algo no es un gate sobre ese algo.
+
 Comandos locales:
 ```powershell
 python -m pip install -e ".[dev]"
@@ -165,7 +173,8 @@ python -m black --check src tests tools
 python -m ruff check src tests tools
 python -m mypy src
 python -m bandit -c .bandit.yml -r src
-python tools/pip_audit_gate.py
+python tools/pip_audit_gate.py            # entorno + extras
+python tools/pip_audit_gate.py --solo-extras   # solo los extras
 python -m pytest -q
 ```
 

@@ -53,6 +53,45 @@ Convención mínima (para notas automáticas útiles):
 - `refactor:` refactor sin cambio funcional.
 - `chore:` tareas de mantenimiento (idealmente sin impactar usuario).
 
+#### Cómo mergear sin duplicar el changelog
+
+**El título del PR no debe llevar el prefijo de tipo** (`fix:`, `feat:`, ...),
+aunque los commits internos sí lo lleven.
+
+No es una preferencia de estilo. Este repo mergea con merge commit, y GitHub
+escribe el título del PR en el **cuerpo** del merge commit:
+
+```
+Merge pull request #20 from cortega26/fix/error-taxonomy-contract
+
+fix(errors): ErrorIngestion cumple el contrato de la taxonomia; mypy a cero y en CI
+```
+
+Release-please parsea los cuerpos de los commits como mensajes conventional, así
+que con el prefijo en el título la entrada aparece **dos veces** en el changelog:
+una por el título del PR y otra por cada commit individual. Con un PR de 3
+commits son 4 líneas, dos de ellas duplicadas.
+
+Por eso se mergea localmente con un cuerpo sin tipo, en vez de dejar que GitHub
+lo redacte:
+
+```bash
+# En vez de: gh pr merge <n> --merge
+git checkout main && git pull --ff-only
+git merge --no-ff <rama> -m "Merge PR #<n>: <titulo del PR sin prefijo de tipo>"
+git push
+```
+
+La alternativa sería mergear con squash, pero eso destruiría el historial
+granular con la explicación de cada commit, que es justamente lo que hace
+revisable este repo. Con merge commit + cuerpo sin tipo se conservan las dos
+cosas.
+
+Las secciones del changelog están declaradas en
+`changelog-sections` (`.github/release-please-config.json`). Sin esa clave los
+commits `build:` y `test:` se descartan **en silencio**: el changelog se ve
+completo y no avisa que le faltan entradas.
+
 ### Opción B: manual (control de patch/minor/major)
 
 ```powershell

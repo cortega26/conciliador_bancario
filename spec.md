@@ -198,25 +198,25 @@ Estas no son olvidos: son preguntas de producto que este documento deja abiertas
 propósito, con el trade-off escrito. Resolverlas por cuenta propia sería inventar
 una regla de negocio.
 
-### 5.1 `run` sale con exit 0 aunque haya hallazgos críticos
+### 5.1 `run` sale con exit 0 aunque haya hallazgos críticos — **RESUELTO en #60**
 
 Verificado: 1000 USD contra 1000 CLP produce exit 0 con
-`monto_coincide_moneda_difiere` y `referencia_coincide_moneda_difiere`, ambos de
-severidad **critica**. La información está en `run.json` y en la hoja de
-hallazgos, pero el código de salida dice "todo bien".
+`monto_coincide_moneda_difiere` y `referencia_coincide_moneda_difiere`, ambos críticos.
+La información está en `run.json` y en la hoja de hallazgos, pero el código de salida
+decía "todo bien".
 
-**Argumento a favor de arreglarlo**: el operador mira el exit code primero, y un
-crítico invisible desde ahí es un cliente que concilió mal sin enterarse.
+**Resuelto sin cambiar el exit por defecto**, por las dos razones que se与企业izaron:
 
-**Argumento en contra**: un exit distinto de 0 tiene que significar "el comando no
-pudo hacer su trabajo". Con un exit 2 por "hubo hallazgos" se rompe el contrato
-documentado (`0` = conciliación hecha, `4` = error de ingesta) y cualquier
-automatización que use el exit code empezaría a fallar por algo que sí se
-concilió.
+- `0` significa "la conciliación se completó", y una conciliación con pendientes es
+  el caso normal de todo contador.
+- Una clase nueva de exit rompería la automatización que hoy usa `== 0`.
 
-**Lo que sí está mal**: `tests/test_e2e_completo.py` fija `assert returncode ==
-EXIT_OK` **en el caso de moneda distinta**, lo que convierte una tensión en un
-comportamiento "correcto". Eso hay que revisarlo cuando se decida.
+Lo que se hizo: `run` **avisa siempre por pantalla** con el detalle de cada hallazgo
+crítico, y se agrega `--fail-on-critico` (exit 7) para automatización estricta. El
+aviso aparece con y sin el flag, y los artefactos se escriben siempre.
+
+El test de `test_e2e_completo.py` que fijaba `returncode == EXIT_OK` en el caso de
+moneda distinta se conserva, y ahora es correcto: el aviso es la garantía, no el exit.
 
 ### 5.2 El PDF texto se puede autoconciliar con umbral bajo
 

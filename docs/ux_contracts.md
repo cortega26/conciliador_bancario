@@ -54,6 +54,24 @@ Meta: que un usuario (frecuentemente **contador/a Excel-first, poco tecnico**) o
 
 Estos codigos son parte de la UX "scriptable":
 - `concilia validate`: `0` OK; `1` fallo de validacion / error; `3` no implementado.
-- `concilia run`: `0` OK; `1` error; `2` flags incompatibles; `3` no implementado.
+- `concilia run`: `0` OK; `1` error; `2` flags incompatibles; `3` no implementado;
+  **`7` hubo hallazgos criticos** (solo con `--fail-on-critico`, ver abajo).
 - `concilia explain`: `0` encontrado; `1` `run.json` invalido (fail-closed); `2` no encontrado / falta `run.json`.
+
+### `7` y `--fail-on-critico`
+
+`concilia run` **siempre avisa** por pantalla cuando hay hallazgos de severidad
+`critica`, y **siempre sale con `0`**: la conciliacion se completo, y una
+conciliacion con movimientos pendientes es el caso normal de todo contador.
+
+Lo que no se permite es que el hallazgo critico sea invisible. El aviso lleva el detalle
+de cada hallazgo, no solo un numero, y dice donde esta el resto
+(`run.json`, `audit.jsonl`, hoja `Hallazgos` del reporte).
+
+`--fail-on-critico` existe para **automatizacion** que quiere un exit distinto. Cambia
+el codigo de salida, no la visibilidad: el aviso aparece igual, y los artefactos se
+escriben igual, para que quien recibe el exit 7 pueda ir a leer el `run.json` y entender
+que paso.
+
+Sin el flag, el codigo no cambia para nadie: es la opcion compatible.
 

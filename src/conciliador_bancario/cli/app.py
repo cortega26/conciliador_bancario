@@ -128,6 +128,15 @@ def cmd_run(
         ),
     ),
     dry_run: bool = typer.Option(False, "--dry-run"),
+    fail_on_critico: bool = typer.Option(
+        False,
+        "--fail-on-critico",
+        help=(
+            "Terminar con exit 7 si hubo hallazgos criticos. La conciliacion se "
+            "completa igual y los hallazgos siempre se avisan; esto solo cambia el "
+            "codigo de salida, para automatizacion."
+        ),
+    ),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
     max_input_bytes: Optional[int] = typer.Option(
@@ -190,6 +199,41 @@ def cmd_run(
     console.print(f"[green]Run ID[/green]: {resultado.run_id}")
     if not dry_run:
         console.print(f"[green]Reporte[/green]: {out / 'reporte_conciliacion.xlsx'}")
+
+    # Hallazgos criticos: la conciliacion **se hizo**, pero hay algo que un humano
+    # tiene que mirar antes de confiar en el resultado.
+    #
+    # ## Por que no sale con exit distinto
+    #
+    # `0` significa "la conciliacion se completo". Una conciliacion con
+    # movimientos sin match es normal (todo contador lo tiene), y si saliera con
+    # error por eso la herramienta no serviria para su caso de uso. Y romper
+    # `0` para una clase nueva haria fallar automatizacion que hoy funciona.
+    #
+    # ## Por que no es silencio
+    #
+    # Hay un precedente en el repo: las transacciones de OCR se marcan "requieren
+    # revision humana" y la corrida **igualmente sale con 0**. Un hallazgo critico
+    # es lo mismo: la herramienta trabajo bien y encontro algo sospechoso. Lo que
+    # no puede pasar es que el operador no se entere, y por eso va en stderr con
+    # color y con el detalle de cada hallazgo, no solo un numero.
+    #
+    # Para quien quiera el exit estricto esta `--fail-on-critico`.
+    criticos = [h for h in resultado.hallazgos if h.severidad.value == "critica"]
+    if criticos:
+        console.print()
+        console.print(
+            f"[bold red]{len(criticos)} hallazgo(s) critico(s): "
+            f"la conciliacion se completo, pero hay que revisarlos antes de "
+            f"confiar en el resultado.[/bold red]"
+        )
+        for h in criticos:
+            console.print(f"  [red]-[/red] [{h.tipo}] {h.mensaje}")
+        console.print(
+            "[dim]Estan en run.json, en el audit log y en la hoja Hallazgos del " "reporte.[/dim]"
+        )
+        if fail_on_critico:
+            raise typer.Exit(code=7)
 
 
 @app.command("explain")

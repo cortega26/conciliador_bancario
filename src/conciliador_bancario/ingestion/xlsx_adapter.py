@@ -107,7 +107,11 @@ def cargar_transacciones_xlsx(
         label="XLSX banco",
     )
 
-    wb = abrir_xlsx(path, etiqueta="XLSX banco")
+    wb = abrir_xlsx(
+        path,
+        etiqueta="XLSX banco",
+        max_uncompressed_bytes=cfg.limites_ingesta.max_xlsx_uncompressed_bytes,
+    )
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
         required=[
@@ -230,7 +234,11 @@ def cargar_movimientos_esperados_xlsx(
         label="XLSX esperados",
     )
 
-    wb = abrir_xlsx(path, etiqueta="XLSX esperados")
+    wb = abrir_xlsx(
+        path,
+        etiqueta="XLSX esperados",
+        max_uncompressed_bytes=cfg.limites_ingesta.max_xlsx_uncompressed_bytes,
+    )
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
         required=[

@@ -123,6 +123,7 @@ def _apply_limit_overrides(
     cfg: ConfiguracionCliente,
     *,
     max_input_bytes: int | None = None,
+    max_xlsx_uncompressed_bytes: int | None = None,
     max_tabular_rows: int | None = None,
     max_tabular_cells: int | None = None,
     max_pdf_pages: int | None = None,
@@ -131,6 +132,7 @@ def _apply_limit_overrides(
 ) -> ConfiguracionCliente:
     updates = {
         "max_input_bytes": max_input_bytes,
+        "max_xlsx_uncompressed_bytes": max_xlsx_uncompressed_bytes,
         "max_tabular_rows": max_tabular_rows,
         "max_tabular_cells": max_tabular_cells,
         "max_pdf_pages": max_pdf_pages,
@@ -164,6 +166,7 @@ def ejecutar_validate(
     log_level: str,
     enable_ocr: bool,
     max_input_bytes: int | None = None,
+    max_xlsx_uncompressed_bytes: int | None = None,
     max_tabular_rows: int | None = None,
     max_tabular_cells: int | None = None,
     max_pdf_pages: int | None = None,
@@ -249,6 +252,7 @@ def ejecutar_run(
     log_level: str,
     enable_ocr: bool,
     max_input_bytes: int | None = None,
+    max_xlsx_uncompressed_bytes: int | None = None,
     max_tabular_rows: int | None = None,
     max_tabular_cells: int | None = None,
     max_pdf_pages: int | None = None,

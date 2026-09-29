@@ -20,6 +20,7 @@ aparezca mas adentro en el adaptador, donde este mensaje no aplica.
 
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +29,75 @@ from openpyxl import load_workbook
 from conciliador_bancario.ingestion.base import ErrorIngestion
 
 
-def abrir_xlsx(path: Path, *, etiqueta: str) -> Any:
-    """Abre el XLSX o lanza `ErrorIngestion` con un mensaje que dice que hacer."""
+def tamano_descomprimido_xlsx(path: Path) -> int:
+    """Bytes descomprimidos que declara el XLSX, **sin descomprimirlo**.
+
+    ## Por que se lee el indice y no se descomprime
+
+    `zipfile` guarda en el directorio central el tamano descomprimido de cada
+    entrada. Leerlo es O(numero de entradas) y no toca los datos, asi que el
+    limite se puede aplicar antes de gastar un solo byte de memoria en el
+    contenido. Es la unica forma de hacer fail-closed sin tener que descomprimir
+    para despues arrepentirse.
+
+    ## Que falta cuando esto no existe
+
+    `enforce_file_size` mide el archivo en disco, o sea el ZIP **comprimido**.
+    Un archivo con ratio 1000:1 lo atraviesa sin problema: se comprobo que 399 KB
+    se descomprimen a 400 MB y el proceso llega a 1.2 GB de RSS. Para cuando
+    `max_tabular_cells` puede contar celdas, el archivo ya esta en memoria.
+
+    Si el zip no se puede abrir, devuelve 0: la apertura real es la que va a
+    reportar el error, y aqui no se quiere tapar un mensaje mejor con otro.
+    """
+    try:
+        with zipfile.ZipFile(path) as z:
+            return sum(i.file_size for i in z.infolist())
+    except (zipfile.BadZipFile, OSError):
+        return 0
+
+
+def abrir_xlsx(path: Path, *, etiqueta: str, max_uncompressed_bytes: int | None = None) -> Any:
+    """Abre el XLSX o lanza `ErrorIngestion` con un mensaje que dice que hacer.
+
+    ## El limite de tamano descomprimido
+
+    Un XLSX es un ZIP, y comprimir es trivial: `A` repetido 400 millones de veces
+    son 400 MB desde 400 KB. Sin mirar el tamano descomprimido, `max_input_bytes`
+    no protege de nada en este formato, porque ve el lado comprimido.
+
+    El chequeo va **antes** de `load_workbook`, que es donde openpyxl
+    descomprime. EsMetadata: leer el indice del zip no cuesta nada, y llegar
+    tarde seria tarde de verdad.
+    """
+    if max_uncompressed_bytes is not None:
+        descomprimido = tamano_descomprimido_xlsx(path)
+        if descomprimido > max_uncompressed_bytes:
+            comprimido = path.stat().st_size if path.exists() else 0
+            ratio = (descomprimido / comprimido) if comprimido else 0
+            raise ErrorIngestion(
+                f"{etiqueta}: el XLSX descomprimido excede el limite: "
+                f"{descomprimido} bytes > {max_uncompressed_bytes} bytes "
+                f"(el archivo en disco ocupa {comprimido} bytes, ratio "
+                f"{ratio:.0f}:1). Un XLSX es un ZIP, y un ratio asi es una zip "
+                "bomb: el archivo se ve pequeno y ocupa gigabytes al abrirlo. "
+                "Override seguro: config `limites_ingesta.max_xlsx_uncompressed_bytes` "
+                "o flag `--max-xlsx-uncompressed-bytes`.",
+                details={
+                    "motivo": "xlsx_uncompressed_too_large",
+                    "uncompressed_bytes": descomprimido,
+                    "compressed_bytes": comprimido,
+                    "ratio": round(ratio, 1),
+                    "max_uncompressed_bytes": max_uncompressed_bytes,
+                    "cfg_path": "limites_ingesta.max_xlsx_uncompressed_bytes",
+                    "cli_flag": "--max-xlsx-uncompressed-bytes",
+                },
+                hint=(
+                    "Verifique que el archivo sea un XLSX real. Un ratio de "
+                    "compresion extremo casi siempre es un archivo manipulado."
+                ),
+            )
+
     try:
         return load_workbook(path, read_only=True, data_only=True)
     except Exception as e:  # noqa: BLE001 - openpyxl/zipfile lanzan tipos propios

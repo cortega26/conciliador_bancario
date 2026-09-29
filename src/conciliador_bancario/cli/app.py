@@ -47,6 +47,14 @@ def cmd_validate(
     max_input_bytes: Optional[int] = typer.Option(
         None, "--max-input-bytes", help="Limite maximo de tamano por archivo de entrada (bytes)"
     ),
+    max_xlsx_uncompressed_bytes: Optional[int] = typer.Option(
+        None,
+        "--max-xlsx-uncompressed-bytes",
+        help=(
+            "Limite maximo de bytes descomprimidos de un XLSX. Un XLSX es un ZIP, "
+            "y `--max-input-bytes` solo ve el lado comprimido."
+        ),
+    ),
     max_tabular_rows: Optional[int] = typer.Option(
         None, "--max-tabular-rows", help="Limite maximo de filas (CSV/XLSX)"
     ),
@@ -72,6 +80,7 @@ def cmd_validate(
             log_level=log_level,
             enable_ocr=enable_ocr,
             max_input_bytes=max_input_bytes,
+            max_xlsx_uncompressed_bytes=max_xlsx_uncompressed_bytes,
             max_tabular_rows=max_tabular_rows,
             max_tabular_cells=max_tabular_cells,
             max_pdf_pages=max_pdf_pages,
@@ -124,6 +133,14 @@ def cmd_run(
     max_input_bytes: Optional[int] = typer.Option(
         None, "--max-input-bytes", help="Limite maximo de tamano por archivo de entrada (bytes)"
     ),
+    max_xlsx_uncompressed_bytes: Optional[int] = typer.Option(
+        None,
+        "--max-xlsx-uncompressed-bytes",
+        help=(
+            "Limite maximo de bytes descomprimidos de un XLSX. Un XLSX es un ZIP, "
+            "y `--max-input-bytes` solo ve el lado comprimido."
+        ),
+    ),
     max_tabular_rows: Optional[int] = typer.Option(
         None, "--max-tabular-rows", help="Limite maximo de filas (CSV/XLSX)"
     ),
@@ -160,6 +177,7 @@ def cmd_run(
             log_level=log_level,
             enable_ocr=enable_ocr,
             max_input_bytes=max_input_bytes,
+            max_xlsx_uncompressed_bytes=max_xlsx_uncompressed_bytes,
             max_tabular_rows=max_tabular_rows,
             max_tabular_cells=max_tabular_cells,
             max_pdf_pages=max_pdf_pages,

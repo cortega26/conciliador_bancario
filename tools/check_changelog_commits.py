@@ -47,8 +47,14 @@ from dataclasses import dataclass
 # Deliberadamente mas amplio que los que aparecen en el changelog: si el tipo no
 # esta en esta lista, release-please lo descarta en silencio, y ese es un problema
 # distinto que no es responsabilidad de este guard.
+# Un mensaje conventional: `<tipo>[(scope)][!]: <asunto>`.
+#
+# El lookahead en vez de un `\S` consumido, para que este patron sea
+# intercambiable con el de `merge_pr.py`: aca se usa solo para detectar, pero si
+# alguien lo reutiliza para quitar el prefijo del titulo, un `\S` consumido
+# dejaria "fix(x): algo" -> "lgo". Dos copias que divergen son una trampa.
 CONVENCIONAL = re.compile(
-    r"^[a-zA-Z]+(\([a-zA-Z0-9_./-]+\))?(!)?:\s+\S",
+    r"^[a-zA-Z]+(\([a-zA-Z0-9_./-]+\))?(!)?:\s+(?=\S)",
 )
 
 # Asunto que identifica un merge commit, de GitHub o del procedimiento propio.

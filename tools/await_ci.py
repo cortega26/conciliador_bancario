@@ -42,6 +42,7 @@ ESPERADOS_BASE = (
     "test (3.11)",
     "wheel_smoke (3.11)",
     "pdf_ocr (3.11)",
+    "volumen",
     "CodeQL",
     "Analyze (actions)",
     "Analyze (python)",

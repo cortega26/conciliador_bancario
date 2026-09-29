@@ -57,7 +57,7 @@ pdf_ocr = [
   # Requiere dependencias de sistema (poppler) para convertir PDF->imagenes.
   "pdf2image==1.17.0",
   "pytesseract==0.3.13",
-  "Pillow==10.4.0",
+  "Pillow==12.3.0",
 ]
 
 [project.scripts]

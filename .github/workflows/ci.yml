@@ -73,7 +73,10 @@ jobs:
       - name: Build wheel
         run: |
           python -m pip install -U pip
-          python -m pip install build==1.2.2
+          # Mismo criterio que publish.yml: se instala el proyecto para que el
+          # build use el backend y el front-end fijados en pyproject, no una
+          # version suelta que puede quedar atras respecto al job de test.
+          python -m pip install -e ".[dev]"
           python -m build
 
       - name: Install-from-wheel smoke

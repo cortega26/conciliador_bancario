@@ -30,7 +30,14 @@ jobs:
 
       - name: Build (sdist + wheel)
         run: |
-          python -m pip install build==1.2.2 twine==5.1.1
+          # Se instala el proyecto, no versiones sueltas de build/twine: es la
+          # unica forma de garantizar que se publica exactamente lo que CI
+          # valido. Fijar aqui las herramientas permitia que publish.yml quedara
+          # atras respecto a ci.yml, que usa .[dev]: con twine 5.1.1 (soporta
+          # Metadata hasta 2.3) y hatchling 1.32.4 (emite Metadata 2.5), el
+          # chequeo fallaba con "Metadata is missing required fields" y la
+          # publicacion a PyPI se caia.
+          python -m pip install -e ".[dev]"
           rm -rf dist
           python -m build
           python -m twine check dist/*

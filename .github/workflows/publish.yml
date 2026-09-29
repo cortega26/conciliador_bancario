@@ -44,3 +44,32 @@ jobs:
 
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # El job de arriba termina en verde cuando PyPI acepto los archivos. Eso no es
+  # lo mismo que "esta publicado y sirve": el indice simple tarda unos minutos en
+  # listar la version, y durante esa ventana `pip install bankrecon==X` falla
+  # aunque la release exista. Este job espera al indice y despues instala el
+  # paquete realmente publicado para probarlo.
+  #
+  # Sin el, "publicado" era una conclusion del operador. Paso en dos releases de
+  # este repo, y las dos veces la respuesta correcta salio de mirar el sha256 a
+  # mano.
+  verify_published:
+    runs-on: ubuntu-latest
+    needs: build_and_publish
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install poppler (lo necesita `concilia init` en el verificador)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+
+      - name: Verify the published package
+        run: python tools/verify_published.py "${GITHUB_REF_NAME#v}"

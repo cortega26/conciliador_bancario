@@ -165,8 +165,10 @@ def test_la_rama_del_pr_se_resuelve_contra_el_remoto() -> None:
     import re
     from pathlib import Path
 
-    fuente = (Path(__file__).resolve().parents[1] / "tools/merge_pr.py").read_text("utf-8")
-    assert 'f"origin/{pr.rama}"' in fuente, "el merge debe usar el ref remoto de la rama"
+    fuente = re.sub(
+        r"\s+", " ", (Path(__file__).resolve().parents[1] / "tools/merge_pr.py").read_text("utf-8")
+    )
+    assert '"origin/{pr.rama}"' in fuente, "el merge debe usar el ref remoto de la rama"
     assert (
         '"git", "fetch", "--quiet", "origin", pr.rama' in fuente
     ), "falta traer la rama del remoto antes de mergear"

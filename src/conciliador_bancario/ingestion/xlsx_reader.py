@@ -99,6 +99,29 @@ def abrir_xlsx(path: Path, *, etiqueta: str, max_uncompressed_bytes: int | None 
             )
 
     try:
+        # `data_only=True` es una propiedad de **seguridad**, no una preferencia.
+        #
+        # Con `False`, una celda que el archivo guarda como formula devuelve su
+        # texto: una descripcion `=cmd|'/c calc'!A1` llegaria verbatim a la
+        # transaccion y de ahi al reporte, donde Excel la ejecutaria al abrirlo.
+        # Con `True` llega el valor en cache, y si no hay cache (lo tipico en un
+        # libro escrito por programa) llega `None` y el campo queda vacio.
+        #
+        # Que el texto se pierda es preferible a que llegue: un `=1+1` en una
+        # descripcion no es una descripcion, es una formula, e inventar una
+        # descripcion a partir de una formula seria peor que no tenerla.
+        #
+        ## Que NO cubre
+        #
+        # Solo el prefijo `=`. Los payloads con `+`, `-` o `@` al inicio, y los
+        # que llevan espacio o tabulador delante del `=`, **no** son formulas para
+        # openpyxl: se guardan como texto y llegan enteros. Esos dependen
+        # enteramente de `prevenir_csv_injection` en la capa de reporte, que por
+        # eso existe y por lo que tambien tiene tests.
+        #
+        # Las dos capas estan fijadas por tests: revirtiendo `data_only` fallan 4,
+        # y el caso de espacios iniciales esta cubierto en
+        # `tests/test_reporting_security.py`.
         return load_workbook(path, read_only=True, data_only=True)
     except Exception as e:  # noqa: BLE001 - openpyxl/zipfile lanzan tipos propios
         # BadZipFile significa que no es un zip: casi siempre un archivo vacio, un

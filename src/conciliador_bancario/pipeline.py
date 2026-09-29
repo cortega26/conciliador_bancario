@@ -10,6 +10,7 @@ import yaml
 from pydantic import ValidationError
 from yaml import YAMLError
 
+from conciliador_bancario.audit.atomic import CerrojoDeSalida, ErrorSalidaEnUso
 from conciliador_bancario.errors import ErrorConfiguracion, ErrorContrato, ErrorOperacionIO
 from conciliador_bancario.ingestion.base import (
     ErrorIngestion,
@@ -316,140 +317,161 @@ def ejecutar_run(
     }
     run_id = sha256_json_estable(run_fingerprint)[:16]
 
-    try:
-        audit = JsonlAuditWriter(out_dir / "audit.jsonl", run_id=run_id)
-    except OSError as e:
-        raise ErrorOperacionIO(
-            "No se pudo preparar audit.jsonl.",
-            details={"archivo": str(out_dir / "audit.jsonl")},
-            hint="Verifique permisos de escritura en --out.",
-        ) from e
-
-    txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)
-    exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)
-
-    # `ejecutar_validate` ya rechazaba un archivo sin transacciones; `run` no lo
-    # hacia, y esa asimetria es el bug. Un CSV con solo el encabezado pasaba por
-    # `run` con exit 0 y generaba un reporte donde los N movimientos esperados
-    # aparecian como "pendientes". La conclusion razonable del operador, "no hay
-    # nada que conciliar del lado del banco", es falsa: lo que paso es que **no se
-    # leyo nada**, y el reporte decia lo contrario con exito.
+    # Cerrojo antes de tocar nada. El truncado del audit log es correcto (es la
+    # traza determinista de ESTA corrida), pero si dos procesos compiten por el
+    # mismo `--out` ambas salen con exit 0 y solo sobrevive una. Se midio: dos
+    # corridas concurrentes con datos distintos, ambas exitosas, y una
+    # conciliacion desaparecida sin aviso. Fallar aqui es fail-closed.
     #
-    # Un export de 50 movimientos leido como 0 es indistinguible de un export
-    # vacio si la herramienta sale bien. Por eso es fail-closed, y por eso el
-    # adaptador de OCR ya lo hacia en su camino (`pdf_ocr_adapter.py`).
-    if not txs:
-        raise ErrorIngestion(
-            "No se detectaron transacciones bancarias.",
-            details={"motivo": "cero_transacciones", "archivo": bank.name},
-            hint="El archivo se leyo pero no contiene ninguna transaccion utilizable. "
-            "Verifique que tenga filas de datos y no solo encabezados.",
-        )
-    if not exps:
-        raise ErrorIngestion(
-            "No se detectaron movimientos esperados.",
-            details={"motivo": "cero_esperados", "archivo": expected.name},
-            hint="El archivo se leyo pero no contiene ningun movimiento. "
-            "Verifique que tenga filas de datos y no solo encabezados.",
-        )
-
-    # Un id repetido hace que una fila desaparezca de la conciliacion sin dejar
-    # hallazgo: el motor marca el id como consumido y la segunda fila no vuelve a
-    # notificarse. Se descarta la repeticion y se reporta explicitamente.
-    txs, dups_tx = validar_ids_unicos(
-        txs,
-        obtener_id=lambda t: t.id,
-        obtener_monto=lambda t: str(t.monto.valor),
-        audit=audit,
-        label=f"banco {bank.name}",
-    )
-    exps, dups_exp = validar_ids_unicos(
-        exps,
-        obtener_id=lambda e: e.id,
-        obtener_monto=lambda e: str(e.monto.valor),
-        audit=audit,
-        label=f"esperados {expected.name}",
-    )
-
-    txs, exps = normalizar_lote(cfg=cfg, transacciones=txs, esperados=exps)
-
-    # Defensa en profundidad: la normalizacion no debe alterar los ids. Si lo
-    # hiciera, un duplicado reintroducido aqui seria un defecto interno, no un
-    # problema de datos del cliente, y corresponde fallar cerrado.
-    if len({t.id for t in txs}) != len(txs) or len({e.id for e in exps}) != len(exps):
-        raise ErrorIngestion(
-            "Ids duplicados detectados despues de normalizar.",
-            details={"banco": bank.name, "esperados": expected.name},
-            hint="Reporte el problema; el lote no es consistente.",
-        )
-
-    resultado = conciliar(cfg=cfg, transacciones=txs, esperados=exps, audit=audit, run_id=run_id)
-
-    hallazgos_duplicados: list[Hallazgo] = []
-    for tipo, entidad, duplicados in (
-        ("id_duplicado_esperado", "esperado", dups_exp),
-        ("id_duplicado_banco", "banco", dups_tx),
-    ):
-        por_id: dict[str, list[IdDuplicado]] = {}
-        for dup in duplicados:
-            por_id.setdefault(dup.id, []).append(dup)
-        for id_duplicado, grupo in por_id.items():
-            hallazgos_duplicados.extend(
-                _hallazgos_id_duplicado(
-                    run_id,
-                    tipo=tipo,
-                    entidad=entidad,
-                    id_duplicado=id_duplicado,
-                    duplicados=grupo,
-                )
-            )
-    if hallazgos_duplicados:
-        resultado = replace(
-            resultado,
-            hallazgos=sorted(resultado.hallazgos + hallazgos_duplicados, key=lambda h: h.id),
-        )
-
-    run_json = out_dir / "run.json"
+    # Se toma **antes** del `JsonlAuditWriter` (que trunca en su constructor) y se
+    # libera en un `finally` que cubre el resto de la corrida. Un cerrojo sin
+    # liberar dejaria la herramienta inservible hasta que alguien borrara el
+    # archivo a mano, que es un remedio que nadie recuerda.
+    cerrojo = CerrojoDeSalida(out_dir)
     try:
-        payload = validate_run_payload(
-            {
-                "schema_version": RUN_JSON_SCHEMA_VERSION,
-                "run_id": resultado.run_id,
-                "fingerprint": run_fingerprint,
-                "matches": [m.model_dump() for m in resultado.matches],
-                "hallazgos": [h.model_dump() for h in resultado.hallazgos],
-            }
-        )
-    except ValueError as e:
-        raise ErrorContrato(
-            "Contrato run.json invalido al generar salida.",
-            details={"schema_version": RUN_JSON_SCHEMA_VERSION},
-            hint="No continue con este run_dir; reporte el problema.",
-        ) from e
-
+        cerrojo.adquirir()
+    except ErrorSalidaEnUso as e:
+        raise ErrorOperacionIO(str(e), details={"salida": str(out_dir)}) from e
     try:
-        run_json.write_text(
-            canonical_json_dumps(payload),
-            encoding="utf-8",
-        )
-    except OSError as e:
-        raise ErrorOperacionIO(
-            "No se pudo escribir run.json.",
-            details={"archivo": str(run_json)},
-            hint="Verifique permisos, ruta de salida y espacio disponible.",
-        ) from e
 
-    if not dry_run:
-        from conciliador_bancario.reporting.excel_report import generar_reporte_excel
-
-        reporte = out_dir / "reporte_conciliacion.xlsx"
         try:
-            generar_reporte_excel(reporte, resultado, mask=mask, cfg=cfg)
+            audit = JsonlAuditWriter(out_dir / "audit.jsonl", run_id=run_id)
         except OSError as e:
             raise ErrorOperacionIO(
-                "No se pudo escribir reporte_conciliacion.xlsx.",
-                details={"archivo": str(reporte)},
+                "No se pudo preparar audit.jsonl.",
+                details={"archivo": str(out_dir / "audit.jsonl")},
+                hint="Verifique permisos de escritura en --out.",
+            ) from e
+
+        txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)
+        exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)
+
+        # `ejecutar_validate` ya rechazaba un archivo sin transacciones; `run` no lo
+        # hacia, y esa asimetria es el bug. Un CSV con solo el encabezado pasaba por
+        # `run` con exit 0 y generaba un reporte donde los N movimientos esperados
+        # aparecian como "pendientes". La conclusion razonable del operador, "no hay
+        # nada que conciliar del lado del banco", es falsa: lo que paso es que **no se
+        # leyo nada**, y el reporte decia lo contrario con exito.
+        #
+        # Un export de 50 movimientos leido como 0 es indistinguible de un export
+        # vacio si la herramienta sale bien. Por eso es fail-closed, y por eso el
+        # adaptador de OCR ya lo hacia en su camino (`pdf_ocr_adapter.py`).
+        if not txs:
+            raise ErrorIngestion(
+                "No se detectaron transacciones bancarias.",
+                details={"motivo": "cero_transacciones", "archivo": bank.name},
+                hint="El archivo se leyo pero no contiene ninguna transaccion utilizable. "
+                "Verifique que tenga filas de datos y no solo encabezados.",
+            )
+        if not exps:
+            raise ErrorIngestion(
+                "No se detectaron movimientos esperados.",
+                details={"motivo": "cero_esperados", "archivo": expected.name},
+                hint="El archivo se leyo pero no contiene ningun movimiento. "
+                "Verifique que tenga filas de datos y no solo encabezados.",
+            )
+
+        # Un id repetido hace que una fila desaparezca de la conciliacion sin dejar
+        # hallazgo: el motor marca el id como consumido y la segunda fila no vuelve a
+        # notificarse. Se descarta la repeticion y se reporta explicitamente.
+        txs, dups_tx = validar_ids_unicos(
+            txs,
+            obtener_id=lambda t: t.id,
+            obtener_monto=lambda t: str(t.monto.valor),
+            audit=audit,
+            label=f"banco {bank.name}",
+        )
+        exps, dups_exp = validar_ids_unicos(
+            exps,
+            obtener_id=lambda e: e.id,
+            obtener_monto=lambda e: str(e.monto.valor),
+            audit=audit,
+            label=f"esperados {expected.name}",
+        )
+
+        txs, exps = normalizar_lote(cfg=cfg, transacciones=txs, esperados=exps)
+
+        # Defensa en profundidad: la normalizacion no debe alterar los ids. Si lo
+        # hiciera, un duplicado reintroducido aqui seria un defecto interno, no un
+        # problema de datos del cliente, y corresponde fallar cerrado.
+        if len({t.id for t in txs}) != len(txs) or len({e.id for e in exps}) != len(exps):
+            raise ErrorIngestion(
+                "Ids duplicados detectados despues de normalizar.",
+                details={"banco": bank.name, "esperados": expected.name},
+                hint="Reporte el problema; el lote no es consistente.",
+            )
+
+        resultado = conciliar(
+            cfg=cfg, transacciones=txs, esperados=exps, audit=audit, run_id=run_id
+        )
+
+        hallazgos_duplicados: list[Hallazgo] = []
+        for tipo, entidad, duplicados in (
+            ("id_duplicado_esperado", "esperado", dups_exp),
+            ("id_duplicado_banco", "banco", dups_tx),
+        ):
+            por_id: dict[str, list[IdDuplicado]] = {}
+            for dup in duplicados:
+                por_id.setdefault(dup.id, []).append(dup)
+            for id_duplicado, grupo in por_id.items():
+                hallazgos_duplicados.extend(
+                    _hallazgos_id_duplicado(
+                        run_id,
+                        tipo=tipo,
+                        entidad=entidad,
+                        id_duplicado=id_duplicado,
+                        duplicados=grupo,
+                    )
+                )
+        if hallazgos_duplicados:
+            resultado = replace(
+                resultado,
+                hallazgos=sorted(resultado.hallazgos + hallazgos_duplicados, key=lambda h: h.id),
+            )
+
+        run_json = out_dir / "run.json"
+        try:
+            payload = validate_run_payload(
+                {
+                    "schema_version": RUN_JSON_SCHEMA_VERSION,
+                    "run_id": resultado.run_id,
+                    "fingerprint": run_fingerprint,
+                    "matches": [m.model_dump() for m in resultado.matches],
+                    "hallazgos": [h.model_dump() for h in resultado.hallazgos],
+                }
+            )
+        except ValueError as e:
+            raise ErrorContrato(
+                "Contrato run.json invalido al generar salida.",
+                details={"schema_version": RUN_JSON_SCHEMA_VERSION},
+                hint="No continue con este run_dir; reporte el problema.",
+            ) from e
+
+        try:
+            run_json.write_text(
+                canonical_json_dumps(payload),
+                encoding="utf-8",
+            )
+        except OSError as e:
+            raise ErrorOperacionIO(
+                "No se pudo escribir run.json.",
+                details={"archivo": str(run_json)},
                 hint="Verifique permisos, ruta de salida y espacio disponible.",
             ) from e
 
-    return resultado
+        if not dry_run:
+            from conciliador_bancario.reporting.excel_report import generar_reporte_excel
+
+            reporte = out_dir / "reporte_conciliacion.xlsx"
+            try:
+                generar_reporte_excel(reporte, resultado, mask=mask, cfg=cfg)
+            except OSError as e:
+                raise ErrorOperacionIO(
+                    "No se pudo escribir reporte_conciliacion.xlsx.",
+                    details={"archivo": str(reporte)},
+                    hint="Verifique permisos, ruta de salida y espacio disponible.",
+                ) from e
+
+        return resultado
+    finally:
+        cerrojo.liberar()

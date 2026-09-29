@@ -30,14 +30,21 @@
 
 ## A2 — Escritura atómica de artefactos — ALTA
 
-- [ ] Sonda honesta: dos corridas concurrentes con contenido **distinto** (la
-      sonda anterior usaba contenido idéntico y no probaba nada)
-- [ ] Decidir con el usuario: ¿dos corridas al mismo `--out` fallan o la segunda sobrescribe?
-- [ ] Helper `escribir_atomico()`: `.tmp` en el mismo directorio + `os.replace`
-- [ ] Aplicar a `run.json`, `audit.jsonl`, `reporte.xlsx`
-- [ ] Test: proceso muerto a mitad de escritura → no queda artefacto parcial
-- [ ] Test: dos corridas concurrentes → ninguna corrompe la otra
-- [ ] Prueba de mordida: revertir `os.replace` a `write_text` y ver el truncamiento
+- [x] Sonda honesta: dos corridas con contenido **distinto**. Resultado: **ambas
+      salían con exit 0** y solo sobrevivía una. La reconciliación perdida no
+      dejaba rastro.
+- [x] Decisión: **fallar** con exit 6 y mensaje claro. La alternativa simpática
+      ("la segunda gana") deja al operador con dos ejecuciones exitosas y un
+      directorio con una. Es fail-closed, como todo lo demás del repo.
+- [x] `escribir_atomico()` en `audit/atomic.py`: `.tmp` en el **mismo directorio**
+      (si fuera a `/tmp`, `os.replace` degrada a copy+delete y deja de ser atómico)
+- [x] `CerrojoDeSalida` con `O_EXCL` + reclamation de cerrojos zombie (pid muerto)
+- [x] Conectado en `ejecutar_run`, liberado en `finally` (tb si la corrida falla)
+- [x] Test: escritura atómica deja el destino intacto si falla a mitad
+- [x] Test: dos corridas concurrentes → **exactamente una** gana
+- [x] Test: tras un fallo, la siguiente corrida puede correr (no falso positivo)
+- [x] Prueba de mordida: cerrojo como no-op → cae concurrencia; sin reclamation
+      → cae el zombie; sin limpiar temporal → cae la atomicidad
 
 ## A3 — Descripción de OCR que era fórmula — MEDIA
 

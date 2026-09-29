@@ -2,6 +2,20 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.21](https://github.com/cortega26/conciliador_bancario/compare/v0.2.20...v0.2.21) (2026-09-29)
+
+
+### Bug Fixes
+
+* **matching:** 1000 USD no es 1000 CLP ([a3dccc8](https://github.com/cortega26/conciliador_bancario/commit/a3dccc83e5bacd78c100a3e5d68b38f1d8fa2077))
+
+
+### Tests
+
+* **e2e:** pruebas end-to-end del producto, mas spec y todo ([82171f3](https://github.com/cortega26/conciliador_bancario/commit/82171f32b681ec7bc775e71d08c361efdfe5e919))
+* **xlsx:** fija que una formula de Excel no viaja como texto ejecutable ([a70b047](https://github.com/cortega26/conciliador_bancario/commit/a70b0477975dcb84ad80ab269119f695442d21b4))
+* **xlsx:** una guarda que detecta un parametrize con cero casos ([70c0e95](https://github.com/cortega26/conciliador_bancario/commit/70c0e95e131269bc6ab25b8ad208a2479dbc51be))
+
 ## [0.2.20](https://github.com/cortega26/conciliador_bancario/compare/v0.2.19...v0.2.20) (2026-09-29)
 
 

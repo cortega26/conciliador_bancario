@@ -10,8 +10,19 @@
       "pull-request-title-pattern": "chore(release): v${version}",
       "extra-files": [
         "src/conciliador_bancario/version.py"
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "ci", "section": "Bug Fixes" },
+        { "type": "build", "section": "Build and toolchain" },
+        { "type": "test", "section": "Tests" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "revert", "section": "Reverts" },
+        { "type": "chore", "section": "Miscellaneous chores" }
       ]
     }
   }
 }
-

@@ -447,3 +447,190 @@ def preflight_mod() -> object:
     import preflight
 
     return preflight
+
+
+# --- el gate de entorno tiene que ser bidireccional --------------------------
+
+
+def _exclusivo_de_un_extra(mod: object) -> tuple[str, str]:
+    """(extra, paquete) de un paquete que solo existe bajo un extra.
+
+    Un paquete que tambien es pin de `dev` no sirve: esta instalado en el venv
+    base, asi que su presencia no dice nada sobre extras.
+    """
+    base = mod.pines_declarados()  # type: ignore[attr-defined]
+    for extra, paquetes in mod.pines_por_extra().items():  # type: ignore[attr-defined]
+        for paquete in paquetes:
+            if paquete not in base:
+                return extra, paquete
+    pytest.skip("ningun paquete es exclusivo de un extra: el gate no tendria nada que mirar")
+
+
+def test_el_gate_de_entorno_detecta_un_extra_instalado(monkeypatch: pytest.MonkeyPatch) -> None:
+    """El gate tiene que fallar tambien cuando hay **de mas**, no solo de menos.
+
+    ## El bug
+
+    `venv_actualizado` recorria los pines declarados y preguntaba si estaban
+    instalados. Nunca preguntaba que habia ademas. Instalar `.[pdf-ocr]` no
+    desfasaba ninguna dependencia declarada, asi que el gate reportaba
+    "venv coincide con los pines de pyproject".
+
+    ## Por que no es cosmetico
+
+    Con `pytesseract` instalado, `mypy` falla con un `type: ignore` sin usar,
+    porque el modulo ahora existe. El sintoma aparece como un error de tipos y
+    no como "el entorno no es el que yo creia", que es justo la confusion que
+    este gate existe para evitar. Un gate que dice OK sobre un venv que no es el
+    de los pines es un gate que no dice la verdad.
+
+    ## Por que se falsea `importlib.metadata`
+
+    El venv de los tests no tiene los extras de OCR, y depender de eso haria que
+    el test solo pase en un entorno concreto. Falsear la version es lo que lo
+    hace determinista, y ademas hace que el test falle si el gate deja de mirar,
+    en vez de pasar por la razon equivocada.
+    """
+    import importlib.metadata as md
+
+    mod = preflight_mod()
+    extra, paquete = _exclusivo_de_un_extra(mod)
+    real = md.version
+    monkeypatch.setattr(
+        md, "version", lambda n: "0.0.0-instalada" if n.lower() == paquete else real(n)
+    )
+
+    detectados = mod.extras_activados()  # type: ignore[attr-defined]
+    assert any(extra in d and paquete in d for d in detectados), (
+        f"el gate no vio el extra {extra} instalado (trae {paquete}): {detectados}. "
+        "Un gate que no ve el extra activo no puede decir la verdad sobre el entorno."
+    )
+
+
+def test_sin_extras_instalados_el_gate_no_reporta_nada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El caso limpio tiene que seguir limpio.
+
+    Sin esto, un gate que reportara siempre seguiria verde en los tests y nadie
+    notaria que perdio el poder de detectar.
+    """
+    import importlib.metadata as md
+
+    mod = preflight_mod()
+    _exclusivo_de_un_extra(mod)
+    original = md.version
+
+    def ausente(nombre: str) -> str:
+        # Simula el venv base: los paquetes exclusivos de extras no estan.
+        exclusives = {
+            p
+            for paquetes in mod.pines_por_extra().values()  # type: ignore[attr-defined]
+            for p in paquetes
+            if p not in mod.pines_declarados()  # type: ignore[attr-defined]
+        }
+        if nombre.lower() in exclusives:
+            raise md.PackageNotFoundError(nombre)
+        return original(nombre)
+
+    monkeypatch.setattr(md, "version", ausente)
+    assert mod.extras_activados() == []  # type: ignore[attr-defined]
+
+
+def test_un_pin_de_dev_no_delata_un_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un paquete del entorno base no puede delatar un extra.
+
+    `Pillow` esta en `pdf_ocr` y el venv base lo tiene instalado, asi que hoy
+    sirve para delatar el extra (y por eso el gate lo reporta cuando corresponde).
+    El riesgo es el contrario: si un paquete estuviera en **ambos** y se usara
+    como evidencia, el gate fallaria en verde permanente, porque el venv base lo
+    tiene. Un gate que siempre falla es tan inutil como uno que nunca falla, y
+    peor: entrena a ignorar el mensaje.
+
+    Se construye el caso a proposito, en vez de confiar en como este
+    `pyproject.toml` esta hoy: la exclusion tiene que seguir valiendo cuando los
+    pins se muevan.
+    """
+    import importlib.metadata as md
+
+    mod = preflight_mod()
+    dev_pin = next(iter(mod.pines_declarados()))  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "pines_por_extra", lambda: {"inventado": {dev_pin: "1.0"}})
+    monkeypatch.setattr(md, "version", lambda n: "1.0" if n.lower() == dev_pin else _no(md, n))
+
+    assert mod.extras_activados() == [], (  # type: ignore[attr-defined]
+        "un pin de dev no puede delatar un extra, pero se reporto: "
+        f"{mod.extras_activados()}"  # type: ignore[attr-defined]
+    )
+
+
+def _no(md: object, nombre: str) -> str:
+    """Como si el paquete no estuviera instalado."""
+    raise md.PackageNotFoundError(nombre)  # type: ignore[attr-defined]
+
+
+def test_el_opt_in_de_extras_normaliza_guion_y_guion_bajo() -> None:
+    """`--permitir-extras pdf-ocr` tiene que valer igual que `pdf_ocr`.
+
+    El nombre en pyproject usa guion bajo y en un comando uno escribe guion. Si
+    se comparan literalmente, el opt-in no coincide con nada y **el gate no se
+    puede desactivar nunca**, que es peor que no tener opt-in: el trabajo
+    legitimo de OCR tendria que vivir con el gate en rojo.
+
+    Llama a `normalizar_extra` y no a una copia de la expresion: mi primera
+    version replicaba el `.replace("-", "_")` en el test, y al revertir el fix en
+    el codigo el test seguia en verde, porque no estaba probando el codigo.
+    """
+    mod = preflight_mod()
+    extra, _ = _exclusivo_de_un_extra(mod)
+
+    for escrito in (extra, extra.replace("_", "-"), extra.upper(), f" {extra} "):
+        permitidos = {mod.normalizar_extra(e) for e in escrito.split(",") if e.strip()}  # type: ignore[attr-defined]
+        assert mod.normalizar_extra(extra) in permitidos, (  # type: ignore[attr-defined]
+            f"el opt-in {escrito!r} no normaliza a {extra!r}"
+        )
+
+
+def test_main_falla_cuando_hay_un_extra_activado(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """El gate tiene que estar **cableado** en main, no solo existir.
+
+    ## Por que este test existe
+
+    La primera version solo probaba `extras_activados()`, que es una funcion
+    pura. Reverti la llamada en `main()` (`extras = []`) y todos los tests
+    siguieron en verde: la funcion existia, hacia lo correcto, y **nadie la
+    invocaba**. Ese es el fallo mas caro posible en un gate: una proteccion que
+    esta escrita y no esta conectada, que se descubre el dia que la necesita.
+
+    Se prueba por la salida y el codigo de retorno de `main`, que es como lo ve
+    quien lo ejecuta, no por la funcion interna.
+
+    ## Por que `GATES` se vacia
+
+    `main()` corre todos los gates, y uno de ellos es `pytest`. Sin vaciarlo, este
+    test lanza la suite, la suite lanza este test, y el proceso se reproduce solo
+    hasta comerse la maquina: lo primero que se pierde es el shell. La
+    recursion se evita en el test, no confiando en que `main` sea barato.
+    """
+    mod = preflight_mod()
+    monkeypatch.setattr(mod, "GATES", [])
+    monkeypatch.setattr(mod, "extras_activados", lambda: ["pdf_ocr (trae pytesseract)"])
+    monkeypatch.setattr(mod, "trabajo_sin_commitear", lambda: [])
+    monkeypatch.setattr(mod, "venv_actualizado", lambda: [])
+
+    codigo = mod.main(["--permitir-sucio"])  # type: ignore[attr-defined]
+    salida = capsys.readouterr().out
+    assert codigo == 1, f"con un extra activo preflight deberia fallar, dio {codigo}"
+    assert (
+        "extras opcionales instalados" in salida
+    ), f"el mensaje tiene que explicar el problema:\n{salida}"
+    assert "pytesseract" in salida, "el mensaje tiene que nombrar el paquete que lo delata"
+
+    # Y con el opt-in: pasa, y dice que extra se permitio, en vez de callarse.
+    codigo = mod.main(["--permitir-sucio", "--permitir-extras", "pdf-ocr"])  # type: ignore[attr-defined]
+    salida = capsys.readouterr().out
+    assert (
+        "extras activados con permiso" in salida
+    ), f"un opt-in usado tiene que quedar registrado, no pasar en silencio:\n{salida}"

@@ -183,6 +183,86 @@ def pines_declarados() -> dict[str, str]:
     }
 
 
+def pines_por_extra() -> dict[str, dict[str, str]]:
+    """Los pins de cada extra opcional, indexados por nombre de extra.
+
+    `dev` queda fuera: es el entorno base que este gate valida, y compararlo
+    consigo mismo no informaria nada.
+    """
+    datos = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))
+    extras = datos["project"].get("optional-dependencies", {})
+    return {
+        nombre: {s.split("==")[0].lower(): s.split("==")[1] for s in specs if "==" in s}
+        for nombre, specs in sorted(extras.items())
+        if nombre != "dev"
+    }
+
+
+def normalizar_extra(nombre: str) -> str:
+    """El nombre de un extra, comparable sin importar como se escriba.
+
+    En pyproject los extras usan guion bajo (`pdf_ocr`) y en un comando uno
+    escribe guion (`pdf-ocr`). Comparar literalmente hacia que el opt-in no
+    coincida con nada y **el gate no se pueda desactivar nunca**, que es peor que
+    no tener opt-in: el trabajo legitimo de OCR tendria que vivir con el gate en
+    rojo, y la primera reaccion de un developer es agregar `--no-verificar` o
+    ignorar el mensaje.
+
+    Vive como funcion y no en la linea del opt-in para que sea testeable. La
+    primera version estaba escrita ahi, y el test copio la expresion en vez de
+    llamarla: un test que replica la logica que quiere verificar no verifica
+    nada, y revirtiendo el fix seguia en verde.
+    """
+    return nombre.strip().lower().replace("-", "_")
+
+
+def extras_activados() -> list[str]:
+    """Extras opcionales instalados en el venv, con el paquete que los delata.
+
+    ## Por que el gate original no lo veia
+
+    `venv_actualizado` recorre los pines declarados y pregunta si estan
+    instalados. Es **unidireccional**: no pregunta que hay de mas. Instalar
+    `pip install -e '.[pdf-ocr]'` no desfasaba nada, porque no desfasaba ninguna
+    dependencia declarada, y el gate reportaba "venv coincide con los pines de
+    pyproject".
+
+    Eso es una afirmacion falsa, y el falso "OK" tiene un costo concreto: con
+    `pytesseract` instalado, `mypy` falla con un `type: ignore` sin usar, porque
+    ahora el modulo existe y el ignore sobra. El sintoma aparece como "error de
+    tipos" y no como "el entorno no es el que creo", que es exactamente la
+    confusion que este gate existe para evitar.
+
+    ## Por que se comparan los extras y no todo lo instalado
+
+    Un venv tiene cientos de paquetes transitivos que legtimamente no estan
+    declarados. Distinguir "transitivo legitimo" de "alguien instalo un extra"
+    exigiria resolver el arbol de dependencias completo en cada corrida. Lo que
+    si es barato y exacto es mirar los extras **declarados**: si un paquete que
+    solo existe bajo `[pdf-ocr]` esta instalado, el venv no es el de los pines,
+    y no hay que adivinar nada mas.
+    """
+    import importlib.metadata as md
+
+    base = pines_declarados()
+    activados: list[str] = []
+    for extra, pines in pines_por_extra().items():
+        for nombre in pines:
+            # Un paquete que tambien es pin de `dev` no dice nada sobre el extra:
+            # `pillow` esta en ambos (dev y pdf-ocr), asi que esta instalado en el
+            # venv base y contarlo como extra activa hacia fallar el gate en verde
+            # permanente. Solo importan los paquetes que el extra trae **y** el
+            # entorno base no declara.
+            if nombre in base:
+                continue
+            try:
+                md.version(nombre)
+            except md.PackageNotFoundError:
+                continue
+            activados.append(f"{extra} (trae {nombre})")
+    return sorted(activados)
+
+
 def venv_actualizado() -> list[str]:
     """Discrepancias entre el venv y los pines de pyproject.
 
@@ -314,6 +394,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Permitir trabajo sin commitear (p. ej. mientras se investiga).",
     )
+    ap.add_argument(
+        "--permitir-extras",
+        default="",
+        help=(
+            "Extras opcionales que se permiten tener instalados, separados por "
+            "coma (p. ej. 'pdf-ocr'). Se usa cuando el trabajo legitimo necesita "
+            "el extra, en vez de apagar el gate entero."
+        ),
+    )
     args = ap.parse_args(argv)
 
     if args.list:
@@ -345,6 +434,36 @@ def main(argv: list[str] | None = None) -> int:
         fallidos.append("entorno")
     else:
         print(f"{PULSO} entorno     venv coincide con los pines de pyproject\n")
+
+    # Un extra instalado no es "el venv desfasado": es un venv distinto, que
+    # cambia el comportamiento de los gates. mypy deja de necesitar el
+    # `type: ignore` de pytesseract cuando el modulo esta disponible, y el
+    # sintoma aparece como un error de tipos, no como un problema de entorno.
+    #
+    # El opt-in existe porque un trabajo legitimo (el job de fuzzing de OCR)
+    # necesita los extras instalados. Se nombra el extra en vez de apagar el
+    # gate entero: "se que hay un extra y cual es" es informacion, "no checking"
+    # no lo es.
+    permitidos = {normalizar_extra(e) for e in args.permitir_extras.split(",") if e.strip()}
+    extras = [e for e in extras_activados() if normalizar_extra(e.split()[0]) not in permitidos]
+    if extras:
+        print("ENTORNO con extras opcionales instalados (cambian los gates):")
+        for e in extras:
+            print(f"  - {e}")
+        print(
+            "\n  Un gate que dice 'OK' sobre un venv que no es el de los pines es un\n"
+            "  gate que no dice la verdad.\n"
+            "  Para volver al entorno de los pines:\n"
+            f"    {VENV / 'bin' / 'python'} -m pip uninstall -y "
+            + " ".join(sorted(pines_por_extra()[e.split()[0]]))
+            + "\n"
+            "  Si el extra es necesario (por ejemplo, para probar OCR), decláralo:\n"
+            f"    preflight.py --permitir-extras {','.join(sorted({e.split()[0] for e in extras}))}\n"
+        )
+        fallidos.append("entorno")
+    elif permitidos:
+        activos = sorted({e.split()[0] for e in extras_activados()})
+        print(f"{PULSO} entorno     extras activados con permiso: {', '.join(activos)}\n")
 
     sucio = trabajo_sin_commitear()
     if sucio and not args.permitir_sucio:

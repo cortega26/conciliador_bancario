@@ -630,6 +630,84 @@ def conciliar(
 
     verificar_invariante_1a1(matches)
 
+    # --- La diferencia que todo contador mira primero ------------------------
+    #
+    # En una conciliacion bancaria, lo primero que se hace es restar el total del
+    # libro al total del banco. Ese numero es el resultado del trabajo, y aqui no
+    # aparecia en ninguna parte: el operador tinha que calcularlo a mano, y si no
+    # lo hacia, no lo hacia.
+    #
+    # ## Por que NO es un error
+    #
+    # Un banco y un libro **deben** poder diferir: comisiones, un movimiento que
+    # aun no aparece, un chequeo no respaldado. Tratar la diferencia como error
+    # haria que la herramienta sirviera para poco mas que declarar que el archivo
+    # esta mal, y empujaria a los clientes a no usarla. Por eso es
+    # `advertencia` y no `critica`, y por eso lleva las tres cifras: lo que hay que
+    # revisar es **la diferencia**, no la existencia de la diferencia.
+    #
+    # ## Por que el motor y no el reporte
+    #
+    # Porque el motor es el unico lugar que ve los tres totales a la vez, y porque
+    # un numero que solo existe en la vista final no se puede auditar: el
+    # `audit.jsonl` lo registra, asi que queda trazabilidad de por que se
+    # reporto esa cifra.
+    total_banco = sum((_valor_monto_tx(t) for t in transacciones), Decimal(0))
+    total_esperado = sum((_valor_monto_exp(e) for e in esperados), Decimal(0))
+    diferencia = total_banco - total_esperado
+    if diferencia != 0:
+        total_conciliado = sum(
+            (
+                _valor_monto_tx(t)
+                for m in matches
+                for t in transacciones
+                if t.id in set(m.transacciones_bancarias)
+            ),
+            Decimal(0),
+        )
+        hid = _hallazgo_id(
+            run_id,
+            "diferencia_de_sumas",
+            "sistema",
+            None,
+            {"total_banco": str(total_banco), "total_esperado": str(total_esperado)},
+        )
+        h = Hallazgo(
+            id=hid,
+            severidad=SeveridadHallazgo.advertencia,
+            tipo="diferencia_de_sumas",
+            mensaje=(
+                f"El total del banco ({total_banco}) no coincide con el total de los "
+                f"movimientos esperados ({total_esperado}). Diferencia: {diferencia}. "
+                f"Conciliado: {total_conciliado}. La diferencia puede ser legitima "
+                f"(comisiones, movimientos aun no reflejados) o puede ser un archivo "
+                f"incompleto: revise los pendientes."
+            ),
+            entidad="sistema",
+            entidad_id=None,
+            detalles={
+                "total_banco": str(total_banco),
+                "total_esperado": str(total_esperado),
+                "diferencia": str(diferencia),
+                "total_conciliado": str(total_conciliado),
+                "n_tx": len(transacciones),
+                "n_esperados": len(esperados),
+            },
+        )
+        hallazgos.append(h)
+        audit.write(
+            AuditEvent(
+                "hallazgo",
+                "Diferencia entre el total del banco y el de los esperados",
+                {
+                    "hallazgo_id": hid,
+                    "total_banco": str(total_banco),
+                    "total_esperado": str(total_esperado),
+                    "diferencia": str(diferencia),
+                },
+            )
+        )
+
     matches = sorted(matches, key=lambda m: m.id)
     hallazgos = sorted(hallazgos, key=lambda h: h.id)
     return ResultadoConciliacion(

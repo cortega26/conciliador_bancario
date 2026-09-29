@@ -6,26 +6,42 @@
     "mask": true,
     "modelo_interno_version": "2",
     "permitir_ocr": false,
-    "version": "0.2.0"
+    "version": "0.2.21"
   },
   "hallazgos": [
     {
       "detalles": {},
-      "entidad": "banco",
-      "entidad_id": "TX-6bc852f1da26",
-      "id": "H-19f57ce37abced",
-      "mensaje": "Transaccion bancaria con match (ver Matches).",
-      "severidad": "info",
-      "tipo": "tx_con_match"
-    },
-    {
-      "detalles": {},
       "entidad": "esperado",
       "entidad_id": "EXP-002",
-      "id": "H-2c65c771778c0e",
+      "id": "H-3030780180bb81",
       "mensaje": "Movimiento esperado sin match (pendiente).",
       "severidad": "advertencia",
       "tipo": "pendiente_esperado"
+    },
+    {
+      "detalles": {
+        "diferencia": "250000",
+        "n_esperados": 2,
+        "n_tx": 1,
+        "total_banco": "150000",
+        "total_conciliado": "150000",
+        "total_esperado": "-100000"
+      },
+      "entidad": "sistema",
+      "entidad_id": null,
+      "id": "H-6dd07850f0c1b2",
+      "mensaje": "El total del banco (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 150000. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
+      "severidad": "advertencia",
+      "tipo": "diferencia_de_sumas"
+    },
+    {
+      "detalles": {},
+      "entidad": "banco",
+      "entidad_id": "TX-6bc852f1da26",
+      "id": "H-c36023aaa5c3ab",
+      "mensaje": "Transaccion bancaria con match (ver Matches).",
+      "severidad": "info",
+      "tipo": "tx_con_match"
     }
   ],
   "matches": [
@@ -33,7 +49,7 @@
       "bloqueado_por_confianza": false,
       "estado": "conciliado",
       "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto.",
-      "id": "M-0feffd256700fc",
+      "id": "M-bfc2ca92665f7a",
       "movimientos_esperados": [
         "EXP-001"
       ],
@@ -44,6 +60,6 @@
       ]
     }
   ],
-  "run_id": "7243e846d9840fea",
+  "run_id": "1a43c6f8d1a13864",
   "schema_version": "1.0.0"
 }

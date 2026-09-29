@@ -101,6 +101,32 @@ antes de que el índice sirva los archivos, y `pip` lee el índice. **Ausencia e
 el índice no es ausencia de publicación**, y `esperar_indice` existe justamente
 por eso.
 
+## A10 — Diferencia de sumas (nuevo, de la revisión) — **HECHO**
+
+Lo报告中 por la revisión como "el control compensatorio estándar contra una fila
+perdida, y hoy la unica defensa es la visibilidad por ítem". Medido antes de
+arreglarlo: 2 tx de 150.000 contra 1 exp de 150.000 daba 1 match, 1 pendiente
+(el recuento cuadra, `1 + 1 == 2`) y **la diferencia de 150.000 no se reportaba
+en ninguna parte**.
+
+- [x] Calcular Σ banco, Σ esperados y Σ conciliado en el motor
+- [x] Emitir hallazgo `diferencia_de_sumas` con los tres totales y la diferencia
+- [x] Severidad `advertencia`, **no** `critica`: un banco y un libro deben poder
+      diferir (comisiones, un chequeo sin respaldo). Tratarlo como error haria
+      la herramienta inservible para su caso de uso normal
+- [x] Solo cuando hay diferencia: una conciliación cuadrada no genera ruido, o el
+      hallazgo se vuelve ruido y entrena a ignorarse
+- [x] Test del falso negativo: `+100.000` contra `-100.000` da 200.000, no 0
+- [x] Prueba de mordida: sin calcular → 7 caen; firmando sumas → 1 cae;
+      severidad crítica → 1 cae
+- [x] Goldens actualizados **con verificacion previa**: se comprobo que los
+      matches no cambian, que no se pierde ningun hallazgo, y que el numero
+      (250.000) coincide con el calculo manual
+
+Se eligio un hallazgo y no un campo nuevo en el contrato: `run.json` tiene esquema
+versionado, y `hallazgos` ya esta en el contrato, ya sale en el reporte y ya queda
+en el audit log.
+
 ## Cierre
 
 - [ ] `pytest` verde (suite completa)

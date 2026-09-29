@@ -2,6 +2,35 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.20](https://github.com/cortega26/conciliador_bancario/compare/v0.2.19...v0.2.20) (2026-09-29)
+
+
+### Bug Fixes
+
+* **gates:** el gate de entorno era unidireccional y decia OK en falso ([ae00436](https://github.com/cortega26/conciliador_bancario/commit/ae004366eed36b35e2f22d37bd856e876e79e184))
+* **ocr:** el monto de una columna ya no se atribuye a la fecha de otra ([65720ae](https://github.com/cortega26/conciliador_bancario/commit/65720ae34fb325b9629af76087a2152364bd5436))
+* **parsing:** rechazar notacion cientrica, hex y el signo minus unicode ([483536c](https://github.com/cortega26/conciliador_bancario/commit/483536c9ea0e12c80c45b7e70be7efbcaccc90e9))
+* **parsing:** un monto con centavos se rechaza, no se redondea ([4835fd1](https://github.com/cortega26/conciliador_bancario/commit/4835fd1775e14ed1c8e53dc0126d668165b88a9e))
+* **preflight:** dos gates que no podían pasar nunca, y el orden de `twine` ([dd3736a](https://github.com/cortega26/conciliador_bancario/commit/dd3736a1bddeb3498902e8950357a470358f41ad))
+* **xlsx:** un limite de tamano que no mire el lado descomprimido no protege ([4b40993](https://github.com/cortega26/conciliador_bancario/commit/4b409933137f145e7395dced3b4451a5a23a9f9b))
+
+
+### Build and toolchain
+
+* **release:** verificar el paquete publicado, no solo que el job pasara ([157a8d4](https://github.com/cortega26/conciliador_bancario/commit/157a8d4a4ce3c20fb455fd52f319ccf5ca50501e))
+
+
+### Tests
+
+* **fuzz-ocr:** generador de PDFs escaneados con degradaciones ([1aa4545](https://github.com/cortega26/conciliador_bancario/commit/1aa454506efa446fb699b18fc26ffbc38d5b12ce))
+* **fuzz:** generador de datos hostiles; encuentra 4 bugs de parsing ([31cadd9](https://github.com/cortega26/conciliador_bancario/commit/31cadd9eccd3ccb9c0e0dd1d8f6e08da596c4d75))
+
+
+### Documentation
+
+* **changelog:** notas de 0.2.19 para quien actualiza desde 0.2.18 ([db23be3](https://github.com/cortega26/conciliador_bancario/commit/db23be383189bde3fc189706de86a4d4c4f6ed61))
+* informe de stress test 2026-09-29 (4 hallazgos, 2 criticos) ([e905850](https://github.com/cortega26/conciliador_bancario/commit/e905850656250a6994e8aafeab3c1361b01ecc69))
+
 ## [0.2.19](https://github.com/cortega26/conciliador_bancario/compare/v0.2.18...v0.2.19) (2026-09-29)
 
 ### Impacto para el usuario

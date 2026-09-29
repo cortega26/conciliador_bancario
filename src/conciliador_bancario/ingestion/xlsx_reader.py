@@ -10,6 +10,12 @@ interrumpida producen `BadZipFile`, que no tiene nada que ver con la taxonomia
 del CLI. El problema es del archivo que entrego el cliente, asi que el reporte
 decir "internal error" es incorrecto en el sentido fail-closed: senala a la
 herramienta donde la falla esta en el input.
+
+Este modulo y `guard.protegido` se complementan, no se duplican: aqui se
+dan los mensajes especificos de los dos fallos mas comunes (XLSX vacio o
+corrupto), que son mas tiles que el generico. La frontera de `detector.py`
+es la red de seguridad para cualquier otra excepcion de terceros que
+aparezca mas adentro en el adaptador, donde este mensaje no aplica.
 """
 
 from __future__ import annotations

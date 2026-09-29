@@ -52,8 +52,8 @@ La Define of Done no es "los tests pasan". Es:
 |---|---|---|---|
 | **A1** | ALTA | ~~Volumen~~ **HECHO en #50**: límites probados en el borde y default medido | 200k filas = 13,3 s y 1.396 MB de RSS. El default es alcanzable, pero **la memoria es el recurso escaso**. |
 | **A2** | ALTA | ~~Escritura atómica~~ **HECHO en #54**: cerrojo `O_EXCL` + `os.replace` | Medido: dos corridas concurrentes salían **ambas con exit 0** y solo sobrevivía una. La reconciliación perdida no dejaba rastro. |
-| **A3** | MEDIA | OCR pierde la descripción de una celda que era fórmula, **en silencio** | Es pérdida de información: el operador ve una descripción vacía sin saber que el origen la tenía. Ya documentado; falta decidir con criterio de producto. |
-| **A4** | MEDIA | Idempotencia del audit log y determinismo de `run_id` entre corridas idénticas | `run_id` es un hash del input. Dos corridas idénticas deben dar el mismo `run_id` y artefactos byte-idénticos. No verificado. |
+| **A3** | MEDIA | OCR pierde la descripción de una celda que era fórmula, **en silencio** | **HECHO en #58**: pérdida de información real, pero el texto ejecutable es lo que se descarta y el monto, la fecha y el resto sobreviven. `data_only=True` se queda y el límite está documentado en `walkthrough.md`. |
+| **A4** | MEDIA | Idempotencia del audit log y determinismo de `run_id` entre corridas idénticas | **HECHO en #58**: `run.json` y `audit.jsonl` son byte-idénticos; el `.xlsx` se compara por **celdas**, no por hash, porque el ZIP lleva timestamps. En #61 el `run_id` pasó a distinguir corridas que difieren en un override `--max-*`. |
 | **A5** | MEDIA | ~~Invariante 1:1~~ **HECHO en #55**: ahora `ErrorIngestion` (exit 4) y extraído a función testeable | El invariante es inalcanzable desde los datos, así que inline no tenía test posible. |
 | **A6** | MEDIA | ~~XML sin red~~ **HECHO en #52**, **con un límite declarado**: ni `defusedxml` ni `xml.etree` resuelven entidades externas, así que la prueba de red nunca se dispara. Lo que se afirma es la **precondición** (el parser es el protegido). |
 | **A7** | BAJA | ~~Informe de riesgo~~ **HECHO en #55**: tabla H1–H18 con PR y test, más un test que falla si vuelve a mentir | Listaba H1–H5 como "abierto" días después de publicados. |
@@ -180,8 +180,8 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 |---|---|---|
 | A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` (**HECHO en #50**) | `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae |
 | A2 | `tests/test_escritura_atomica.py` (11 tests): atomicidad, cerrojo, zombie, secuencial, concurrente | Cerrojo como no-op → cae la concurrencia; sin reclamation → cae el zombie; sin limpiar temporal → cae la atomicidad |
-| A3 | **PENDIENTE**: la documentación prometida no existe. `walkthrough.md` tiene 59 líneas y cero menciones de `data_only`. Un mensaje de commit no es documentación que un operador pueda encontrar | N/A |
-| A4 | `tests/test_idempotencia.py`: dos corridas → mismo `run_id`, mismas celdas | Introducir `datetime.now()` en el fingerprint y ver que el `run_id` cambia |
+| A3 | **HECHO en #58**: `data_only=True` se queda (es lo correcto) y el límite quedó documentado en `walkthrough.md`, que es donde un operador busca un comportamiento que no entiende | N/A |
+| A4 | **HECHO en #58**: los tests viven en `tests/test_determinismo_reporte.py` (no en `test_idempotencia.py`, que nunca existió) y comparan **celdas**, no hash del `.xlsx` | **HECHO**: introducir PID en una celda cae en 4 tests, y en `run.json` en 9 |
 | A5 | `tests/test_invariante_matching.py`: forzar la violación con monkeypatch y afirmar el exit/tipo | Cambiar `ErrorIngestion` por `ValueError` y ver que el test detecta la diferencia |
 | A6 | `tests/test_xml_sin_red.py` | Cambiar `defusedxml` por `xml.etree` → cae la aserción de precondición. **El control negativo del parche no ejercita el fixture**; lo protege la aserción de precondición |
 | A7 | `tests/test_docs_actualizados.py`: el informe no puede listar un hallazgo cerrado como abierto | Marcar H1 como abierto en el doc y ver que el test falla |
@@ -248,14 +248,18 @@ El comportamiento por umbral queda **fijado con un test** que usa confianza 0,40
 real de PDF texto) y la frontera medida, para que cambiar la política de umbrales sea una
 decisión visible y no un efecto secundario.
 
-### 5.3 El `run_id` no cubre los límites efectivos
+### 5.3 El `run_id` no cubría los límites efectivos — **RESUELTO en #61**
 
-El fingerprint incluye `config_sha256`, los tres archivos, `mask`,
-`permitir_ocr` y la versión del modelo, pero **no** los overrides `--max-*`. Dos
-correrías que difieren solo en `--max-tabular-rows` comparten `run_id`.
+El fingerprint incluía `config_sha256`, los tres archivos, `mask`, `permitir_ocr` y la
+versión del modelo, pero **no** los overrides `--max-*`: dos corridas que difieren
+solo en `--max-tabular-rows` compartían `run_id`. No producía dinero incorrecto, pero
+rompía la promesa que `test_e2e_completo.py` hace explícita ("el `run_id` identifica el
+input").
 
-No produce dinero incorrecto hoy, pero rompe la promesa que
-`test_e2e_completo.py:283` hace explícita ("el `run_id` identifica el input").
+Ahora el fingerprint incluye `limites_ingesta` completo, así que el `run_id`
+distingue corridas que difieren en cualquier límite. El contrato consumidor lo tolera:
+`limites` es opcional, de modo que un `run.json` anterior sin esa clave se sigue
+leyendo.
 
 ### 5.4 No hay verificación aritmética — **RESUELTO en #63**
 

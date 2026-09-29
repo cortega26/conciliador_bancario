@@ -110,13 +110,17 @@ que se está admitiendo data degradada y que el OCR sigue bloqueado. Con umbral 
 referencia de PDF texto (confianza 0,40) se autoconcilia, y el operador que lo bajó para
 otra cosa quizá no lo sabía.
 
-### El `run_id` no incluye los overrides `--max-*`
+### El `run_id` **sí** incluye los límites efectivos
 
-El fingerprint del `run_id` cubre los archivos, la config, `mask` y la versión del
-modelo, pero no los límites efectivos: dos corridas que difieren solo en un override como
-`--max-tabular-rows` (o en la clave de config `max_tabular_rows`) comparten `run_id`. No
-produce dinero incorrecto, pero rompe la promesa de que el `run_id` identifica la corrida.
-Escrito en `spec.md` §5.3.
+Dos corridas que difieren solo en `--max-tabular-rows` (o en `max_tabular_rows` de la
+config) tienen `run_id` distinto, porque el fingerprint incluye todos los límites
+efectivos, no solo los archivos, la config, `mask` y la versión del modelo.
+
+Esto **no** era así: hasta el #61 el `run_id` ignoraba los overrides, así que dos
+corridas con límites distintos compartían identificador. No producía dinero incorrecto,
+pero rompía la promesa de que el `run_id` identifica la corrida, y por eso estaba
+escrito acá como límite conocido. El contrato consumidor lo tolera: `limites` es
+opcional y una corrida vieja sin esa clave se sigue leyendo.
 
 ### Un DTD externo en un XML no se descarga, y eso no es lo que el test prueba
 

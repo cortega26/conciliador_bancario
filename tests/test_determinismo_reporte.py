@@ -234,3 +234,132 @@ def test_el_masking_no_depende_de_cuando_se_corre(base) -> None:
     assert (
         "123456789" not in texto_a and "123456789" not in texto_b
     ), "la cuenta aparece en claro: el masking no se esta aplicando"
+
+
+# --- El run_id tiene que distinguir corridas que difieren en un override ---
+
+
+def test_el_run_id_cambia_cuando_cambia_un_override(tmp_path: Path) -> None:
+    """Dos corridas que difieren solo en `--max-tabular-rows` son corridas distintas.
+
+    ## El bug
+
+    `config_sha256` hashea el **archivo** de config, pero un override por CLI cambia
+    `cfg.limites_ingesta` *después* de leerlo, y ese cambio no estaba en ninguna
+    parte del fingerprint. Dos corridas con distinta tolerancia compartían `run_id`,
+    o sea que el identificador no identificaba la corrida.
+
+    ## Por qué importa
+
+    El `run_id` es lo que un operador usa para decir "esta conciliación es la que
+    revisé". Si dos corridas con límites distintos lo comparten, esa frase deja de
+    tener sentido, y comparar dos conciliaciones de_settings distintas empieza a
+    parecer la misma cosa.
+    """
+    base = tmp_path / "c"
+    d = base / "cliente"
+    assert _cli("init", "--out-dir", str(d)).returncode == EXIT_OK
+    config = next(d.rglob("*.yaml"))
+
+    def correr(tag: str, *extra: str) -> str:
+        sub = d / tag
+        sub.mkdir(parents=True, exist_ok=True)
+        b = sub / "banco.csv"
+        b.write_text(BANCOS["varios"], encoding="utf-8")
+        e = sub / "esperados.csv"
+        e.write_text(ESPERADOS_TRES, encoding="utf-8")
+        out = sub / "out"
+        r = _cli(
+            "run",
+            "--config",
+            str(config),
+            "--bank",
+            str(b),
+            "--expected",
+            str(e),
+            "--out",
+            str(out),
+            *extra,
+        )
+        assert r.returncode == EXIT_OK, f"{tag}: {r.stdout}{r.stderr}"
+        return _json(out / "run.json")["run_id"]
+
+    normal = correr("normal")
+    override = correr("override", "--max-tabular-rows", "5000")
+
+    assert normal != override, (
+        "cambiar --max-tabular-rows no cambio el run_id: dos corridas con tolerancias "
+        "distintas son la misma conciliacion para el operador, y no lo son"
+    )
+
+
+def test_el_run_id_sigue_siendo_determinista_con_override(tmp_path: Path) -> None:
+    """Con el mismo override, el `run_id` se repite.
+
+    El otro lado del bug: si el `run_id` ahora de los flags, dos corridas idénticas
+    darían identificadores distintos y el determinismo se pierde.
+    """
+    d = tmp_path / "cliente"
+    assert _cli("init", "--out-dir", str(d)).returncode == EXIT_OK
+    config = next(d.rglob("*.yaml"))
+
+    def correr(tag: str) -> str:
+        sub = d / tag
+        sub.mkdir(parents=True, exist_ok=True)
+        (sub / "banco.csv").write_text(BANCOS["varios"], encoding="utf-8")
+        (sub / "esperados.csv").write_text(ESPERADOS_TRES, encoding="utf-8")
+        out = sub / "out"
+        r = _cli(
+            "run",
+            "--config",
+            str(config),
+            "--bank",
+            str(sub / "banco.csv"),
+            "--expected",
+            str(sub / "esperados.csv"),
+            "--out",
+            str(out),
+            "--max-tabular-rows",
+            "5000",
+        )
+        assert r.returncode == EXIT_OK, f"{tag}: {r.stdout}{r.stderr}"
+        return _json(out / "run.json")["run_id"]
+
+    assert correr("a") == correr("b"), "el mismo override dio run_ids distintos"
+
+
+def test_los_limites_efectivos_quedan_en_el_fingerprint(tmp_path: Path) -> None:
+    """El `run.json` dice qué tolerancia tuvo la corrida, no solo qué tolerancia pedía el archivo.
+
+    Sin esto, un `run.json` de hace seis meses no permite reconstruir por qué una
+    corrida acepto 200.000 filas y otra las rechazo: el archivo de config pudo haber
+    cambiado desde entonces.
+    """
+    d = tmp_path / "cliente"
+    assert _cli("init", "--out-dir", str(d)).returncode == EXIT_OK
+    config = next(d.rglob("*.yaml"))
+    sub = d / "x"
+    sub.mkdir()
+    (sub / "banco.csv").write_text(BANCOS["varios"], encoding="utf-8")
+    (sub / "esperados.csv").write_text(ESPERADOS_TRES, encoding="utf-8")
+    out = sub / "out"
+    _cli(
+        "run",
+        "--config",
+        str(config),
+        "--bank",
+        str(sub / "banco.csv"),
+        "--expected",
+        str(sub / "esperados.csv"),
+        "--out",
+        str(out),
+        "--max-tabular-rows",
+        "12345",
+    )
+    limites = _json(out / "run.json")["fingerprint"]["limites"]
+    assert limites["max_tabular_rows"] == 12345, (
+        f"el fingerprint guarda {limites.get('max_tabular_rows')} y la corrida uso 12345: "
+        "el run.json no permite reconstruir la tolerancia de esa conciliacion"
+    )
+    # Y tambien los que NO se tocaron, para que el registro sea completo.
+    assert limites["max_input_bytes"] > 0, limites

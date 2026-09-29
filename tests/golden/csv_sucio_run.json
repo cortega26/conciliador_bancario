@@ -1,1 +1,72 @@
-{"fingerprint":{"bank_sha256":"ca1e0e9ac0b250ff7447de9d9b41a32268f0a57b5c51d5656f799e0dbf497cb2","config_sha256":"e945e0648ad08a255d9dc1043e7227db54a69048693fd293d242ad27af9a6f4d","expected_sha256":"c04e806df53b6f13267dc95ac55bd0c2a8eec8d92d5786b26b72a00144e77abc","mask":true,"modelo_interno_version":"2","permitir_ocr":false,"version":"0.2.0"},"hallazgos":[{"detalles":{},"entidad":"banco","entidad_id":"TX-a7a30e01c2d9","id":"H-93d9ea8366a985","mensaje":"Transaccion bancaria con match (ver Matches).","severidad":"info","tipo":"tx_con_match"},{"detalles":{},"entidad":"banco","entidad_id":"TX-7d3367659ca2","id":"H-adc2406c0c4af3","mensaje":"Transaccion bancaria con match (ver Matches).","severidad":"info","tipo":"tx_con_match"}],"matches":[{"bloqueado_por_confianza":false,"estado":"conciliado","explicacion":"Match por referencia exacta (FAC-1001) y monto exacto.","id":"M-431284d538feec","movimientos_esperados":["EXP-001"],"regla":"ref_exacta","score":1.0,"transacciones_bancarias":["TX-7d3367659ca2"]},{"bloqueado_por_confianza":false,"estado":"conciliado","explicacion":"Match por referencia exacta (NOM-ENE) y monto exacto.","id":"M-c03193eb5f07c0","movimientos_esperados":["EXP-002"],"regla":"ref_exacta","score":1.0,"transacciones_bancarias":["TX-a7a30e01c2d9"]}],"run_id":"3095fd041345d63c","schema_version":"1.0.0"}
+{
+  "fingerprint": {
+    "bank_sha256": "ca1e0e9ac0b250ff7447de9d9b41a32268f0a57b5c51d5656f799e0dbf497cb2",
+    "config_sha256": "e945e0648ad08a255d9dc1043e7227db54a69048693fd293d242ad27af9a6f4d",
+    "expected_sha256": "c04e806df53b6f13267dc95ac55bd0c2a8eec8d92d5786b26b72a00144e77abc",
+    "limites": {
+      "max_input_bytes": 25000000,
+      "max_pdf_pages": 200,
+      "max_pdf_text_chars": 5000000,
+      "max_tabular_cells": 5000000,
+      "max_tabular_rows": 200000,
+      "max_xlsx_uncompressed_bytes": 200000000,
+      "max_xml_movimientos": 200000
+    },
+    "mask": true,
+    "modelo_interno_version": "2",
+    "permitir_ocr": false,
+    "version": "0.2.21"
+  },
+  "hallazgos": [
+    {
+      "detalles": {},
+      "entidad": "banco",
+      "entidad_id": "TX-7d3367659ca2",
+      "id": "H-42fb351a83b0a4",
+      "mensaje": "Transaccion bancaria con match (ver Matches).",
+      "severidad": "info",
+      "tipo": "tx_con_match"
+    },
+    {
+      "detalles": {},
+      "entidad": "banco",
+      "entidad_id": "TX-a7a30e01c2d9",
+      "id": "H-9edb5aaa458165",
+      "mensaje": "Transaccion bancaria con match (ver Matches).",
+      "severidad": "info",
+      "tipo": "tx_con_match"
+    }
+  ],
+  "matches": [
+    {
+      "bloqueado_por_confianza": false,
+      "estado": "conciliado",
+      "explicacion": "Match por referencia exacta (NOM-ENE) y monto exacto.",
+      "id": "M-9010030deda5f3",
+      "movimientos_esperados": [
+        "EXP-002"
+      ],
+      "regla": "ref_exacta",
+      "score": 1.0,
+      "transacciones_bancarias": [
+        "TX-a7a30e01c2d9"
+      ]
+    },
+    {
+      "bloqueado_por_confianza": false,
+      "estado": "conciliado",
+      "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto.",
+      "id": "M-af327f006a9d3a",
+      "movimientos_esperados": [
+        "EXP-001"
+      ],
+      "regla": "ref_exacta",
+      "score": 1.0,
+      "transacciones_bancarias": [
+        "TX-7d3367659ca2"
+      ]
+    }
+  ],
+  "run_id": "9c3a3f6b4cc5cee0",
+  "schema_version": "1.0.0"
+}

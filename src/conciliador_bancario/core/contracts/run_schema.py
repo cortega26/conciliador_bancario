@@ -29,6 +29,13 @@ class RunFingerprint(_CBContractModel):
     expected_sha256: str = Field(min_length=1)
     mask: bool
     permitir_ocr: bool
+    # Limites **efectivos** de esta corrida, no los del archivo de config: un
+    # `--max-*` por CLI los cambia despues de leer el archivo, y sin esto dos
+    # corridas que difieren solo en un override compartian `run_id`.
+    #
+    # Se agrega el diccionario completo y no solo los que tienen flag, para que
+    # agregar un limite nuevo no requiera acordarse de tocar el fingerprint.
+    limites: dict[str, int] = Field(default_factory=dict)
     modelo_interno_version: str = Field(min_length=1)
     version: str = Field(min_length=1)
 
@@ -117,6 +124,13 @@ class RunFingerprintConsumer(_CBContractConsumerModel):
     expected_sha256: str = Field(min_length=1)
     mask: bool
     permitir_ocr: bool
+    # Limites **efectivos** de esta corrida, no los del archivo de config: un
+    # `--max-*` por CLI los cambia despues de leer el archivo, y sin esto dos
+    # corridas que difieren solo en un override compartian `run_id`.
+    #
+    # Se agrega el diccionario completo y no solo los que tienen flag, para que
+    # agregar un limite nuevo no requiera acordarse de tocar el fingerprint.
+    limites: dict[str, int] = Field(default_factory=dict)
     modelo_interno_version: str = Field(min_length=1)
     version: str = Field(min_length=1)
 

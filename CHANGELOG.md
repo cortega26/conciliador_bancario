@@ -2,6 +2,48 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.17](https://github.com/cortega26/conciliador_bancario/compare/v0.2.16...v0.2.17) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ci:** make the OCR anti-skip guard exit 0 on success ([955b30c](https://github.com/cortega26/conciliador_bancario/commit/955b30c618e94aae34497c12acc48e82314b067c))
+* **errors:** ErrorIngestion cumple el contrato de la taxonomia; mypy a cero y en CI ([07d252f](https://github.com/cortega26/conciliador_bancario/commit/07d252f968bbf690dd8bf1c3956c43975512bd94))
+* **errors:** give ErrorIngestion the taxonomy's details/hint contract ([6962215](https://github.com/cortega26/conciliador_bancario/commit/6962215ceae7dff82b9904e61165c3b47abd3b0f))
+* **pdf:** un PDF vacio o corrupto es error de ingesta, no internal error ([34ae53a](https://github.com/cortega26/conciliador_bancario/commit/34ae53ac55e281ffa269eb9cd347cd58d79be2b3))
+* **xlsx:** un XLSX ilegible es error de ingesta, no internal error ([8376129](https://github.com/cortega26/conciliador_bancario/commit/83761295e73a896d1efec37d1a00b3b2c3651607))
+* **xlsx:** un XLSX ilegible es error de ingesta, no internal error ([3fff161](https://github.com/cortega26/conciliador_bancario/commit/3fff161d98836580f027b3b104aec4804d4e50b0))
+* **xml:** un DTD hostil es error de ingesta, no internal error ([d294784](https://github.com/cortega26/conciliador_bancario/commit/d294784e62ee624d0c29354750d45f2dd10e4f9a))
+
+
+### Build and toolchain
+
+* embebir SBOM CycloneDX en el wheel (PEP 770) ([04ac1c3](https://github.com/cortega26/conciliador_bancario/commit/04ac1c3887bbe5a27f72cdee909c862720876914))
+* embebir un SBOM CycloneDX en el wheel (PEP 770) ([4bc904b](https://github.com/cortega26/conciliador_bancario/commit/4bc904ba628696b84398b2c5d91d115f1125103b))
+* no importar la stdlib xml solo para tipar, y evitar B405 ([488a98e](https://github.com/cortega26/conciliador_bancario/commit/488a98e620c847c141547527e5b03a6876dc8515))
+* take mypy from 21 errors to zero and put it in CI ([7242c71](https://github.com/cortega26/conciliador_bancario/commit/7242c71379159b47c133c5f374ab04accb036cc1))
+
+
+### Tests
+
+* close coverage gaps on untested paths and add a coverage ratchet ([50f4579](https://github.com/cortega26/conciliador_bancario/commit/50f4579f33c2822ca00a6a514e3a81b34682386b))
+* close coverage gaps on untested paths and add a coverage ratchet ([4087627](https://github.com/cortega26/conciliador_bancario/commit/408762705ea9859f1e5689e8b1c8a15d101fbf47))
+* fuzzing de los adaptadores de ingesta (encuentra un DTD que se reportaba como internal error) ([d7d9d50](https://github.com/cortega26/conciliador_bancario/commit/d7d9d50d35a722d1e7ee9310e050bc43deec7058))
+* fuzzing de los adaptadores de ingesta con Hypothesis ([38768ba](https://github.com/cortega26/conciliador_bancario/commit/38768ba9c8c084d6201b02223b26a907ef1469ee))
+* **ocr:** exercise the real OCR path in CI ([1b99c71](https://github.com/cortega26/conciliador_bancario/commit/1b99c713f73b31c6144f8a84c01cb1b862ded1b4))
+* **ocr:** exercise the real OCR path in CI ([724d208](https://github.com/cortega26/conciliador_bancario/commit/724d20869666cb7c17ab6d4039b3a77157a1a6a1))
+
+
+### Documentation
+
+* **release:** como mergear sin duplicar el changelog ([c1982d9](https://github.com/cortega26/conciliador_bancario/commit/c1982d9fb1cb7276af05aeed4948b73dfcabb76b))
+
+
+### Miscellaneous chores
+
+* **release:** declarar las secciones del changelog ([d7e7ab0](https://github.com/cortega26/conciliador_bancario/commit/d7e7ab020a69f1f9cca62b3991b8b36206308f2a))
+* **release:** declarar las secciones del changelog (build/test se descartaban en silencio) ([d43648a](https://github.com/cortega26/conciliador_bancario/commit/d43648a1426a7d8a628fb1c06c841eb6f785f6ab))
+
 ## [0.2.16](https://github.com/cortega26/conciliador_bancario/compare/v0.2.14...v0.2.16) (2026-09-29)
 
 ### Breaking changes

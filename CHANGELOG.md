@@ -2,6 +2,26 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.19](https://github.com/cortega26/conciliador_bancario/compare/v0.2.18...v0.2.19) (2026-09-29)
+
+
+### Bug Fixes
+
+* **deps:** Pillow 10.4.0 -&gt; 12.3.0, 33 vulnerabilidades conocidas ([4ea3d04](https://github.com/cortega26/conciliador_bancario/commit/4ea3d046f61394177f4b546b9d6c3abfd5080482))
+* **release:** un titulo de release-please avisa, no bloquea el merge ([9b31f1f](https://github.com/cortega26/conciliador_bancario/commit/9b31f1f197b7dfbb28d92d1fd4852549ac40d553))
+
+
+### Build and toolchain
+
+* **ci:** el gate de supply-chain audita tambien los extras opcionales ([17659bd](https://github.com/cortega26/conciliador_bancario/commit/17659bde8255abfbaba9782f214dadf279c06895))
+* protocolo de iteracion, con la maquinaria que lo hace cumplible ([d2bb8f0](https://github.com/cortega26/conciliador_bancario/commit/d2bb8f06d56029b6358610be524ab256215462f6))
+* **release:** merge_pr.py, para que el numero del PR no se escriba a mano ([c96f496](https://github.com/cortega26/conciliador_bancario/commit/c96f496ac9c421b1bd5e18659cdf8c99f8b363b5))
+
+
+### Tests
+
+* **ingesta:** el determinismo se mide sobre un archivo que se parsea de verdad ([93fa50e](https://github.com/cortega26/conciliador_bancario/commit/93fa50ec2448100a85796745c36ac9c4eaf4ae89))
+
 ## [0.2.18](https://github.com/cortega26/conciliador_bancario/compare/v0.2.17...v0.2.18) (2026-09-29)
 
 

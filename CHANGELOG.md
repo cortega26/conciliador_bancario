@@ -4,6 +4,28 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
 ## [0.2.19](https://github.com/cortega26/conciliador_bancario/compare/v0.2.18...v0.2.19) (2026-09-29)
 
+### Impacto para el usuario
+
+- **Actualiza Pillow si usas OCR.** `pip install bankrecon[pdf-ocr]` instalaba
+  Pillow 10.4.0, con **33 vulnerabilidades conocidas** (seis `high` segun
+  Dependabot), corregidas en 12.1.1 / 12.2.0 / 12.3.0. Ahora el extra declara
+  `Pillow==12.3.0`. No hay nada que hacer en el codigo: es una dependencia que se
+  reinstala sola al actualizar el paquete.
+  El salto de version mayor (10 -> 12) no cambio el comportamiento de OCR: el
+  job `pdf_ocr` de CI corre OCR real con tesseract sobre un PDF escaneado y pasa
+  con Pillow 12.3.0. Si tu plataforma no tiene binarios para Pillow 12, el
+  `pip install` va a fallar al compilar, y la causa sera visible en el error.
+
+- **El escaneo de dependencias ahora cubre los extras opcionales.** El gate de
+  supply-chain audita el entorno instalado y, por separado, cada extra
+  declarado en `pyproject.toml`. Antes no cubria los extras: por eso el punto
+  anterior pudo publicarse con el gate en verde. No cambia el comportamiento
+  del CLI; cambia que un extra nuevo con una vulnerabilidad conocida falle la
+  build en vez de aparecer semanas despues en Dependabot.
+
+- **Sin cambios de comportamiento en la conciliacion.** Los fixes de exit code
+  (`internal error` -> error de ingesta) salieron en 0.2.17. Los cambios de
+  matching, normalizacion y OCR no se tocaron en esta version.
 
 ### Bug Fixes
 

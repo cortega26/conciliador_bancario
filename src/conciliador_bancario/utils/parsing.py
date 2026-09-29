@@ -13,6 +13,28 @@ class ErrorParseo(ValueError):
 # (1.234) pueda reconocerse como negativo de contabilidad y no eliminarse.
 _MONEDA_RE = re.compile(r"[^0-9,.()-]")
 
+# Ruido que se descarta: no altera el valor del numero.
+#
+# Son simbolos de moneda, espacios (incluidos los no separables que algunos
+# exportadores insertan entre miles) y codigos de moneda. Quitarlos es seguro
+# porque `1000`, `$ 1 000` y `1.000 CLP` son el mismo monto.
+_RUIDO_RE = re.compile(r"[^\S]|USD|EUR|CLP|COP|UF|\$|€|£")
+
+# Lo que puede quedar despues de quitar el ruido.
+#
+# El bug de fondo era tratar todo lo no permitido como ruido, y no lo es:
+#   - `1e5`  -> quitar la `e` deja `15`: error de 100x a 1000x, con exit 0.
+#   - `0x10` -> quitar la `x` deja `010`: el monto nunca fue 10.
+#   - `-100` (menos unicode U+2212) -> quitarlo deja `100`: **cambia el signo**, y
+#     un egreso de 100 se registra como ingreso de 100. Ni la magnitud ni el
+#     matching lo detectan.
+#
+# Se usa una lista de **permitidos**, no de prohibidos: cualquier cosa que no sea
+# un digito o un separador de miles vuelve el monto ilegible con certeza, y hay
+# que rechazar. En software YMYL, descartar un caracter en silencio es peor que
+# rechazar el archivo.
+_SOLO_MONTO_RE = re.compile(r"^[0-9,.()+-]+$")
+
 # Parentesis de contabilidad: envuelven el monto completo.
 _PARENTESIS_RE = re.compile(r"^\(.*\)$")
 
@@ -87,7 +109,17 @@ def parse_monto_clp(texto: str) -> Decimal:
     elif t.startswith("+"):
         t = t[1:].strip()
 
-    t = _MONEDA_RE.sub("", t)
+    # Ruido primero (moneda, espacios), y despues una validacion estricta de lo
+    # que queda. Antes se hacia `sub` con una lista de prohibidos, que descartaba
+    # en silencio los caracteres que alteran el valor: notacion cientrica,
+    # hexadecimalo y el signo menos unicode. Ver el comentario de
+    # `_SOLO_MONTO_RE`.
+    t = _RUIDO_RE.sub("", t)
+    if not _SOLO_MONTO_RE.match(t):
+        raise ErrorParseo(
+            f"Monto invalido: {texto!r} (caracteres no numericos, o notacion "
+            "cientifica/hexadecimal, o signo no ASCII)"
+        )
     t = _resolver_separadores(t, texto)
     try:
         d = Decimal(t)

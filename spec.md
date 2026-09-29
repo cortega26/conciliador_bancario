@@ -43,18 +43,20 @@ La Define of Done no es "los tests pasan". Es:
 | H14 | **1000 USD se conciliaba contra 1000 CLP** | #48 | `test_fuzz_matching.py` |
 | H15 | **`run` aceptaba un archivo sin transacciones con exit 0** | #53 | `test_p0_contrato_cli.py` |
 | H16 | **`--max-xlsx-uncompressed-bytes` era un flag muerto**, y el error lo recomendaba | #53 | ídem |
+| H17 | **Dos corridas al mismo `--out` se pisaban**, ambas con exit 0 | #54 | `test_escritura_atomica.py` |
+| H18 | El invariante 1:1 lanzaba `ValueError` → exit 10 | #55 | `test_invariante_matching.py` |
 
 ### Abierto — el backlog real de este documento
 
 | ID | Severidad | Qué falta | Por qué importa |
 |---|---|---|---|
 | **A1** | ALTA | ~~Volumen~~ **HECHO en #50**: límites probados en el borde y default medido | 200k filas = 13,3 s y 1.396 MB de RSS. El default es alcanzable, pero **la memoria es el recurso escaso**. |
-| **A2** | ALTA | Escritura de artefactos **no atómica**: `run.json`, `audit.jsonl`, `reporte.xlsx` con `write_text`/`wb.save` | Dos corridas sobre el mismo `--out` pueden truncar o pisar. Sonda inicial: no se observó corrupción, pero la sonda usó conten idénticos y `run.json` no incluía los montos, así que **no prueba nada**. |
+| **A2** | ALTA | ~~Escritura atómica~~ **HECHO en #54**: cerrojo `O_EXCL` + `os.replace` | Medido: dos corridas concurrentes salían **ambas con exit 0** y solo sobrevivía una. La reconciliación perdida no dejaba rastro. |
 | **A3** | MEDIA | OCR pierde la descripción de una celda que era fórmula, **en silencio** | Es pérdida de información: el operador ve una descripción vacía sin saber que el origen la tenía. Ya documentado; falta decidir con criterio de producto. |
 | **A4** | MEDIA | Idempotencia del audit log y determinismo de `run_id` entre corridas idénticas | `run_id` es un hash del input. Dos corridas idénticas deben dar el mismo `run_id` y artefactos byte-idénticos. No verificado. |
-| **A5** | MEDIA | El invariante 1:1 del matching lanza `ValueError`, **fuera de la taxonomía** | Si se violara, sería exit 10 "internal error" cuando el problema es del dato. Hoy es inalcanzable, pero un invariante que lanza la excepción equivocada confunde al operador. |
+| **A5** | MEDIA | ~~Invariante 1:1~~ **HECHO en #55**: ahora `ErrorIngestion` (exit 4) y extraído a función testeable | El invariante es inalcanzable desde los datos, así que inline no tenía test posible. |
 | **A6** | MEDIA | ~~XML sin red~~ **HECHO en #52**, **con un límite declarado**: ni `defusedxml` ni `xml.etree` resuelven entidades externas, así que la prueba de red nunca se dispara. Lo que se afirma es la **precondición** (el parser es el protegido). |
-| **A7** | BAJA | `docs/stress_test_2026-09-29.md` está desactualizado: lista H1–H5 como "abierto" | El documento que describe el estado del riesgo miente. En un repo YMYL, un informe de riesgo obsoleto es peor que ninguno. |
+| **A7** | BAJA | ~~Informe de riesgo~~ **HECHO en #55**: tabla H1–H18 con PR y test, más un test que falla si vuelve a mentir | Listaba H1–H5 como "abierto" días después de publicados. |
 | **A8** | PROC | El commit del gate bidireccional (H12) entró a `main` **sin revisión humana** | Único cambio de la serie sin PR. Verificado por tests que muerden, pero "tests verdes" ≠ "revisado". |
 | **A9** | PROC | ~~Release 0.2.21~~ **HECHO**: mergeado, `verify_published` en verde, H14 verificado en un venv limpio. |
 
@@ -169,8 +171,8 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 
 | Ítem | Cómo se prueba | Prueba de mordida (se revierte y debe fallar) |
 |---|---|---|
-| A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` | Bajar el límite y ver que el caso "justo encima" deja de fallar |
-| A2 | `tests/test_escritura_atomica.py`: matar el proceso a mitad de escritura y verificar que no hay artefacto parcial; dos corridas concurrentes con contenido distinto | Revertir `os.replace` a `write_text` y ver que aparece el artefacto truncado |
+| A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` (**HECHO en #50**) | `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae |
+| A2 | `tests/test_escritura_atomica.py` (11 tests): atomicidad, cerrojo, zombie, secuencial, concurrente | Cerrojo como no-op → cae la concurrencia; sin reclamation → cae el zombie; sin limpiar temporal → cae la atomicidad |
 | A3 | **PENDIENTE**: la documentación prometida no existe. `walkthrough.md` tiene 59 líneas y cero menciones de `data_only`. Un mensaje de commit no es documentación que un operador pueda encontrar | N/A |
 | A4 | `tests/test_idempotencia.py`: dos corridas → mismo `run_id`, mismas celdas | Introducir `datetime.now()` en el fingerprint y ver que el `run_id` cambia |
 | A5 | `tests/test_invariante_matching.py`: forzar la violación con monkeypatch y afirmar el exit/tipo | Cambiar `ErrorIngestion` por `ValueError` y ver que el test detecta la diferencia |

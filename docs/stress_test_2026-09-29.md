@@ -11,13 +11,32 @@ final.
 
 ## Resumen
 
-| id | severidad | hallazgo | estado |
-|----|-----------|----------|--------|
-| H1 | CRITICO | `1e5` se Concilia como `15` | abierto |
-| H2 | CRITICO | `0x10` se Concilia como `10` (hex) | abierto |
-| H3 | ALTO | centavos redondeados en silencio | abierto |
-| H4 | ALTO | >=29 digitos escapan como `InvalidOperation` | abierto |
-| H5 | CRITICO | el signo menos unicode se pierde: `−100` -> `100` | abierto |
+> **Estado a 2026-09-29**: los 14 hallazgos de esta campana y de las dos
+> siguientes estan **cerrados y publicados en 0.2.21**. Este documento se conserva
+> como registro de como se arrives a ellos; la tabla de estado de hoy esta en
+> `spec.md` §2, que es la fuente de verdad. Un informe de riesgo que lista como
+> "abierto" algo ya arreglado es peor que no tener informe.
+
+| id | severidad | hallazgo | estado | cerrado en |
+|----|-----------|----------|--------|-----------|
+| H1 | CRITICO | `1e5` se conciliaba como `15` | **cerrado** | #41 |
+| H2 | CRITICO | `0x10` se conciliaba como `10` (hex) | **cerrado** | #41 |
+| H3 | ALTO | centavos redondeados en silencio | **cerrado** | #42 |
+| H4 | ALTO | >=29 digitos escapan como `InvalidOperation` | **cerrado** | #43 |
+| H5 | CRITICO | el signo menos unicode se perdia: `−100` -> `100` | **cerrado** | #41 |
+| H6 | ALTO | `0,567` se leia como `567` (error de 1000x) | **cerrado** | #43 |
+| H7 | ALTO | una IP se leia como monto | **cerrado** | #43 |
+| H8 | CRITICO | `--100` y `+-100` cambiaban el signo | **cerrado** | #43 |
+| H9 | CRITICO | OCR: monto de una columna atribuido a la fecha de otra | **cerrado** | #44 |
+| H10 | ALTO | OCR: lectura parcial presentada como completa | **cerrado** | #44 |
+| H11 | ALTA | XLSX: el limite de tamano no miraba el lado descomprimido | **cerrado** | #45 |
+| H12 | ALTA | el gate de entorno decia OK en falso | **cerrado** | #46 |
+| H13 | ALTA | `data_only=True` sin test (propiedad de seguridad) | **cerrado** | #46 |
+| H14 | CRITICA | **1000 USD se conciliaba contra 1000 CLP** | **cerrado** | #48 |
+| H15 | CRITICA | `run` aceptaba un archivo sin transacciones con exit 0 | **cerrado** | #53 |
+| H16 | ALTA | `--max-xlsx-uncompressed-bytes` era un flag muerto | **cerrado** | #53 |
+| H17 | ALTA | dos corridas al mismo `--out` se pisaban sin aviso | **cerrado** | #54 |
+| H18 | MEDIA | el invariante 1:1 lanzaba `ValueError` -> exit 10 | **cerrado** | #55 |
 
 Los cinco estan en `parse_monto_clp` y tienen la misma raiz: la funcion acepta
 caracteres que no deberia y despues los descarta. En un sistema fail-closed,
@@ -183,20 +202,24 @@ El archivo entra, la corrida termina con exit 0, y el monto de la transaccion es
 parse_monto_clp("1.234.567,89")  # -> 1234568
 ```
 
-## Que NO se cubrio en esta campana
+## Que NO se cubrio en esta campana (y donde quedo cada cosa)
 
-Para que quede escrito y no se suponga:
+Para que quede escrito y no se suponga. La columna de la derecha es donde esta hoy.
 
-- **Carga concurrency.** No se probo que dos corridas simultaneas sobre el mismo
-  `--out` no se pisen. El `run_id` es un hash del input, lo que sugiere que dos
-  corridas identicas colisionarian a proposito; falta probarlo.
-- **Volumenes grandes.** 100k+ filas. Los limites existen y se probaron con
-  `--max-tabular-rows`, pero no se midio el tiempo ni la memoria.
-- **PDF/OCR reales.** La cobertura real de OCR solo la prueba el job `pdf_ocr` de CI
-  (tesseract instalado). En local no se puede.
-- **Unicode en descripciones.** Se vio que los numeros arabes y el ancho completo
-  se rechazan en montos; no se probo texto cirilico, emoji ni RTL en descripciones,
-  que es donde suele romperse la normalizacion y el ordenamiento.
-- **Modelos adversariales de matching.** No se construyo un caso donde el motor
-  deveria conciliar y no, o viceversa, salvo el ambiguo. La matriz de reglas tiene
-  tests de contrato pero no un fuzzing de la politica de matching.
+| hueco | donde quedo |
+|---|---|
+| **Carga/concurrency** | A2 cerrado en #54: cerrojo con `O_EXCL` + escritura atomica. Cubre dos corridas simultaneas; multi-proceso mas alla de eso sigue fuera de alcance |
+| **Volumenes grandes** | A1 cerrado en #50: limites probados en el borde y default medido (200k filas = 13,3 s / 1.396 MB). La memoria es el recurso escaso |
+| **PDF/OCR reales** | Cerrado en #44 con `tools/fuzzocr.py`: degradaciones de rotacion, contraste, desenfoque, dpi, tipografia y columnas. Corre en el job `pdf_ocr` de CI |
+| **Unicode en descripciones** | Parcial. Los montos rechazan digitos no ASCII (`tests/test_fuzz_ingesta.py`). Las descripciones conservan el texto: se fijo que un homoglifo **no** se convierta en su similar ASCII, y que zero-width y bidi sobrevivan como evidencia |
+| **Modelos adversariales de matching** | A2 de esta segunda campana: `tools/fuzzmatch.py`, 19 escenarios. Encontró H14 (moneda), el mas severo de toda la serie |
+
+## Lo que sigue abierto, y por que no se cerro
+
+Estan escritos con su trade-off en `spec.md` §5, porque resolverlos por cuenta
+propia seria inventar una regla de negocio:
+
+1. `run` sale con **exit 0** aunque haya hallazgos de severidad **critica**.
+2. El PDF **texto** se puede autoconciliar con `umbral_confianza_campos` bajo.
+3. El `run_id` no incluye los overrides `--max-*`.
+4. No existe verificacion aritmetica (`Σ banco = Σ esperados`).

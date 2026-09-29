@@ -2,17 +2,7 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
-## [0.2.16](https://github.com/cortega26/conciliador_bancario/compare/v0.2.15...v0.2.16) (2026-09-29)
-
-
-### Bug Fixes
-
-* **ci:** build in publish and smoke with the project's own toolchain ([31524a8](https://github.com/cortega26/conciliador_bancario/commit/31524a8e356b768b870adc22575b11659a67a8a7))
-* **ci:** build in publish and smoke with the project's own toolchain ([cd1b79f](https://github.com/cortega26/conciliador_bancario/commit/cd1b79fc209b12b151ea11e315e82d1e4c7bd234))
-
-## [Unreleased]
-
-## [0.2.15](https://github.com/cortega26/conciliador_bancario/compare/v0.2.14...v0.2.15) (2026-09-28)
+## [0.2.16](https://github.com/cortega26/conciliador_bancario/compare/v0.2.14...v0.2.16) (2026-09-29)
 
 ### Breaking changes
 
@@ -87,6 +77,14 @@ Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
   `hypothesis` -> 6.168.3, `twine` -> 7.0.0. Se mantienen `ruff` 0.4.10 y `mypy`
   1.10.0: ruff 0.16.9 exige una migracion de estilo en 65 archivos y mypy ya
   reporta 18 errores sin estar en CI.
+
+- **Publicacion a PyPI.** El pipeline de release construia y verificaba los
+  artefactos con un toolchain propio (`build==1.2.2`, `twine==5.1.1`) mientras CI
+  usaba el del proyecto, asi que no se publicaba exactamente lo que CI habia
+  validado. Con `hatchling` 1.32.4 (que emite `Metadata-Version: 2.5`) el chequeo
+  del release caia y la subida se caia con el. Ambos workflows ahora instalan
+  `.[dev]`, que es lo que ya hacia el job de test, y no queda ningun pin suelto
+  de `build`/`twine` en `.github/workflows/`.
 
 ### Performance
 

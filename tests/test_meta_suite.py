@@ -25,6 +25,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 RAIZ = Path(__file__).resolve().parents[1]
+PAQUETE = "bankrecon"
 PYPROJECT = RAIZ / "pyproject.toml"
 
 # Pasos de `ci.yml` que son gates. `Install` y `Setup` no lo son: preparan el
@@ -42,6 +43,18 @@ PASOS_GATE_CI = {
     "Build (sdist + wheel)",
     "Verify dist (twine check)",
 }
+
+
+def fuente_normalizada(nombre: str) -> str:
+    """El fuente de un modulo con los espacios colapsados.
+
+    Comparar texto de fuente con un match literal es fragil por construccion:
+    black reformatea y el test se rompe sin que cambie el comportamiento. Se
+    normaliza el espacio una vez y se busca sobre eso.
+    """
+    import re
+
+    return re.sub(r"\s+", " ", (RAIZ / nombre).read_text(encoding="utf-8"))
 
 
 # --- 1. preflight <-> CI no divergen ------------------------------------------
@@ -284,3 +297,84 @@ def test_el_entorno_reporta_su_veredicto_como_texto() -> None:
     assert p.returncode == 0, p.stderr
     for nombre in ("formato", "lint", "mypy", "tests", "supply-chain"):
         assert nombre in p.stdout, f"{nombre} no aparece en --list"
+
+
+# --- 5. la verificacion post-publicacion existe y esta conectada -------------
+
+
+def test_la_verificacion_de_publicacion_esta_en_el_workflow() -> None:
+    """Publicar tiene que incluir verificar lo publicado, no solo subirlo.
+
+    El job de publish termina en verde cuando PyPI acepta los archivos, que no es
+    lo mismo que "esta disponible": el indice simple tarda unos minutos. En dos
+    releases de este repo, la conclusion correcta salio de mirar el sha256 a
+    mano; con este job deja de depender del operador.
+
+    Si alguien saca el job, la publicacion sigue "en verde" y nadie se entera de
+    que el paquete no se puede instalar. Por eso el test.
+    """
+    import yaml
+
+    wf = yaml.safe_load((RAIZ / ".github/workflows/publish.yml").read_text(encoding="utf-8"))
+    jobs = wf["jobs"]
+    assert "verify_published" in jobs, "el job de verificacion post-publicacion desaparecio"
+
+    v = jobs["verify_published"]
+    assert (
+        v["needs"] == "build_and_publish"
+    ), "verificar despues de publicar: si corre en paralelo, verifica un paquete viejo"
+    pasos = [s.get("name") or "" for s in v["steps"]]
+    assert any(
+        "Verify the published package" in n for n in pasos
+    ), "el job de verificacion no ejecuta el script"
+    # Y el script tiene que ser el del repo, no una linea suelta.
+    runs = " ".join(s.get("run", "") for s in v["steps"])
+    assert "tools/verify_published.py" in runs, "el job no llama a tools/verify_published.py"
+
+
+def test_el_script_de_verificacion_declara_los_codigos_de_salida_que_importan() -> None:
+    """Los dos codigos que hacen o rompen la garantia estan nombrados.
+
+    `EXIT_INGESTION = 4` es el que distingue "el archivo del cliente esta malo"
+    de "la herramienta se rompio" (10). Si alguien cambia ese numero, la
+    verificacion dejaria de comprobar lo que dice comprobar.
+    """
+    sys.path.insert(0, str(RAIZ / "tools"))
+    from verify_published import EXIT_INGESTION, EXIT_OK
+
+    assert EXIT_INGESTION == 4, "el error de ingesta es exit 4; un 10 seria internal error"
+    assert EXIT_OK == 0
+
+
+def test_el_verificador_instala_el_archivo_y_no_resuelve_por_indice() -> None:
+    """Se instala el wheel descargado, no `bankrecon==X`.
+
+    Resolver por indice seria verificar el indice, que es justamente lo que el
+    script esta midiendo: si el indice falla, `pip install` falla y no se puede
+    distinguir de "el paquete esta roto".
+    """
+    fuente = fuente_normalizada("tools/verify_published.py")
+    assert (
+        '"pip", "install", "-q", "--no-cache-dir", str(wheel)' in fuente
+    ), "el verificador debe instalar el archivo descargado, no la especificacion"
+
+    # La parte que de verdad importa es la **firma**: si alguien cambia el
+    # parametro de una ruta por un string de version, el verificador pasa a
+    # resolver por indice, que es justamente lo que esta midiendo.
+    #
+    # No se comprueba la ausencia de un string porque el docstring menciona
+    # `pip install bankrecon==X` para explicar por que NO se hace, y una
+    # busqueda negativa daria un falso positivo sobre la propia documentacion.
+    import inspect
+
+    sys.path.insert(0, str(RAIZ / "tools"))
+    from verify_published import crear_venv
+
+    parametros = list(inspect.signature(crear_venv).parameters)
+    assert parametros == [
+        "destino",
+        "wheel",
+    ], f"crear_venv deberia recibir la ruta del wheel, no una version: {parametros}"
+    assert (
+        inspect.getsource(crear_venv).count("str(wheel)") == 1
+    ), "crear_venv deberia pasar la ruta del wheel a pip, no un spec de version"

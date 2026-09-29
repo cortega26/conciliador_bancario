@@ -2,6 +2,29 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.2.18](https://github.com/cortega26/conciliador_bancario/compare/v0.2.17...v0.2.18) (2026-09-29)
+
+
+### Build and toolchain
+
+* **ingesta:** frontera que clasifica la excepcion en vez de tragarsela ([cb86905](https://github.com/cortega26/conciliador_bancario/commit/cb86905fec6862dec6a8f8f544c76865c85ed7c5))
+* **release:** guard que falla si un merge commit duplica el changelog ([c7dbc9c](https://github.com/cortega26/conciliador_bancario/commit/c7dbc9ccd770b297ba02e63864fe7ca3f882bbbe))
+
+
+### Tests
+
+* **ingesta:** contrato de frontera con discovery automatico ([dec13a1](https://github.com/cortega26/conciliador_bancario/commit/dec13a1345014bc94e4588f138ff6b3fa12f7c67))
+
+
+### Documentation
+
+* **changelog:** reescribir las notas de 0.2.17 para un usuario ([81844b7](https://github.com/cortega26/conciliador_bancario/commit/81844b76a2546cf2f6a1734ea1bce9f46250ba44))
+
+
+### Miscellaneous chores
+
+* **release:** los commits de CI no son bug fixes ([a251869](https://github.com/cortega26/conciliador_bancario/commit/a25186969ed86ce77681c40dc6ba4898c2c22022))
+
 ## [0.2.17](https://github.com/cortega26/conciliador_bancario/compare/v0.2.16...v0.2.17) (2026-09-29)
 
 ### Impacto para el usuario

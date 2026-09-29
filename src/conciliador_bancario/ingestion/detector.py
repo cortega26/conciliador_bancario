@@ -8,6 +8,7 @@ from conciliador_bancario.ingestion.csv_adapter import (
     cargar_movimientos_esperados_csv,
     cargar_transacciones_csv,
 )
+from conciliador_bancario.ingestion.guard import protegido
 from conciliador_bancario.ingestion.pdf_ocr_adapter import cargar_transacciones_pdf_ocr
 from conciliador_bancario.ingestion.pdf_text_adapter import cargar_transacciones_pdf_texto
 from conciliador_bancario.ingestion.xlsx_adapter import (
@@ -29,6 +30,7 @@ def _format_supported_suffixes(suffixes: tuple[str, ...]) -> str:
     return ", ".join(sorted(suffixes))
 
 
+@protegido(lambda: "Ingesta banco")
 def cargar_transacciones_bancarias(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[TransaccionBancaria]:
@@ -55,6 +57,7 @@ def cargar_transacciones_bancarias(
     )
 
 
+@protegido(lambda: "Ingesta movimientos esperados")
 def cargar_movimientos_esperados(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[MovimientoEsperado]:

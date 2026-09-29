@@ -16,6 +16,12 @@ dependencias va **antes** de abrir el PDF, asi que en un entorno sin `pytesserac
 instalado el adaptador aborta antes de llegar aqui y el defecto queda invisible.
 Solo se manifiesta donde OCR esta instalado, que es justamente donde lo usa la
 gente.
+
+Este modulo y `guard.protegido` se complementan, no se duplican: aqui se
+dan los mensajes especificos de los dos fallos mas comunes (PDF vacio o
+corrupto), que son mas tiles que el generico. La frontera de `detector.py`
+es la red de seguridad para cualquier otra excepcion de terceros que
+aparezca mas adentro en el adaptador, donde este mensaje no aplica.
 """
 
 from __future__ import annotations

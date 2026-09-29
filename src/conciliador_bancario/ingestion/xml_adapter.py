@@ -42,7 +42,7 @@ def _id_tx(path: Path, idx: int, data_norm: dict[str, Any]) -> str:
     return "TX-" + sha256_json_estable({"file": path.name, "idx": idx, "data": data_norm})[:12]
 
 
-def _txt(node: ET.Element, tag: str) -> str:
+def _txt(node: Any, tag: str) -> str:
     el = node.find(tag)
     return normalizar_texto(el.text if el is not None and el.text else "")
 

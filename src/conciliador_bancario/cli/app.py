@@ -10,6 +10,7 @@ from rich.console import Console
 
 from conciliador_bancario.cli.errors import emit_failure_audit_best_effort, render_and_exit
 from conciliador_bancario.errors import (
+    ErrorConciliador,
     ErrorConfiguracion,
     ErrorContrato,
     ErrorEntradaUsuario,
@@ -85,6 +86,9 @@ def cmd_validate(
     error_type = str(res.get("error_type") or "ingestion")
     errores = [str(x) for x in list(res.get("errores") or []) if str(x).strip()]
     message = " | ".join(errores) if errores else "Validacion fallida."
+    # La anotacion evita que el tipo se estreche a la primera rama: las cuatro
+    # son tipos distintos de la misma taxonomia y el comun es ErrorConciliador.
+    exc: ErrorConciliador
     if error_type == "config":
         exc = ErrorConfiguracion(message)
     elif error_type == "contract":

@@ -295,3 +295,69 @@ def test_todos_los_formatos_reportan_datos_invalidos_como_ingestion(
     assert r.exit_code == 4, r.stdout
     assert "Error (ingestion)" in r.stdout
     assert "CLPPE" in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# Contrato de la taxonomia de errores
+#
+# Toda excepcion que el CLI clasifica debe aceptar el mismo contrato
+# `details`/`hint` que `ErrorConciliador`. `ErrorIngestion` era un `ValueError`
+# pelado y no lo aceptaba, con lo que un `raise` con contexto reventaba con
+# `TypeError` en vez de reportar el error: y como `TypeError` no esta en la
+# taxonomia, salia como exit 10 "interno". Para un error fail-closed, asi es
+# peor que no fallar.
+# ---------------------------------------------------------------------------
+
+_TAXONOMIA = [
+    "ErrorEntradaUsuario",
+    "ErrorConfiguracion",
+    "ErrorIngestion",
+    "ErrorContrato",
+    "ErrorOperacionIO",
+]
+
+
+@pytest.mark.parametrize("nombre", _TAXONOMIA)
+def test_toda_excepcion_de_la_taxonomia_acepta_details_y_hint(nombre: str) -> None:
+    """Ninguna clase clasificada por el CLI puede rechazar el contrato comun."""
+    import conciliador_bancario.errors as errores_mod
+    from conciliador_bancario.ingestion import base as ingestion_base
+
+    modulo = ingestion_base if nombre == "ErrorIngestion" else errores_mod
+    clase = getattr(modulo, nombre)
+
+    exc = clase("mensaje", details={"campo": "valor"}, hint="como resolver")
+    assert exc.details == {"campo": "valor"}, nombre
+    assert exc.hint == "como resolver", nombre
+    # El mensaje posicional debe seguir funcionando: es como la levantan los adaptadores.
+    assert str(clase("solo mensaje")) == "solo mensaje", nombre
+
+
+@pytest.mark.parametrize("nombre", _TAXONOMIA)
+def test_toda_excepcion_de_la_taxonomia_es_error_conciliador(nombre: str) -> None:
+    """La clasificacion del CLI depende de que todas compartan la misma base."""
+    from conciliador_bancario.errors import ErrorConciliador
+    from conciliador_bancario.ingestion.base import ErrorIngestion
+
+    if nombre == "ErrorIngestion":
+        assert issubclass(ErrorIngestion, ErrorConciliador)
+    else:
+        import conciliador_bancario.errors as errores_mod
+
+        assert issubclass(getattr(errores_mod, nombre), ErrorConciliador)
+
+
+def test_error_ingestion_con_contexto_sigue_siendo_exit_4() -> None:
+    """Un ErrorIngestion con details/hint debe seguir clasificandose como ingesta."""
+    import conciliador_bancario.errors as errores_mod
+    from conciliador_bancario.cli.errors import classify_cli_error
+    from conciliador_bancario.ingestion.base import ErrorIngestion
+
+    rendered = classify_cli_error(
+        ErrorIngestion("Fila 2: algo", details={"fila": 2}, hint="corrija la fila 2")
+    )
+    assert rendered.exit_code == 4
+    assert rendered.category == "ingestion"
+    assert rendered.details == {"fila": 2}
+    assert rendered.hint == "corrija la fila 2"
+    assert issubclass(ErrorIngestion, errores_mod.ErrorConciliador)

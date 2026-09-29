@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
@@ -72,7 +72,7 @@ def _build_header_map(header: tuple[Any, ...] | None) -> dict[str, int]:
 
 
 def _select_worksheet_with_columns(
-    wb, required: list[list[str]]
+    wb: Workbook, required: list[list[str]]
 ) -> tuple[Any, dict[str, int], tuple[Any, ...]]:
     """
     required: lista de grupos; cada grupo contiene alias aceptados.

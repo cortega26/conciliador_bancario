@@ -9,11 +9,24 @@ from typing import TypeVar
 from pydantic import ValidationError
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
+from conciliador_bancario.errors import ErrorConciliador
 from conciliador_bancario.models import ConfiguracionCliente
 
 
-class ErrorIngestion(ValueError):
-    pass
+class ErrorIngestion(ErrorConciliador):
+    """
+    Error de ingesta: dato del cliente que no se puede usar.
+
+    Hereda de `ErrorConciliador` y no de `ValueError` para compartir el contrato
+    `details`/`hint` del resto de la taxonomia. Antes era un `ValueError` pelado:
+    un `raise ErrorIngestion(msg, details=..., hint=...)` reventaba con
+    `TypeError: takes no keyword arguments` en vez de reportar el error, y como
+    `TypeError` no esta en la taxonomia del CLI salia como exit 10 "interno".
+    Para un error fail-closed, fallar cerrado asi es peor que no fallar.
+
+    Nada captura `ErrorIngestion` como `ValueError`, asi que el cambio de base no
+    altera ninguna ruta existente.
+    """
 
 
 @dataclass(frozen=True)

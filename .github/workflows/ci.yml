@@ -34,6 +34,12 @@ jobs:
       - name: Lint (ruff)
         run: python -m ruff check src tests tools
 
+      # mypy estaba declarado pero fuera de CI. Esa decision es la que dejo pasar
+      # un bug real: ErrorIngestion no aceptaba details=/hint= y el raise reventaba
+      # con TypeError en vez de reportar el error. Configurado en pyproject.toml.
+      - name: Types (mypy)
+        run: python -m mypy src
+
       - name: Security (bandit)
         run: python -m bandit -c .bandit.yml -r src
 

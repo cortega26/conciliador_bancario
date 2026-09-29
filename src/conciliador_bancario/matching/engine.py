@@ -172,7 +172,7 @@ def conciliar(
         # La ventana forma parte de la seleccion de candidatos, no un filtro
         # posterior: asi una referencia reutilizada en otro periodo no genera
         # una ambiguedad falsa ni un match fuera de periodo.
-        cands = [
+        cands: list[MovimientoEsperado] = [
             e
             for e in idx_exp_ref.get(r, [])
             if e.id not in used_exp
@@ -315,7 +315,7 @@ def conciliar(
             continue
         tx_fecha = _valor_fecha_tx(tx)
         tx_monto = _valor_monto_tx(tx)
-        cands: list[MovimientoEsperado] = [
+        cands = [
             e
             for e in idx_exp_monto.get(tx_monto, [])
             if e.id not in used_exp

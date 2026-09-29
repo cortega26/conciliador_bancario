@@ -125,8 +125,29 @@ def parse_monto_clp(texto: str) -> Decimal:
         d = Decimal(t)
     except InvalidOperation as e:
         raise ErrorParseo(f"Monto invalido: {texto!r}") from e
-    # CLP: sin decimales
-    d = d.quantize(Decimal("1"))
+
+    # CLP no tiene centavos. Toda operacion bancaria ocurre en pesos enteros, asi
+    # que un monto con parte decimal no es un monto de CLP: es otro dato, y
+    # redondearlo cambia el valor en silencio.
+    #
+    # La regla es "rechazar si el redondeo **cambia** el valor", no "rechazar
+    # cualquier decimal": `1.234.567,00` vale exactamente 1.234.567 CLP y se
+    # acepta, mientras que `1.234.567,89` pasaria a 1.234.568 perdiendo 89 pesos.
+    # Rechazar tambien los ceros seria un falso positivo que empuja a clientes con
+    # exportes validos aLpiar sus archivos.
+    #
+    # Esto cierra tambien un agujero de 1000x: `0,567` se resolvia como 567 (un
+    # separador unico de 3 digitos parece grupo de miles), o sea 0,567 CLP leido
+    # como 567 pesos. Y contradecía la decision de 0.2.16, que ya rechazaba
+    # `0,50` por ambiguo: la regla corría solo contra centavos chicos.
+    entero = d.to_integral_value()
+    if entero != d:
+        raise ErrorParseo(
+            f"Monto con parte decimal en CLP, que no tiene centavos: {texto!r} "
+            f"({d}). No se redondea porque cambiaria el valor en silencio; "
+            "revisar el archivo de origen."
+        )
+    d = entero
     # copy_negate sobre cero produciria -0, que no debe aparecer en el reporte.
     if negativo and d != 0:
         d = -d

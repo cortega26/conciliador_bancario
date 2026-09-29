@@ -36,6 +36,40 @@ def test_monto_con_un_solo_separador_ambiguo_falla_cerrado() -> None:
 
 
 @pytest.mark.parametrize(
+    "raw",
+    [
+        "1.234.567,89",  # LATAM con centavos: redondearia a 1.234.568
+        "1.234,56",  # redondearia a 1.235
+        "(1.234,56)",  # negativo de contabilidad con centavos
+        "0,89",
+    ],
+)
+def test_monto_con_centimos_falla_cerrado(raw: str) -> None:
+    """CLP no tiene centavos: un monto con parte decimal se rechaza, no se redondea.
+
+    La regla es "rechazar si el redondeo cambia el valor", no "rechazar todo
+    decimal": `1.234,00` vale exactamente 1.234 CLP y se acepta.
+
+    Antes estos casos se redondeaban en silencio con exit 0, y `1.234.567,89`
+    llegaba al reporte como 1.234.568 con 89 pesos de diferencia. El changelog de
+    0.2.16 ya había señalado `(1.234,56)` -> `+1235` como un bug (un crédito
+    contabilizado como débito) sin cerrar el caso LATAM.
+    """
+    with pytest.raises(ErrorParseo):
+        parse_monto_clp(raw)
+
+
+@pytest.mark.parametrize("raw", ["1.234,00", "-1.234,00", "1.234.567,00"])
+def test_monto_con_ceros_decimales_se_acepta(raw: str) -> None:
+    """`1.234,00` vale exactamente 1.234 CLP: no hay nada que redondear.
+
+    Rechazar tambien los ceros seria un falso positivo que empujaria a clientes
+    con exportes validos a limpiar archivos que ya estan bien.
+    """
+    assert parse_monto_clp(raw) == parse_monto_clp(raw.replace(",00", ""))
+
+
+@pytest.mark.parametrize(
     "raw,exp",
     [
         # Sin separador.
@@ -59,7 +93,6 @@ def test_monto_con_un_solo_separador_ambiguo_falla_cerrado() -> None:
         ("(1.234)", Decimal("-1234")),
         ("(-1.234)", Decimal("-1234")),
         ("(1234)", Decimal("-1234")),
-        ("(1.234,56)", Decimal("-1235")),
         # El cero no debe reportarse como -0.
         ("(0)", Decimal("0")),
     ],

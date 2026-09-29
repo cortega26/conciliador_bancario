@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -39,6 +40,68 @@ def _campo(valor: Any, *, notas: str | None = None, degrade: float = 0.0) -> Cam
 
 def _id_tx(path: Path, idx: int, data_norm: dict[str, Any]) -> str:
     return "TX-" + sha256_json_estable({"file": path.name, "idx": idx, "data": data_norm})[:12]
+
+
+def _parece_monto(texto: str) -> bool:
+    """Si el token **parece** un monto, aunque no se pueda parsear.
+
+    ## Por que existe
+
+    El bucle de abajo busca el ultimo token que se pueda parsear. Con el
+    parser endurecido (que rechaza centavos, notacion cientrica y hex), un
+    token como `1.234,56` pasa a ser irreconocible, y el bucle seguia hacia
+    atras y devolveria **otro** token: `05/01/2026 Pago 1.234,56` terminaria
+    leyendo 2026 como monto.
+
+    Eso es peor que no encontrar monto: es encontrar el numero equivocado con
+    exit 0. Un token que tiene forma de monto pero no se puede leer hace que
+    la linea se descarte, en vez de que se lea mal.
+
+    ## Por que no basta "solo digitos y separadores"
+
+    Un intento de monto puede traer letras: `1e5` (notacion cientrica) y
+    `0x10` (hexadecimalo) los rechaza el parser, pero `_parece_monto` los
+    declaraba "no son un monto" y el bucle hacia backtracking igual. Lo
+    Verificado revirtiendo la guarda: el test parametrico falla para
+    esos dos casos.
+
+    La forma se decide por la estructura: tiene que haber **al menos un
+    digito**, y todo lo demas tiene que ser digito, separador de miles, signo
+    o moneda. `Pago` no entra porque no tiene digitos; `1e5` entra porque
+    tiene un digito y una letra, que es justamente la forma sospechosa.
+    """
+    limpio = re.sub(r"[^\S]|USD|EUR|CLP|COP|UF|\$|€|£", "", texto)
+    if not any(c.isdigit() for c in limpio):
+        return False
+    return all(c in "0123456789.,()-+eExX" for c in limpio)
+
+
+def _monto_de_linea(tokens: list[str]) -> Decimal | None:
+    """El monto de una linea de OCR, o None si no hay uno legible.
+
+    Se busca desde el final, que es donde el OCR suele dejar el monto.
+
+    ## La guarda
+
+    Si el ultimo token tiene forma de monto pero no se puede parsear, la linea se
+    descarta. Sin esa guarda, el bucle seguia hacia atras y devolvia **otro**
+    token: `05/01/2026 Pago 1.234,56` terminaba leyendo 2026 como monto.
+
+    Devolver el numero equivocado es peor que no devolver nada: es un monto
+    inventado con exit 0, en un camino donde la politica es que OCR nunca
+    autoconcilia pero si exige no inventar.
+
+    Vive a nivel de modulo y no anidada para que sea testeable: una copia en el
+    test puede quedar vieja sin que nada lo note.
+    """
+    for tok in reversed(tokens):
+        try:
+            return parse_monto_clp(tok)
+        except ErrorParseo:
+            pass
+        if _parece_monto(tok):
+            return None
+    return None
 
 
 def cargar_transacciones_pdf_ocr(
@@ -107,12 +170,6 @@ def cargar_transacciones_pdf_ocr(
         except ErrorParseo:
             return None
 
-    def _try_parse_monto(texto: str) -> Decimal | None:
-        try:
-            return parse_monto_clp(texto)
-        except ErrorParseo:
-            return None
-
     for raw_line in full.splitlines():
         line = normalizar_texto(raw_line)
         if not line:
@@ -124,11 +181,7 @@ def cargar_transacciones_pdf_ocr(
         fecha = _try_parse_fecha(fecha_txt)
         if fecha is None:
             continue
-        monto = None
-        for tok in reversed(parts):
-            monto = _try_parse_monto(tok)
-            if monto is not None:
-                break
+        monto = _monto_de_linea(parts)
         if monto is None:
             continue
         desc = normalizar_texto(line.replace(fecha_txt, "", 1))

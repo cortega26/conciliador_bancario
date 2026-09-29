@@ -123,7 +123,9 @@ def cargar_transacciones_xml(
         except ErrorParseo as e:
             raise ErrorIngestion(f"Movimiento XML {idx}: parseo invalido: {e}") from e
 
-        moneda = (_txt(m, "moneda") or cfg.moneda_default).upper()
+        moneda_crudo = _txt(m, "moneda")
+        moneda_asumida = not moneda_crudo
+        moneda = (moneda_crudo or cfg.moneda_default).upper()
         desc = _txt(m, "descripcion")
         ref_raw = _txt(m, "referencia")
         ref = normalizar_referencia(ref_raw) if ref_raw else ""
@@ -149,6 +151,7 @@ def cargar_transacciones_xml(
                     fecha_contable=_campo(fecha_ct) if fecha_ct else None,
                     monto=_campo(monto),
                     moneda=moneda,
+                    moneda_asumida=moneda_asumida,
                     descripcion=_campo(desc),
                     referencia=_campo(ref) if ref else None,
                     archivo_origen=path.name,

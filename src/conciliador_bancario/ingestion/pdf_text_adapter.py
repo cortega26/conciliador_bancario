@@ -153,6 +153,7 @@ def cargar_transacciones_pdf_texto(
                     fecha_contable=None,
                     monto=_campo(monto),
                     moneda=cfg.moneda_default,
+                    moneda_asumida=True,
                     descripcion=_campo(desc, degrade=0.10 if not desc else 0.0),
                     referencia=_campo(normalizar_referencia(ref), degrade=0.20) if ref else None,
                     archivo_origen=path.name,

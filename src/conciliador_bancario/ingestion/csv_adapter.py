@@ -174,7 +174,9 @@ def cargar_transacciones_csv(
                 monto: Decimal = parse_monto_clp(row[c_monto] or "")
             except ErrorParseo as e:
                 raise ErrorIngestion(f"Fila {i}: monto invalido: {e}") from e
-            moneda = (normalizar_texto(row.get(c_moneda, "") or "") or cfg.moneda_default).upper()
+            moneda_crudo = normalizar_texto(row.get(c_moneda, "") or "")
+            moneda_asumida = not moneda_crudo
+            moneda = (moneda_crudo or cfg.moneda_default).upper()
             desc = normalizar_texto(row[c_desc] or "")
             ref_raw = normalizar_texto(row.get(c_ref, "") or "")
             ref = normalizar_referencia(ref_raw) if ref_raw else ""
@@ -207,6 +209,7 @@ def cargar_transacciones_csv(
                         ),
                         monto=_campo(monto, origen=origen),
                         moneda=moneda,
+                        moneda_asumida=moneda_asumida,
                         descripcion=_campo(desc, origen=origen),
                         referencia=_campo(ref, origen=origen) if ref else None,
                         archivo_origen=path.name,
@@ -306,7 +309,9 @@ def cargar_movimientos_esperados_csv(
                 monto = parse_monto_clp(row[c_monto] or "")
             except ErrorParseo as e:
                 raise ErrorIngestion(f"Fila {i}: monto invalido: {e}") from e
-            moneda = (normalizar_texto(row.get(c_moneda, "") or "") or cfg.moneda_default).upper()
+            moneda_crudo = normalizar_texto(row.get(c_moneda, "") or "")
+            moneda_asumida = not moneda_crudo
+            moneda = (moneda_crudo or cfg.moneda_default).upper()
             desc = normalizar_texto(row[c_desc] or "")
             ref_raw = normalizar_texto(row.get(c_ref, "") or "")
             ref = normalizar_referencia(ref_raw) if ref_raw else ""
@@ -331,6 +336,7 @@ def cargar_movimientos_esperados_csv(
                         fecha=_campo(fecha, origen=origen),
                         monto=_campo(monto, origen=origen),
                         moneda=moneda,
+                        moneda_asumida=moneda_asumida,
                         descripcion=_campo(desc, origen=origen),
                         referencia=_campo(ref, origen=origen) if ref else None,
                         tercero=_campo(tercero, origen=origen, degrade=0.20) if tercero else None,

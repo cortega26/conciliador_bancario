@@ -630,6 +630,76 @@ def conciliar(
 
     verificar_invariante_1a1(matches)
 
+    # --- La moneda que se asumió y terminó conciliando ------------------------
+    #
+    # H14 obliga a que banco y esperado compartan moneda, pero esa comparacion
+    # solo vale si las dos etiquetas son **reales**. Un extracto en USD sin columna
+    # de moneda y un libro en CLP salen ambos marcados con `moneda_default`, se
+    # concilian y salen con exit 0 sin ninguna señal: la proteccion de H14 queda
+    # vacia por la puerta de atras.
+    #
+    # ## Por que solo los matches conciliados
+    #
+    # Un PDF texto o un OCR nunca traen columna de moneda, asi que ahi el
+    # supuesto es estructural y no una anomalia. Avisar en cada corrida PDF
+    # entrenaria al operador a ignorar el aviso, que es peor que no avisar. Lo que
+    # si es una anomalia es que **el supuesto haya producido una conciliacion**:
+    # ahi el dinero quedo declarado conciliado sobre una etiqueta que nadie
+    # escribio, y eso si merece una linea en el reporte. Es el mismo criterio del
+    # aviso de umbral: se avisa del riesgo real, no de la mera existencia del
+    # supuesto.
+    tx_por_id = {t.id: t for t in transacciones}
+    exp_por_id = {e.id: e for e in esperados}
+    for m in matches:
+        if m.estado is not EstadoMatch.conciliado:
+            continue
+        asumidas = [
+            tx_por_id[i]
+            for i in m.transacciones_bancarias
+            if i in tx_por_id and tx_por_id[i].moneda_asumida
+        ] + [
+            exp_por_id[i]
+            for i in m.movimientos_esperados
+            if i in exp_por_id and exp_por_id[i].moneda_asumida
+        ]
+        if not asumidas:
+            continue
+        monedas = sorted({a.moneda for a in asumidas})
+        hid = _hallazgo_id(
+            run_id,
+            "moneda_asumida_en_match",
+            "match",
+            m.id,
+            {"monedas": monedas},
+        )
+        h = Hallazgo(
+            id=hid,
+            severidad=SeveridadHallazgo.advertencia,
+            tipo="moneda_asumida_en_match",
+            mensaje=(
+                f"El match {m.id} se concilio con la moneda asumida "
+                f"({', '.join(monedas)}): el archivo no informa la divisa y se uso "
+                f"moneda_default. Si la divisa real es otra, esta conciliacion no "
+                f"deberia existir. Verifique que moneda_default sea el valor "
+                f"correcto para este archivo."
+            ),
+            entidad="match",
+            entidad_id=m.id,
+            detalles={
+                "match_id": m.id,
+                "monedas_asumidas": monedas,
+                "regla": m.regla,
+            },
+        )
+        hallazgos.append(h)
+        audit.write(
+            AuditEvent(
+                "hallazgo",
+                "Match conciliado con la moneda asumida por defecto",
+                {"hallazgo_id": hid, "match_id": m.id, "monedas": monedas},
+            )
+        )
+
     # --- La diferencia que todo contador mira primero ------------------------
     #
     # En una conciliacion bancaria, lo primero que se hace es restar el total del
@@ -652,19 +722,53 @@ def conciliar(
     # un numero que solo existe en la vista final no se puede auditar: el
     # `audit.jsonl` lo registra, asi que queda trazabilidad de por que se
     # reporto esa cifra.
-    total_banco = sum((_valor_monto_tx(t) for t in transacciones), Decimal(0))
-    total_esperado = sum((_valor_monto_exp(e) for e in esperados), Decimal(0))
-    diferencia = total_banco - total_esperado
-    if diferencia != 0:
-        total_conciliado = sum(
-            (
-                _valor_monto_tx(t)
-                for m in matches
-                for t in transacciones
-                if t.id in set(m.transacciones_bancarias)
-            ),
-            Decimal(0),
+    # ## Por que se agrupa por moneda
+    #
+    # Sumar 1000 USD y 1000 CLP da 2000, que es un numero sin significado: son
+    # dos monedas distintas y la suma no es una cantidad. El motor ya comparaba
+    # divisas al decidir cada match (H14), pero esta aritmetica se escribio
+    # despues y sumo a pelo, dejando que la proteccion de H14 quedara vacia:
+    # un extracto en USD contra un libro en CLP se podia reportar como conciliado.
+    # Es H14 por otra puerta.
+    # -----------------------------------------------------------------------
+    # Ademas, `total_conciliado` solo cuenta matches **conciliados**. Antes
+    # contaba cualquier transaccion que apareciera en un match, y un match
+    # bloqueado (`bloqueado_por_confianza`) o solo sugerido no es dinero
+    # conciliado. Decir "Conciliado: 150000" al lado de un match en estado
+    # `pendiente` es un numero que contradice al resto del reporte.
+    bancos_por_moneda: dict[str, Decimal] = {}
+    for t in transacciones:
+        bancos_por_moneda[t.moneda] = bancos_por_moneda.get(t.moneda, Decimal(0)) + _valor_monto_tx(
+            t
         )
+    esperados_por_moneda: dict[str, Decimal] = {}
+    for e in esperados:
+        esperados_por_moneda[e.moneda] = esperados_por_moneda.get(
+            e.moneda, Decimal(0)
+        ) + _valor_monto_exp(e)
+
+    conciliado_por_moneda: dict[str, Decimal] = {}
+    for m in matches:
+        if m.estado is not EstadoMatch.conciliado:
+            continue
+        for t in transacciones:
+            if t.id in set(m.transacciones_bancarias):
+                conciliado_por_moneda[t.moneda] = conciliado_por_moneda.get(
+                    t.moneda, Decimal(0)
+                ) + _valor_monto_tx(t)
+
+    # La union de las dos fuentes, no solo la del banco: si el libro tiene
+    # movimientos que el banco no registra, esa moneda tiene que aparecer igual
+    # con total_banco 0. Iterar solo sobre `bancos_por_moneda` hacia que un
+    # archivo de banco vacio no reportara nada, que es justo el caso en que el
+    # operador mas necesita el numero.
+    for moneda in sorted(set(bancos_por_moneda) | set(esperados_por_moneda)):
+        total_banco = bancos_por_moneda.get(moneda, Decimal(0))
+        total_esperado = esperados_por_moneda.get(moneda, Decimal(0))
+        diferencia = total_banco - total_esperado
+        if diferencia == 0:
+            continue
+        total_conciliado = conciliado_por_moneda.get(moneda, Decimal(0))
         hid = _hallazgo_id(
             run_id,
             "diferencia_de_sumas",
@@ -677,15 +781,16 @@ def conciliar(
             severidad=SeveridadHallazgo.advertencia,
             tipo="diferencia_de_sumas",
             mensaje=(
-                f"El total del banco ({total_banco}) no coincide con el total de los "
-                f"movimientos esperados ({total_esperado}). Diferencia: {diferencia}. "
-                f"Conciliado: {total_conciliado}. La diferencia puede ser legitima "
-                f"(comisiones, movimientos aun no reflejados) o puede ser un archivo "
-                f"incompleto: revise los pendientes."
+                f"El total del banco en {moneda} ({total_banco}) no coincide con el "
+                f"total de los movimientos esperados ({total_esperado}). Diferencia: "
+                f"{diferencia}. Conciliado: {total_conciliado}. La diferencia puede ser "
+                f"legitima (comisiones, movimientos aun no reflejados) o puede ser un "
+                f"archivo incompleto: revise los pendientes."
             ),
             entidad="sistema",
             entidad_id=None,
             detalles={
+                "moneda": moneda,
                 "total_banco": str(total_banco),
                 "total_esperado": str(total_esperado),
                 "diferencia": str(diferencia),
@@ -701,6 +806,7 @@ def conciliar(
                 "Diferencia entre el total del banco y el de los esperados",
                 {
                     "hallazgo_id": hid,
+                    "moneda": moneda,
                     "total_banco": str(total_banco),
                     "total_esperado": str(total_esperado),
                     "diferencia": str(diferencia),

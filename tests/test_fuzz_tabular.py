@@ -377,3 +377,36 @@ def test_una_formula_en_la_columna_del_monto_se_rechaza(tmp_path: Path) -> None:
     ruta = _escribir(tmp_path, "monto.xlsx", caso.data)
     with pytest.raises(ErrorIngestion):
         cargar_transacciones_xlsx(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
+
+
+def test_los_casos_de_formula_no_pueden_desaparecer() -> None:
+    """Un `@parametrize` con cero casos seleccionados esta **verde y no prueba nada**.
+
+    ## Que paso
+
+    Los dos parametros de estas pruebas filtran por `capa`, que es un campo del
+    generador. Una edicion que no aplico dejo el campo con su valor por defecto
+    y los dos filtros sin coincidir: **cero casos** en cada uno, suite en verde,
+    y las dos capas de proteccion sin cubrir.
+
+    Es la peor forma de estar verde, y no la detecta nadie salvo que uno mire
+    cuantos tests se recolectaron. Por eso el filtro tiene que afirmarlo.
+
+    ## Por que el valor minimo es 4 y no 1
+
+    Con un solo caso, un typo en el filtro lo deja en uno y sigue pareciendo que
+    funciona. Cuatro es el piso que hace visible un filtro mal escrito, y el
+    numero viene de los payloads que openpyxl guarda como formula de verdad.
+    """
+    por_capa: dict[str, int] = {}
+    for caso in CASOS_FORMULAS:
+        por_capa[caso.capa] = por_capa.get(caso.capa, 0) + 1
+
+    assert por_capa.get("data_only", 0) >= 4, (
+        f"faltan casos de la capa 1: {por_capa}. Si el filtro de `@parametrize` "
+        "no encuentra nada, la suite pasa sin probar nada."
+    )
+    assert por_capa.get("reporte", 0) >= 4, (
+        f"faltan casos de la capa 2: {por_capa}. Los payloads con `+`, `-`, `@` "
+        "y los que llevan espacio delante del `=` dependen de esta capa."
+    )

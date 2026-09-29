@@ -5,6 +5,10 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .codegraph/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 .venv/
 .pip-audit-cache/
 dist/

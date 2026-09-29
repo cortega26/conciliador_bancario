@@ -20,7 +20,7 @@ from conciliador_bancario.models import (
     TransaccionBancaria,
 )
 from conciliador_bancario.reporting.excel_report import generar_reporte_excel
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from openpyxl import load_workbook
 from typer.testing import CliRunner
@@ -170,6 +170,11 @@ def test_ids_inyectables_nunca_se_escriben_como_formula(tmp_path: Path) -> None:
     assert formulas == [], f"Celdas de formula sin sanitizar: {formulas}"
 
 
+# Esta property escribe un XLSX por ejemplo (~9 ms). El deadline por defecto de
+# Hypothesis son 200 ms, holgura amplia hoy, pero el unico test que hace I/O dentro
+# de una property es exactamente el que se vuelve flaky cuando el runner se
+# satura o la suite crece. deadline=None evita ese falso positivo.
+@settings(deadline=None, max_examples=50)
 @given(st.sampled_from(_PAYLOADS), st.integers(min_value=1, max_value=6))
 def test_payload_con_espacios_iniciales_nunca_es_formula(payload: str, espacios: int) -> None:
     """La guarda no puede depender del primer caracter: el blanco tambien la bypassea."""

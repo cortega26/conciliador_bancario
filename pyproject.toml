@@ -46,6 +46,7 @@ dev = [
   # Fijado para que el gate de supply chain sea reproducible: el runner de CI
   # trae su propia version y sin este pin la auditoria depende de la imagen.
   "setuptools==84.0.0",
+  "coverage==7.6.1",
 ]
 pdf_ocr = [
   # Requiere dependencias de sistema (poppler) para convertir PDF->imagenes.
@@ -117,6 +118,24 @@ ignore = [
 [tool.black]
 line-length = 100
 target-version = ["py311"]
+
+[tool.coverage.run]
+# Se mide con ramas: una linea cubierta puede esconder un `if` nunca tomado, que
+# es justo donde viven los defaults dangerousos (match/bloqueo/ventanas).
+branch = true
+source = ["src/conciliador_bancario"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "\\.\\.\\.",
+]
+# Ratchet: solo puede subir. Se fijo en 88 porque la medicion esta en 89, dejando
+# un punto de holgura para refactors legitimos; si cae, el gate exige tests.
+fail_under = 88
 
 [tool.mypy]
 python_version = "3.11"

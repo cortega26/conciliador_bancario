@@ -171,6 +171,17 @@ class LimitesIngesta(CBModel):
     """
 
     max_input_bytes: int = Field(default=25_000_000, ge=1)  # ~25 MB
+    # Un XLSX es un ZIP: `max_input_bytes` ve el archivo **comprimido**, que un
+    # archivo con ratio de compresion alto puede reducir arbitrariamente. Sin
+    # este limite, 399 KB se descomprimen a 400 MB y el proceso llega a 1.2 GB de
+    # RSS antes de que ningun codigo del repo pueda mirarlo: el conteo de
+    # `max_tabular_cells` ocurre despues de descomprimir, cuando el dano ya esta
+    # hecho.
+    #
+    # El default es holgado a proposito (200 MB para 25 MB comprimidos): un
+    # XLSX real de un banco tiene mucho aire, y un limite demasiado ajustado
+    # rechazaria archivos que funcionan.
+    max_xlsx_uncompressed_bytes: int = Field(default=200_000_000, ge=1)
     max_tabular_rows: int = Field(default=200_000, ge=1)
     max_tabular_cells: int = Field(default=5_000_000, ge=1)
     max_pdf_pages: int = Field(default=200, ge=1)

@@ -34,7 +34,7 @@ from conciliador_bancario.ingestion.xlsx_adapter import cargar_transacciones_xls
 from conciliador_bancario.ingestion.xml_adapter import cargar_transacciones_xml
 from conciliador_bancario.models import ConfiguracionCliente
 
-from tools.fuzztabular import gen_xlsx, gen_xml
+from tools.fuzztabular import gen_xlsx, gen_xlsx_formulas, gen_xml, libro_con_fila
 
 CASOS_XLSX = gen_xlsx()
 CASOS_XML = gen_xml()
@@ -217,3 +217,163 @@ def test_xml_respeta_el_oraculo(caso, tmp_path: Path) -> None:
         assert txs == [], f"{caso.nombre} produjo transacciones: {txs}"
     else:
         cargar_transacciones_xml(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
+
+
+# --- Formulas: dos capas de proteccion, ninguna fijada ------------------------
+#
+# La primera capa es `load_workbook(..., data_only=True)`: una celda que Excel
+# guardo como formula llega como su valor en cache, no como el texto `=...`.
+# La segunda es `prevenir_csv_injection` en la capa de reporte.
+#
+# Ninguna de las dos tenia un test. Es decir: la propiedad era real pero
+# **supuesta**. Cambiar cualquiera de las dos no habria roto nada, y el primer
+# indicio habria sido un archivo que ejecuta una formula en la maquina del
+# operador.
+
+CASOS_FORMULAS = gen_xlsx_formulas()
+
+
+def _es_formula(valor: str) -> bool:
+    """Si Excel interpretaria este texto como formula al abrir el archivo.
+
+    Se ignoran espacios y tabs iniciales a proposito: Excel tambien los
+    descarta, que es exactamente por lo que mirar solo el primer caracter no
+    basta. Por eso `prevenir_csv_injection` tiene `_LIDER_SIN_SIGNIFICADO_RE`.
+    """
+    return valor.lstrip(" \t").startswith(("=", "+", "-", "@"))
+
+
+@pytest.mark.parametrize(
+    "caso",
+    [c for c in CASOS_FORMULAS if c.capa == "data_only"],
+    ids=lambda c: c.nombre,
+)
+def test_capa_1_data_only_impide_que_llegue_el_texto_de_la_formula(caso, tmp_path: Path) -> None:
+    """Una celda que openpyxl guardo como formula no viaja como texto.
+
+    ## Que promete esta capa, exactamente
+
+    Solo cubre el prefijo `=` sin espacios delante, porque es el unico caso en
+    que openpyxl guarda la celda como formula. En ese caso `data_only=True`
+    devuelve el valor en cache, y si no hay cache (que es lo tipico en un libro
+    escrito por programa) devuelve `None` y la descripcion queda vacia.
+
+    ## Por que el texto vacio es el resultado correcto
+
+    Un texto `=1+1` en la descripcion no es una descripcion, es una formula. La
+    capa 1 no lo "interpreta" ni lo "limpieza": lo **imposibilita**. Que quede
+    vacio es la consecuencia, y hay que aceptarla: inventar una descripcion a
+    partir de una formula seria peor.
+
+    Lo que si queda es una perdida de informacion silenciosa, que se reporta como
+    pendiente en el commit y no como un arreglo a ojo: cualquier correccion
+    tendria que decidir que hacer con una celda que es una formula, y esa es una
+    pregunta de producto, no del fuzzer.
+    """
+    ruta = _escribir(tmp_path, f"{caso.nombre}.xlsx", caso.data)
+    for tx in cargar_transacciones_xlsx(ruta, cfg=_cfg(), audit=NullAuditWriter()):  # type: ignore[arg-type]
+        # El monto tiene que seguir intacto: una defensa que rompe los datos
+        # para evitar un riesgo no es una defensa.
+        assert str(tx.monto.valor) == "150000"
+        valor = str(tx.descripcion.valor)
+        assert not valor.startswith("="), (
+            f"la celda era una formula y su texto llego al modelo: {valor!r}. "
+            "data_only=True dejo de funcionar."
+        )
+
+
+@pytest.mark.parametrize(
+    "caso",
+    [c for c in CASOS_FORMULAS if c.capa == "reporte"],
+    ids=lambda c: c.nombre,
+)
+def test_capa_2_el_reporte_neutraliza_lo_que_ingesta_deja_pasar(caso, tmp_path: Path) -> None:
+    """Lo que la capa 1 no cubre tiene que morir en la capa 2.
+
+    Estos payloads **si** llegan al modelo como texto: `+`, `-` y `@` no son
+    formulas para openpyxl, y un espacio delante del `=` tampoco lo es. Es
+    exactamente el caso para el que existe `prevenir_csv_injection`, y por eso el
+    test tiene que llegar hasta el `.xlsx` generado.
+
+    La primera version de esta suite afirmaba que "ninguna formula llega al
+    modelo" y fallo con `+SUM(A1:A9)`. La afirmacion era mas fuerte que el
+    diseño: un test que exige mas de lo que el sistema promete empuja a
+    "arreglar" el diseño en vez de verificar el contrato real.
+    """
+    ruta = _escribir(tmp_path, f"{caso.nombre}.xlsx", caso.data)
+    txs = cargar_transacciones_xlsx(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
+    for tx in txs:
+        valor = str(tx.descripcion.valor)
+        # Llega entero, y Excel lo interpretaria como formula: ese es el gap que
+        # tiene que cerrar la capa de reporte.
+        assert valor, f"el payload no llego y el test no probaria la capa 2: {caso.nombre}"
+        assert _es_formula(valor), f"el payload llego alterado: {valor!r}"
+
+
+def test_una_formula_ingerida_desde_xlsx_no_llega_viva_al_reporte(tmp_path: Path) -> None:
+    """El camino completo **de XLSX**, que es el que no estaba cubierto.
+
+    ## Correccion importante sobre lo que dije antes
+
+    Afirme que "ninguna de las dos capas tenia test". Es falso para la segunda:
+    `tests/test_reporting_security.py` ya cubre la inyeccion en el reporte,
+    incluido el caso de payloads con espacios iniciales, que es el que mas
+    importa. No lo vi porque solo mire el lado de la ingesta.
+
+    Lo que si faltaba era el lado del **XLSX**: que la lectura con
+    `data_only=True` no deje pasar el texto de una formula. Este test atraviesa
+    las dos capas por el camino que de verdad usa el producto, y por eso no
+    duplica el de reporting: entra por el archivo, no por un objeto construido
+    a mano.
+    """
+    from conciliador_bancario.models import ResultadoConciliacion
+    from conciliador_bancario.reporting.excel_report import generar_reporte_excel
+    from openpyxl import load_workbook
+
+    # Todos los payloads que la ingesta deja pasar como texto: `+`, `-`, `@` y
+    # los que llevan espacio delante del `=`.
+    payloads = ["+SUM(A1:A9)", "-1+1", "@SUM(A1)", "\t=1+1", " =1+1"]
+    ruta = _escribir(
+        tmp_path,
+        "payload.xlsx",
+        libro_con_fila(
+            ["fecha", "monto", "descripcion", "referencia"],
+            ["05/01/2026", 150000, payloads[0], "REF-1"],
+        ),
+    )
+    txs = cargar_transacciones_xlsx(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
+    salida = tmp_path / "reporte.xlsx"
+    generar_reporte_excel(
+        salida,
+        ResultadoConciliacion(
+            transacciones_bancarias=txs,
+            movimientos_esperados=[],
+            matches=[],
+            hallazgos=[],
+            run_id="r",
+        ),
+        mask=False,
+        cfg=_cfg(),
+    )
+    libro = load_workbook(salida)
+    vivas = [
+        (hoja.title, i, j, celda)
+        for hoja in libro.worksheets
+        for i, fila in enumerate(hoja.iter_rows(values_only=True), 1)
+        for j, celda in enumerate(fila, 1)
+        if isinstance(celda, str) and _es_formula(celda)
+    ]
+    assert not vivas, f"el reporte tiene formulas vivas: {vivas}"
+
+
+def test_una_formula_en_la_columna_del_monto_se_rechaza(tmp_path: Path) -> None:
+    """`=1+1` en la columna del monto no es un monto, con o sin valor en cache.
+
+    Sin cache devuelve `None` y falla por "monto vacio". Con cache devolveria 2,
+    que tampoco es un monto de CLP, pero al menos es un numero. Por eso el caso
+    va en la lista de rechazos y no en la de payloads tolerados.
+    """
+    caso = next(c for c in CASOS_FORMULAS if c.nombre == "formula_en_monto")
+    ruta = _escribir(tmp_path, "monto.xlsx", caso.data)
+    with pytest.raises(ErrorIngestion):
+        cargar_transacciones_xlsx(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]

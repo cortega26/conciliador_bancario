@@ -17,7 +17,12 @@ from conciliador_bancario.errors import (
     ErrorOperacionIO,
 )
 from conciliador_bancario.ingestion.base import ErrorIngestion
-from conciliador_bancario.pipeline import ejecutar_run, ejecutar_validate, generar_plantillas_init
+from conciliador_bancario.pipeline import (
+    _cargar_config,
+    ejecutar_run,
+    ejecutar_validate,
+    generar_plantillas_init,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
@@ -234,6 +239,27 @@ def cmd_run(
         )
         if fail_on_critico:
             raise typer.Exit(code=7)
+
+    # Umbral de confianza por debajo de 0.5: se esta admitiendo data degradada.
+    #
+    # No se cambia la politica: el operador configura el umbral a proposito, y el
+    # matcher obedece. Lo que no puede pasar es que sea **invisible**. Con umbral
+    # 0.30, una referencia extraida de un PDF texto (confianza 0.40) pasa a
+    # autoconciliarse, y 0.30 es exactamente la confianza que el repo le asigna al
+    # OCR, que la politica prohibe autoconciliar. El operador no sabe que al bajar
+    # el numero para otra cosa dejo de distinguir "confiable" de "adivinada".
+    umbral = _cargar_config(config).umbral_confianza_campos
+    if umbral < 0.5:
+        console.print()
+        console.print(
+            f"[bold yellow]Aviso:[/bold yellow] `umbral_confianza_campos` esta en "
+            f"{umbral}, por debajo de 0.5."
+        )
+        console.print(
+            "  A partir de ese valor, los campos extraidos de formatos heuristicos "
+            "(PDF texto, referencias reconstruidas) pueden llegar a "
+            "autoconciliarse. El OCR sigue bloqueado siempre."
+        )
 
 
 @app.command("explain")

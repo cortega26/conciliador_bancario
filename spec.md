@@ -218,16 +218,28 @@ aviso aparece con y sin el flag, y los artefactos se escriben siempre.
 El test de `test_e2e_completo.py` que fijaba `returncode == EXIT_OK` en el caso de
 moneda distinta se conserva, y ahora es correcto: el aviso es la garantía, no el exit.
 
-### 5.2 El PDF texto se puede autoconciliar con umbral bajo
+### 5.2 El PDF texto se puede autoconciliar con umbral bajo — **RESUELTO en #62**
 
-El adaptador de OCR marca `bloquea_autoconcilia=True` (blindaje duro). El de PDF
-texto marca `False`: lo único que lo frena es `umbral_confianza_campos`, y la
-referencia degrada a 0,40. Con umbral 0,35 (un valor legal) una transacción de
-PDF texto queda `conciliado`.
+Medido: un PDF digital con `umbral_confianza_campos` en 0,40 deja la transacción
+`conciliado`; con 0,80 queda `pendiente`. Una referencia extraída de PDF texto tiene
+confianza 0,40, y **0,30 es exactamente la confianza que el repo le asigna al OCR**,
+que la política prohíbe autoconciliar siempre.
 
-No se cambia: PDF digital es un formato de mayor confianza que un escaneo, y
-`AGENTS.md` solo prohíbe el autoconciliado para OCR. **Pero no hay ningún test que
-fije el comportamiento**, así que un cambio accidental pasaría inadvertido.
+**No se cambia la política.** El OCR está bloqueado por `bloquea_autoconcilia=True`, un
+blindaje que ningún umbral puede vencer, y el PDF texto no lo está porque es un formato
+de mayor confianza. El operador que configura el umbral lo hace a propósito y el matcher
+obedece; cambiar eso sin criterio sería inventar una regla de negocio.
+
+**Lo que sí se resolvió**: que fuera invisible. Un operador puede bajar el umbral para
+admitir una columna de CSV con confianza media, y no saber que de paso dejó de distinguir
+"confiable" de "adivinada" en los PDF. `run` ahora avisa cuando el umbral baja de 0,5,
+diciendo qué se está admitiendo y **`tranquilizando en la parte que sí está garantizada**
+(que el OCR sigue bloqueado), porque sin esa frase el operador sube el umbral por miedo
+y el aviso se vuelve un falso positivo**.
+
+El comportamiento por umbral queda **fijado con un test** que usa confianza 0,40 (la
+real de PDF texto) y la frontera medida, para que cambiar la política de umbrales sea una
+decisión visible y no un efecto secundario.
 
 ### 5.3 El `run_id` no cubre los límites efectivos
 

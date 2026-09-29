@@ -104,6 +104,23 @@ def _monto_de_linea(tokens: list[str]) -> Decimal | None:
     return None
 
 
+def _fechas_de_linea(tokens: list[str]) -> list[date]:
+    """Todas las fechas que la linea contiene, en orden.
+
+    Una linea de cartola tiene **una** fecha. Dos o mas significan que el OCR
+    fusiono dos transacciones en una, que es exactamente lo que pasa con un
+    layout de dos columnas: los renglones de la izquierda y los de la derecha
+    se leen intercalados en la misma linea de texto.
+    """
+    fechas: list[date] = []
+    for tok in tokens:
+        try:
+            fechas.append(parse_fecha_chile(tok))
+        except ErrorParseo:
+            continue
+    return fechas
+
+
 def cargar_transacciones_pdf_ocr(
     path: Path, *, cfg: ConfiguracionCliente, audit: JsonlAuditWriter
 ) -> list[TransaccionBancaria]:
@@ -119,10 +136,24 @@ def cargar_transacciones_pdf_ocr(
         label="PDF banco (OCR)",
     )
 
+    # Importacion dinamica a proposito.
+    #
+    # Con `import pytesseract  # type: ignore` el comentario hace falta cuando las
+    # dependencias no estan y **sobra** cuando estan. Como `warn_unused_ignores`
+    # esta activo, mypy falla en un caso o en el otro: con los pines de `dev`
+    # (sin extras) dice que el ignore es necesario; con `.[pdf-ocr]` instalado
+    # dice que sobra. No hay ningun entorno en que el gate pase, y desarrollo de
+    # OCR es—justamente— trabajar con los extras puestos.
+    #
+    # Con `importlib` no hay import estatico que mypy pueda revisar, asi que el
+    # gate dice lo mismo en los dos entornos. El fail-closed no cambia: la
+    # ausencia de la dependencia sigue produciendo `ErrorIngestion`.
+    import importlib
+
     try:
-        import pytesseract  # type: ignore
-        from pdf2image import convert_from_path  # type: ignore
-    except Exception as e:  # noqa: BLE001
+        pytesseract = importlib.import_module("pytesseract")
+        convert_from_path = importlib.import_module("pdf2image").convert_from_path
+    except ImportError as e:
         raise ErrorIngestion(
             "OCR no disponible. Instale extras: pip install -e '.[pdf_ocr]' y dependencias del sistema (poppler)."
         ) from e
@@ -163,6 +194,11 @@ def cargar_transacciones_pdf_ocr(
 
     out: list[TransaccionBancaria] = []
     idx = 0
+    # Lineas que **parecian** una transaccion (tienen una fecha) pero no pudieron
+    # leerse como una. Se cuentan y se reportan, porque descartarlas en silencio
+    # hace que una lectura parcial se presente como una lectura completa.
+    descartadas_fusion = 0
+    descartadas_sin_monto = 0
 
     def _try_parse_fecha(texto: str) -> date | None:
         try:
@@ -181,8 +217,30 @@ def cargar_transacciones_pdf_ocr(
         fecha = _try_parse_fecha(fecha_txt)
         if fecha is None:
             continue
+
+        # Una linea con dos o mas fechas es la fusion de dos transacciones. El
+        # monto se busca **desde el final**, asi que la fecha de una y el monto
+        # de la otra se emparejan: el monto de la segunda con la fecha de la
+        # primera. Se comprobo con un PDF de dos columnas, y el resultado es un
+        # monto equivocado con exit 0:
+        #
+        #   '05/01/2026 PAGO ACME 150.000 06/01/2026 TRANSFER 1.234.500'
+        #     -> fecha=2026-01-05  monto=1234500   (el real era 150.000)
+        #
+        # El numero equivocado es plausible, asi que ninguna validacion de rango
+        # lo detecta, y la unica defensa es no construir la transaccion. La regla
+        # es simple porque el dato lo permite: una transaccion tiene una fecha.
+        if len(_fechas_de_linea(parts)) > 1:
+            descartadas_fusion += 1
+            continue
+
         monto = _monto_de_linea(parts)
         if monto is None:
+            # Habia una fecha, o sea que la linea parecia una transaccion, pero no
+            # se pudo leer el monto. Puede ser una linea que no es transaccion
+            # (un encabezado, un pie de pagina) o una transaccion ilegible; en los
+            # dos casos el operador tiene que saber que la linea existia.
+            descartadas_sin_monto += 1
             continue
         desc = normalizar_texto(line.replace(fecha_txt, "", 1))
         idx += 1
@@ -206,7 +264,45 @@ def cargar_transacciones_pdf_ocr(
                     fila_origen=idx,
                 )
             )
-    audit.write(AuditEvent("ingestion", "OCR finalizado", {"archivo": path.name, "txs": len(out)}))
+    audit.write(
+        AuditEvent(
+            "ingestion",
+            "OCR finalizado",
+            {
+                "archivo": path.name,
+                "txs": len(out),
+                "lineas_descartadas_fusion": descartadas_fusion,
+                "lineas_descartadas_sin_monto": descartadas_sin_monto,
+            },
+        )
+    )
+    # Una lectura parcial tiene que ser visible, no silenciosa. Si 7 de 8 lineas
+    # se descartan y el operador recibe 1 transaccion con exit 0, la conclusion
+    # razonable es "la cartola tiene una transaccion", que es falsa: el reporte
+    # esta completo en apariencia y no lo esta.
+    #
+    # No se falla por esto: OCR produce basura con normalidad (encabezados, pies
+    # de pagina) y rechazar por una linea ilegible seria inservible. Lo que no
+    # es aceptable es que el descarte no quede en ningun lado.
+    if out and (descartadas_fusion or descartadas_sin_monto):
+        total = len(out) + descartadas_fusion + descartadas_sin_monto
+        audit.write(
+            AuditEvent(
+                "hallazgo",
+                "OCR leyo menos lineas de las que parecian transacciones",
+                {
+                    "archivo": path.name,
+                    "transacciones": len(out),
+                    "descartadas_fusion": descartadas_fusion,
+                    "descartadas_sin_monto": descartadas_sin_monto,
+                    "lineas_candidatas": total,
+                    "recomendacion": (
+                        "Revisar el PDF original: puede tener un layout de varias "
+                        "columnas oTransactions ilegibles que no quedaron en el reporte."
+                    ),
+                },
+            )
+        )
     if not out:
         raise ErrorIngestion("OCR completado pero no se detectaron transacciones (heuristica).")
     return out

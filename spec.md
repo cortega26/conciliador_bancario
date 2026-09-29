@@ -57,7 +57,7 @@ La Define of Done no es "los tests pasan". Es:
 | **A5** | MEDIA | ~~Invariante 1:1~~ **HECHO en #55**: ahora `ErrorIngestion` (exit 4) y extraído a función testeable | El invariante es inalcanzable desde los datos, así que inline no tenía test posible. |
 | **A6** | MEDIA | ~~XML sin red~~ **HECHO en #52**, **con un límite declarado**: ni `defusedxml` ni `xml.etree` resuelven entidades externas, así que la prueba de red nunca se dispara. Lo que se afirma es la **precondición** (el parser es el protegido). |
 | **A7** | BAJA | ~~Informe de riesgo~~ **HECHO en #55**: tabla H1–H18 con PR y test, más un test que falla si vuelve a mentir | Listaba H1–H5 como "abierto" días después de publicados. |
-| **A8** | PROC | El commit del gate bidireccional (H12) entró a `main` **sin revisión humana** | Único cambio de la serie sin PR. Verificado por tests que muerden, pero "tests verdes" ≠ "revisado". |
+| **A8** | PROC | ~~Commit del gate sin revisión~~ **HECHO en #59**: re-verificado desde cero | Un commit mergeado no se revisa: se re-verifica. Los 27 tests de meta pasan, el gate sigue bidireccional, y el diff contra `HEAD` son solo adiciones posteriores. La revisión humana no se recupera. |
 | **A9** | PROC | ~~Release 0.2.21~~ **HECHO**: mergeado, `verify_published` en verde, H14 verificado en un venv limpio. |
 
 ## 3. Implementación por ítem

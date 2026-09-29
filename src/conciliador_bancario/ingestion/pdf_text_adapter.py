@@ -6,11 +6,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from pypdf import PdfReader
-
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
+from conciliador_bancario.ingestion.pdf_reader import abrir_pdf
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -49,7 +48,7 @@ def _id_tx(path: Path, idx: int, data_norm: dict[str, Any]) -> str:
 
 
 def extraer_texto_pdf(path: Path) -> str:
-    reader = PdfReader(str(path))
+    reader = abrir_pdf(path, etiqueta="PDF banco")
     parts: list[str] = []
     for page in reader.pages:
         parts.append(page.extract_text() or "")
@@ -71,7 +70,7 @@ def cargar_transacciones_pdf_texto(
         label="PDF banco",
     )
 
-    reader = PdfReader(str(path))
+    reader = abrir_pdf(path, etiqueta="PDF banco")
     enforce_counter(
         path=path,
         audit=audit,

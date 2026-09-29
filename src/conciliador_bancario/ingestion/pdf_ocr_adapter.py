@@ -5,11 +5,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from pypdf import PdfReader
-
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
+from conciliador_bancario.ingestion.pdf_reader import abrir_pdf
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -67,7 +66,7 @@ def cargar_transacciones_pdf_ocr(
 
     # Limit pages before converting to images (expensive). Keep it after the deps check so
     # missing OCR deps fails with a clean error even on invalid PDFs (contract test).
-    reader = PdfReader(str(path))
+    reader = abrir_pdf(path, etiqueta="PDF banco (OCR)")
     enforce_counter(
         path=path,
         audit=audit,

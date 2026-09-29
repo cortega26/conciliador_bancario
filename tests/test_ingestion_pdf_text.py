@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from conciliador_bancario.audit.audit_log import NullAuditWriter
-from conciliador_bancario.ingestion import pdf_text_adapter
+from conciliador_bancario.ingestion import pdf_reader, pdf_text_adapter
 from conciliador_bancario.models import ConfiguracionCliente, OrigenDato
 
 
@@ -24,7 +24,7 @@ def test_pdf_sin_texto_se_considera_escaneado(monkeypatch, tmp_path: Path) -> No
     def fake_reader(_path: str):
         return _FakeReader([_FakePage(None), _FakePage("")])
 
-    monkeypatch.setattr(pdf_text_adapter, "PdfReader", fake_reader)
+    monkeypatch.setattr(pdf_reader, "PdfReader", fake_reader)
 
     pdf = tmp_path / "x.pdf"
     pdf.write_bytes(b"%PDF-FAKE")
@@ -42,7 +42,7 @@ def test_pdf_texto_extraible_genera_transacciones(monkeypatch, tmp_path: Path) -
     def fake_reader(_path: str):
         return _FakeReader([_FakePage(text)])
 
-    monkeypatch.setattr(pdf_text_adapter, "PdfReader", fake_reader)
+    monkeypatch.setattr(pdf_reader, "PdfReader", fake_reader)
 
     pdf = tmp_path / "x.pdf"
     pdf.write_bytes(b"%PDF-FAKE")

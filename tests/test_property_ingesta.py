@@ -39,6 +39,7 @@ import pytest
 from conciliador_bancario.audit.audit_log import NullAuditWriter
 from conciliador_bancario.errors import ErrorConciliador
 from conciliador_bancario.ingestion.pdf_ocr_adapter import cargar_transacciones_pdf_ocr
+from conciliador_bancario.ingestion.pdf_text_adapter import cargar_transacciones_pdf_texto
 from conciliador_bancario.ingestion.xml_adapter import cargar_transacciones_xml
 from conciliador_bancario.models import ConfiguracionCliente, OrigenDato, TransaccionBancaria
 from hypothesis import HealthCheck, given, settings
@@ -201,10 +202,60 @@ def test_xml_es_determinista(tmp_path: Path, payload: bytes) -> None:
     assert correr() == correr()
 
 
+@st.composite
+def _pdf_arbitrario(draw: st.DrawFn) -> bytes:
+    """Bytes de PDF que el generador no deberia ACCEPTAR nunca.
+
+    Se incluyen las tres familias de corrupt que un cliente entrega en la practica:
+    archivo vacio (nunca se subio bien), basura que no es PDF, y un PDF truncado
+    (download interrumpido, que es el mas comun de los tres).
+    """
+    return draw(
+        st.one_of(
+            st.binary(max_size=0),  # vacio
+            st.binary(max_size=512),  # basura arbitraria
+            st.just(b"%PDF-1.4\n"),  # header sin nada detras
+            st.just(b"%PDF-1.4\n%%EOF"),  # header + EOF, sin objetos
+            st.just(b"%PDF-1.7\n1 0 obj\n<<\n"),  # objeto sin cerrar
+            st.just(b"\x00" * 64),  # NULs
+        )
+    )
+
+
 @SETTINGS
-@given(payload=st.binary(max_size=512))
-def test_pdf_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: bytes) -> None:
-    """El adaptador de PDF abre con pypdf: cualquier basura debe ser error tipado."""
+@given(payload=_pdf_arbitrario())
+def test_pdf_texto_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: bytes) -> None:
+    """El camino de PDF con texto extraible, con deps de OCR o sin ellas.
+
+    Este es el test que encuentra el bug de `PdfReader`: es el unico camino
+    alcanzable en cualquier entorno, porque no tiene chequeo de dependencias que
+    pueda cortarlo antes.
+    """
+    p = tmp_path / "cartola.pdf"
+    p.write_bytes(payload)
+
+    resultado = _resultado(
+        lambda path: cargar_transacciones_pdf_texto(
+            path, cfg=ConfiguracionCliente(cliente="Fuzz"), audit=NullAuditWriter()
+        ),
+        p,
+    )
+    # O devuelve (txs, parece_escaneado), o un error de la taxonomia. Nunca un traceback.
+    assert resultado is not None
+
+
+@SETTINGS
+@given(payload=_pdf_arbitrario())
+def test_pdf_ocr_siempre_dentro_de_la_taxonomia(
+    tmp_path: Path, monkeypatch, payload: bytes
+) -> None:
+    """El mismo invariante en el camino OCR, con las dependencias stubbeadas.
+
+    Sin el stub este test pasa siempre: el adaptador aborta en el chequeo de
+    dependencias y nunca abre el PDF. Con el stub se alcanza `PdfReader`, que es
+    donde estaba el defecto.
+    """
+    _inyectar_ocr_fake(monkeypatch)
     p = tmp_path / "cartola.pdf"
     p.write_bytes(payload)
 
@@ -212,14 +263,17 @@ def test_pdf_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: bytes) -> N
 
 
 @SETTINGS
-@given(payload=st.binary(max_size=512))
-def test_pdf_es_determinista(tmp_path: Path, payload: bytes) -> None:
+@given(payload=_pdf_arbitrario())
+def test_pdf_texto_es_determinista(tmp_path: Path, payload: bytes) -> None:
     p = tmp_path / "cartola.pdf"
     p.write_bytes(payload)
 
     def correr() -> object:
         return _resultado(
-            lambda path: cargar_transacciones_pdf_ocr(path, cfg=CFG, audit=NullAuditWriter()), p
+            lambda path: cargar_transacciones_pdf_texto(
+                path, cfg=ConfiguracionCliente(cliente="Fuzz"), audit=NullAuditWriter()
+            ),
+            p,
         )
 
     assert correr() == correr()
@@ -256,8 +310,14 @@ def _lineas_ocr(draw: st.DrawFn) -> str:
     return "\n".join(lineas)
 
 
-def _inyectar_ocr_fake(monkeypatch: pytest.MonkeyPatch, texto: str) -> None:
-    """Stubs de pdf2image y pytesseract, como en test_ingestion_pdf_ocr.py."""
+def _inyectar_ocr_fake(monkeypatch: pytest.MonkeyPatch, texto: str = "") -> None:
+    """Stubs de pdf2image y pytesseract, como en test_ingestion_pdf_ocr.py.
+
+    Importante: el adaptador OCR chequea las dependencias **antes** de abrir el
+    PDF. Sin este stub, en un entorno sin OCR instalado aborta en el chequeo y
+    nunca llega a `PdfReader`, que es donde estaba el defecto. Con el stub el
+    camino queda alcanzable en cualquier entorno.
+    """
     mod_pdf2image = types.ModuleType("pdf2image")
     mod_pdf2image.convert_from_path = lambda *a, **k: [object()]
     monkeypatch.setitem(sys.modules, "pdf2image", mod_pdf2image)

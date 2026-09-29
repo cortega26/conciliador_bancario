@@ -82,12 +82,20 @@
 - [ ] Confirmar que el árbol coincide con lo que se commiteó
 - [ ] Si cambió algo, corregirlo en un PR nuevo
 
-## A9 — Mergear release 0.2.21 — PROC
+## A9 — Mergear release 0.2.21 — PROC — **HECHO**
 
-- [ ] `await_ci.py 47` (los 6 checks esperados, no "ninguno pendiente")
-- [ ] `merge_pr.py 47`
-- [ ] Esperar `verify_published` en el workflow
-- [ ] Instalación limpia en venv nuevo y comprobar que H14 (moneda) está dentro
+- [x] `await_ci.py 47` (los 6 checks esperados, no "ninguno pendiente")
+- [x] `merge_pr.py 47`
+- [x] Esperar `verify_published` en el workflow → `success`
+- [x] Instalación limpia en venv nuevo y comprobar que H14 (moneda) está dentro:
+      `1000 USD vs 1000 CLP -> 0 matches, critico monto_coincide_moneda_difiere`
+
+**Evidencia del retardo de PyPI**: `verify_published` dio success y el índice
+simple todavía no listaba 0.2.21. `pip download` loSirvio a los ~30s. Es el
+retardo que ya documenta `tools/verify_published.py`: la API de PyPI responde
+antes de que el índice sirva los archivos, y `pip` lee el índice. **Ausencia en
+el índice no es ausencia de publicación**, y `esperar_indice` existe justamente
+por eso.
 
 ## Cierre
 

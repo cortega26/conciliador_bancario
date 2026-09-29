@@ -267,7 +267,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Mergeando PR #{pr.numero} ({pr.rama}) con:\n  {mensaje}")
     _run("git", "checkout", "main")
     _run("git", "pull", "--ff-only")
-    _run("git", "merge", "--no-ff", pr.rama, "-m", mensaje)
+    # Se mergea `origin/<rama>` y no `<rama>`: la rama de un PR puede existir
+    # solo en remoto, que es justo el caso de las que crea release-please. Con el
+    # nombre local, `git merge` falla con un "did you mean" que no explica nada.
+    remoto = f"origin/{pr.rama}"
+    _run("git", "fetch", "--quiet", "origin", pr.rama)
+    _run("git", "merge", "--no-ff", remoto, "-m", mensaje)
     _run("git", "push", "origin", "main")
     print("Listo.")
     return 0

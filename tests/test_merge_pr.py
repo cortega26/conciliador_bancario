@@ -153,3 +153,24 @@ def test_rojo_tiene_prioridad_sobre_el_titulo() -> None:
     """
     with pytest.raises(ErrorDeMerge, match="checks en rojo"):
         validar(_pr(titulo="fix(x): algo", checks_fallidos=["mypy (FAILURE)"]))
+
+
+def test_la_rama_del_pr_se_resuelve_contra_el_remoto() -> None:
+    """La rama puede existir solo en remoto, que es el caso de release-please.
+
+    Mergear por el nombre local falla con un `git merge release-please--...` que
+    responde "did you mean origin/...", sin explicar nada. Se fusiona
+    `origin/<rama>` porque para un PR abierto ese ref existe siempre.
+    """
+    import re
+    from pathlib import Path
+
+    fuente = (Path(__file__).resolve().parents[1] / "tools/merge_pr.py").read_text("utf-8")
+    assert 'f"origin/{pr.rama}"' in fuente, "el merge debe usar el ref remoto de la rama"
+    assert (
+        '"git", "fetch", "--quiet", "origin", pr.rama' in fuente
+    ), "falta traer la rama del remoto antes de mergear"
+    # Y no debe mergear por el nombre local pelado.
+    assert not re.search(
+        r'"--no-ff",\s*pr\.rama\b', fuente
+    ), "el merge sigue usando el nombre local de la rama"

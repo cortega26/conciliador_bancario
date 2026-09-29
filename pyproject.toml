@@ -43,6 +43,11 @@ dev = [
   "bump2version==1.0.1",
   "mypy==1.10.0",
   "types-PyYAML==6.0.12.20260906",
+  # Stubs de terceros: sin ellos mypy no puede verificar openpyxl ni
+  # defusedxml y trata el modulo entero como Any, que es donde se esconden
+  # los bugs de contrato (ej. pasar details= a una excepcion que no lo acepta).
+  "types-openpyxl==3.1.5.20260827",
+  "types-defusedxml==0.7.0.20260504",
   # Fijado para que el gate de supply chain sea reproducible: el runner de CI
   # trae su propia version y sin este pin la auditoria depende de la imagen.
   "setuptools==84.0.0",
@@ -141,6 +146,9 @@ fail_under = 88
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+# Un `# type: ignore` que deja de ser necesario es ruido que se pudre: con esto
+# mypy lo reporta y hay que borrarlo o justificarlo de nuevo.
+warn_unused_ignores = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true

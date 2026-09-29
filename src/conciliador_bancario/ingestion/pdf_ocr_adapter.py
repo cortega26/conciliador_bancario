@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -100,13 +102,13 @@ def cargar_transacciones_pdf_ocr(
     out: list[TransaccionBancaria] = []
     idx = 0
 
-    def _try_parse_fecha(texto: str):
+    def _try_parse_fecha(texto: str) -> date | None:
         try:
             return parse_fecha_chile(texto)
         except ErrorParseo:
             return None
 
-    def _try_parse_monto(texto: str):
+    def _try_parse_monto(texto: str) -> Decimal | None:
         try:
             return parse_monto_clp(texto)
         except ErrorParseo:

@@ -11,4 +11,9 @@ twine==7.0.0
 bump2version==1.0.1
 mypy==1.10.0
 types-PyYAML==6.0.12.20260906
+# Stubs de terceros: sin ellos mypy no puede verificar openpyxl ni
+# defusedxml y trata el modulo entero como Any, que es donde se esconden
+# los bugs de contrato (ej. pasar details= a una excepcion que no lo acepta).
+types-openpyxl==3.1.5.20260827
+types-defusedxml==0.7.0.20260504
 setuptools==84.0.0

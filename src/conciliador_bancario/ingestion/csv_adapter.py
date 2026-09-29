@@ -32,7 +32,7 @@ from conciliador_bancario.utils.parsing import (
 def _detectar_delimitador(path: Path) -> str:
     sample = path.read_text(encoding="utf-8", errors="replace")[:4096]
     try:
-        dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t", "|"])
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
         return dialect.delimiter
     except csv.Error:
         return ","

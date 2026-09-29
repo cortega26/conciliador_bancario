@@ -7,12 +7,13 @@ from pathlib import Path
 
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from openpyxl.worksheet.worksheet import Worksheet
 
 from conciliador_bancario.models import ConfiguracionCliente, ResultadoConciliacion
 from conciliador_bancario.utils.masking import enmascarar_texto_sensible, prevenir_csv_injection
 
 
-def _ws_write_table(ws, headers: list[str], rows: list[list[object]]) -> None:
+def _ws_write_table(ws: Worksheet, headers: list[str], rows: list[list[object]]) -> None:
     ws.append(headers)
     for c in range(1, len(headers) + 1):
         ws.cell(row=1, column=c).font = Font(bold=True)
@@ -38,7 +39,9 @@ def generar_reporte_excel(
     path: Path, resultado: ResultadoConciliacion, *, mask: bool, cfg: ConfiguracionCliente
 ) -> None:
     wb = Workbook()
-    wb.remove(wb.active)
+    # `wb.active` es opcional segun los stubs; en un Workbook nuevo hay
+    # exactamente una hoja, asi que se quita por indice sin depender de el.
+    wb.remove(wb.worksheets[0])
 
     # Intento de determinismo: metadatos fijos. (openpyxl puede sobreescribir `modified` al guardar)
     fixed = datetime(2000, 1, 1, 0, 0, 0, tzinfo=UTC)

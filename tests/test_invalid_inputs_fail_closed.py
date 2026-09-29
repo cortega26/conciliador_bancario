@@ -347,10 +347,8 @@ def test_toda_excepcion_de_la_taxonomia_es_error_conciliador(nombre: str) -> Non
         assert issubclass(getattr(errores_mod, nombre), ErrorConciliador)
 
 
-def test_error_ingestion_con_contexto_sigue_siendo_exit_4(tmp_path: Path) -> None:
+def test_error_ingestion_con_contexto_sigue_siendo_exit_4() -> None:
     """Un ErrorIngestion con details/hint debe seguir clasificandose como ingesta."""
-    from typer.testing import CliRunner
-
     import conciliador_bancario.errors as errores_mod
     from conciliador_bancario.cli.errors import classify_cli_error
     from conciliador_bancario.ingestion.base import ErrorIngestion
@@ -363,4 +361,3 @@ def test_error_ingestion_con_contexto_sigue_siendo_exit_4(tmp_path: Path) -> Non
     assert rendered.details == {"fila": 2}
     assert rendered.hint == "corrija la fila 2"
     assert issubclass(ErrorIngestion, errores_mod.ErrorConciliador)
-    _ = CliRunner

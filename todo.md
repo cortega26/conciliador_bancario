@@ -46,20 +46,24 @@
 - [x] Prueba de mordida: cerrojo como no-op → cae concurrencia; sin reclamation
       → cae el zombie; sin limpiar temporal → cae la atomicidad
 
-## A3 — Descripción de OCR que era fórmula — MEDIA
+## A3 — Descripción de OCR que era fórmula — MEDIA — **HECHO en #58**
 
 - [x] Decidido: `data_only=True` es correcto y se queda
 - [x] Límite documentado en el commit de #46
-- [ ] Evaluar con el usuario si se instrumenta un hallazgo o basta documentar
-      (propuesta actual: documentar en `walkthrough.md`, no instrumentar)
+- [x] **Documentado en `walkthrough.md` en #58**, que es donde un operador busca un
+      comportamiento que no entiende (un mensaje de commit no lo encuentra nadie)
+- [x] Con test que verifica que el límite está escrito
 
-## A4 — Idempotencia y determinismo — MEDIA
+## A4 — Determinismo de los artefactos — MEDIA — **HECHO en #58**
 
-- [ ] Test: dos corridas idénticas → mismo `run_id`
-- [ ] Test: dos corridas idénticas → mismas celdas en el reporte
-- [ ] Test: cambiar un byte de la entrada → `run_id` cambia (sensibilidad)
-- [ ] Comparar **contenido de celdas**, no hash del `.xlsx` (zip con timestamps)
-- [ ] Prueba de mordida: meter `datetime.now()` en el fingerprint
+- [x] Medir qué es comparable y qué no: `run.json` y `audit.jsonl` byte-idénticos;
+      el `.xlsx` no (ZIP con timestamps)
+- [x] Comparar **celdas**, no hash del `.xlsx`
+- [x] `run_id` y `audit.jsonl` por hash
+- [x] Control negativo: bancos distintos → reportes distintos, y contenido real
+- [x] El masking no depende de cuándo se corre
+- [x] Prueba de mordida: PID en una celda → 4 tests caen
+- [x] `run_id` distingue overrides distintos (en #61)
 
 ## A5 — Invariante 1:1 del matching en la taxonomía — MEDIA — **HECHO**
 

@@ -9,9 +9,18 @@ class ErrorParseo(ValueError):
     pass
 
 
-# Caracteres admitidos en un monto. Se conservan los parentesis para que
-# (1.234) pueda reconocerse como negativo de contabilidad y no eliminarse.
-_MONEDA_RE = re.compile(r"[^0-9,.()-]")
+# Un monto como `1e5` puede querer decir 100000 (notacion
+# cientifica) o 15 (una referencia a la fila). Elegir una de las dos es inventar el
+# monto, y el resultado es un saldo equivocado con exit 0. Lo mismo con `0x10`
+# (16 o 10?) y con el signo menos unicode, que si se pierde convierte un egreso en
+# ingreso.
+#
+# Por eso el filtro es una **allowlist** (`_SOLO_MONTO_RE`) y no una lista de
+# prohibidos. Un patron `[^0-9,.()-]` como este, que descarta "todo lo raro", es
+# exactamente el bug: no distingue un simbolo de moneda (que se puede quitar sin
+# cambiar el valor) de una letra que **cambia** el numero. Se deja aqui solo para
+# que quede constancia de por que no se usa, porque re-aparecer es tentador.
+_RE_NO_USADO = re.compile(r"[^0-9,.()-]")
 
 # Ruido que se descarta: no altera el valor del numero.
 #

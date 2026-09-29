@@ -19,14 +19,14 @@
 
 ## A1 — Volumen con medición de tiempo y memoria — ALTA
 
-- [ ] `tools/fuzzvolumen.py`: generador determinista de N filas (streaming)
-- [ ] Test: N justo debajo del límite → pasa
-- [ ] Test: N justo encima del límite → `ErrorIngestion` con el nombre del límite
-- [ ] Test: el mensaje nombra el flag de override correcto
-- [ ] **Medición**: tiempo y RSS pico con el default real de 200k filas
-- [ ] Decidir, con la medición, si el default de 200k es razonable
-- [ ] Marcar `@pytest.mark.slow`, correr solo con `BR_SLOW=1`
-- [ ] Prueba de mordida: bajar el límite y ver que el caso "justo encima" deja de fallar
+- [x] `tools/fuzzvolumen.py`: generador determinista de N filas (streaming) — PR #50
+- [x] Test: N justo debajo del límite → pasa
+- [x] Test: N justo encima del límite → `ErrorIngestion` con el nombre del límite
+- [x] Test: el mensaje nombra el flag de override correcto
+- [x] **Medición**: 10k=0,5s/87MB · 50k=3,0s/268MB · 100k=6,3s/496MB · **200k=13,3s/1396MB**
+- [x] Decisión: el default es alcanzable; **la memoria es el recurso escaso**
+- [x] Marcado `slow`, corre solo con `BR_SLOW=1`
+- [x] Prueba de mordida: `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae
 
 ## A2 — Escritura atómica de artefactos — ALTA
 

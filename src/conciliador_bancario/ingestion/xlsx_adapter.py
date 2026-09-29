@@ -5,11 +5,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
 from conciliador_bancario.ingestion.limits import LimitHints, enforce_counter, enforce_file_size
+from conciliador_bancario.ingestion.xlsx_reader import abrir_xlsx
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -106,7 +107,7 @@ def cargar_transacciones_xlsx(
         label="XLSX banco",
     )
 
-    wb = load_workbook(path, read_only=True, data_only=True)
+    wb = abrir_xlsx(path, etiqueta="XLSX banco")
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
         required=[
@@ -229,7 +230,7 @@ def cargar_movimientos_esperados_xlsx(
         label="XLSX esperados",
     )
 
-    wb = load_workbook(path, read_only=True, data_only=True)
+    wb = abrir_xlsx(path, etiqueta="XLSX esperados")
     ws, header_map, header = _select_worksheet_with_columns(
         wb,
         required=[

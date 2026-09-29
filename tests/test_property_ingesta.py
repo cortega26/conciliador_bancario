@@ -38,8 +38,16 @@ from typing import Any, TypeVar
 import pytest
 from conciliador_bancario.audit.audit_log import NullAuditWriter
 from conciliador_bancario.errors import ErrorConciliador
+from conciliador_bancario.ingestion.csv_adapter import (
+    cargar_movimientos_esperados_csv,
+    cargar_transacciones_csv,
+)
 from conciliador_bancario.ingestion.pdf_ocr_adapter import cargar_transacciones_pdf_ocr
 from conciliador_bancario.ingestion.pdf_text_adapter import cargar_transacciones_pdf_texto
+from conciliador_bancario.ingestion.xlsx_adapter import (
+    cargar_movimientos_esperados_xlsx,
+    cargar_transacciones_xlsx,
+)
 from conciliador_bancario.ingestion.xml_adapter import cargar_transacciones_xml
 from conciliador_bancario.models import ConfiguracionCliente, OrigenDato, TransaccionBancaria
 from hypothesis import HealthCheck, given, settings
@@ -141,6 +149,41 @@ def _xml_casi_valido(draw: st.DrawFn) -> str:
     raiz = draw(st.sampled_from(["cartola", "cartola2", "", "CARTOLA"]))
     cuerpo = draw(st.sampled_from(["".join(movs), "".join(movs) + "<movimiento>", ""]))
     return f'<?xml version="1.0" encoding="UTF-8"?><{raiz}{attrs}>{cuerpo}</{raiz}>'
+
+
+@st.composite
+def _xlsx_arbitrario(draw: st.DrawFn) -> bytes:
+    """Lo que llega con extension .xlsx y no es un XLSX.
+
+    Un XLSX es un zip, asi que lo que falla es la estructura zip: vacio, basura, o
+    una cabecera zip cortada. El CSV renombrado esta aparte porque es el caso mas
+    comun en la practica.
+    """
+    return draw(
+        st.one_of(
+            st.binary(max_size=0),  # vacio
+            st.binary(max_size=512),  # basura arbitraria
+            st.just(b"PK\x03\x04\x00basura"),  # cabecera zip cortada
+            st.just(b"a,b,c\n1,2,3\n"),  # CSV renombrado a .xlsx
+        )
+    )
+
+
+@st.composite
+def _csv_arbitrario(draw: st.DrawFn) -> str:
+    """Texto arbitrario donde se espera un CSV.
+
+    Incluye NULs y vacio, porque el adaptador lee con `errors="replace"`
+    justamente para eso.
+    """
+    return draw(
+        st.one_of(
+            st.text(max_size=200),
+            st.just("\x00"),
+            st.just("a,b\n\x00,\n"),
+            st.just(""),
+        )
+    )
 
 
 def _pdf_minimo() -> bytes:
@@ -438,3 +481,56 @@ def test_cualquier_tx_devuelta_pasa_el_modelo(tmp_path: Path, monkeypatch) -> No
         dumped: dict[str, Any] = tx.model_dump()
         assert dumped["origen"] == OrigenDato.pdf_ocr.value
         assert tx.cuenta_mask is None or isinstance(tx.cuenta_mask, str)
+
+
+# ---------------------------------------------------------------------------
+# 5. Los otros dos adaptadores: XLSX y CSV
+# ---------------------------------------------------------------------------
+#
+# Los cuatro tests de arriba cubren solo XML y PDF. XLSX y CSV se agregaron aparte
+# porque el mismo defecto de "excepcion fuera de la taxonomia" se manifiesta
+# distinto segun la libreria: XLSX usa `load_workbook` (lanza BadZipFile), PDF
+# usa `PdfReader` (lanza EmptyFileError y familia), y CSV usa el modulo estandar.
+# Un invariante que no llega a un adaptador no es un invariante.
+
+
+@SETTINGS
+@given(payload=_xlsx_arbitrario())
+def test_xlsx_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: bytes) -> None:
+    """Un XLSX vacio, renombrado o truncado es error de ingesta.
+
+    Un XLSX es un zip, asi que los tres casos producen BadZipFile, que antes
+    escapaba de los dos entry points y terminaba como exit 10 "internal error".
+    """
+    p = tmp_path / "cartola.xlsx"
+    p.write_bytes(payload)
+    cfg = ConfiguracionCliente(cliente="Fuzz")
+
+    for fn in (
+        lambda: cargar_transacciones_xlsx(p, cfg=cfg, audit=NullAuditWriter()),
+        lambda: cargar_movimientos_esperados_xlsx(p, cfg=cfg, audit=NullAuditWriter()),
+    ):
+        # El default es lo que fija `fn` al momento de crear la lambda: sin el,
+        # ambas lambdas cerrarian sobre la misma variable de loop.
+        _resultado(lambda path, _fn=fn: _fn(), p)
+
+
+@SETTINGS
+@given(payload=_csv_arbitrario())
+def test_csv_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: str) -> None:
+    """CSV no tiene el defecto, y este test es lo que lo deja escrito.
+
+    Se incluye para que quede protegido, no porque se haya encontrado un bug: CSV
+    lee con `errors="replace"` y protege el Sniffer, asi que hoy ya responde
+    exit 4. Si alguien cambia eso, el test lo avisa en vez de que lo descubra un
+    usuario.
+    """
+    p = tmp_path / "cartola.csv"
+    p.write_text(payload, encoding="utf-8", errors="replace")
+    cfg = ConfiguracionCliente(cliente="Fuzz")
+
+    for fn in (
+        lambda: cargar_transacciones_csv(p, cfg=cfg, audit=NullAuditWriter()),
+        lambda: cargar_movimientos_esperados_csv(p, cfg=cfg, audit=NullAuditWriter()),
+    ):
+        _resultado(lambda path, _fn=fn: _fn(), p)

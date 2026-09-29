@@ -87,6 +87,57 @@ jobs:
           .smoke_venv/bin/python -c "import bankrecon as br; import conciliador_bancario as cb; from conciliador_bancario.core import premium_contracts as pc; print(br.__version__); assert br.__version__ == cb.__version__; assert pc.RUN_JSON_SCHEMA_VERSION"
           .smoke_venv/bin/concilia --help
 
+  pdf_ocr:
+    # El job de test instala solo .[dev], asi que pdf2image/pytesseract/Pillow
+    # nunca se instalaban y la ruta OCR no se ejecutaba en ningun run: por eso un
+    # bump mayor de Pillow (Dependabot #11) no tenia nada que validarlo. Este job
+    # instala los extras y los binarios de sistema para ejercitar la costura real.
+    runs-on: ubuntu-latest
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install OCR system deps (poppler + tesseract spa)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-spa
+          tesseract --list-langs | grep -qx spa
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev,pdf_ocr]"
+
+      - name: OCR toolchain is present
+        run: |
+          python -c "import pdf2image, pytesseract, PIL; print('extras ok')"
+          tesseract --version | head -1
+          pdftoppm -v 2>&1 | head -1
+
+      - name: Tests (incluye integracion OCR real)
+        run: python -m pytest -q -rs
+
+      - name: El golden OCR no debe quedar en skip
+        # El golden con stubs debe seguir pasando; lo que no puede pasar es que
+        # los tests de integracion se salten por falta de toolchain.
+        run: |
+          out=$(python -m pytest tests/test_ingestion_pdf_ocr.py -q -rs 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "Requiere extras \[pdf_ocr\]" && {
+            echo "::error::los tests de integracion OCR se saltaron: toolchain incompleta"
+            exit 1
+          }
+
   release:
     # Deprecated:
     # Releases are now handled by `.github/workflows/release-please.yml`.

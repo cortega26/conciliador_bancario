@@ -82,13 +82,41 @@ def test_pasa_un_pr_limpio() -> None:
     validar(_pr())
 
 
-def test_rechaza_titulo_con_prefijo() -> None:
-    """La regla que previene la duplicacion, antes de tocar main."""
-    with pytest.raises(ErrorDeMerge) as exc:
-        validar(_pr(titulo="fix(x): algo"))
-    assert "prefijo de tipo" in str(exc.value)
-    # El error dice como arreglarlo, no solo que esta mal.
-    assert "algo" in str(exc.value)
+def test_titulo_con_prefijo_avisa_pero_no_bloquea() -> None:
+    """La proteccion contra la duplicacion no puede bloquear la ruta de release.
+
+    Una version anterior rechazaba aca. Fallo con los PRs de release-please: su
+    titulo lo genera `pull-request-title-pattern` ("chore(release): v${version}")
+    y no es una variable del operador. Rechazarlos habria sido bloquear la
+    publicacion entera para proteger algo que el propio script ya garantiza,
+    porque arma el mensaje del merge sin el prefijo.
+
+    Lo que importa es que quede registro del aviso.
+    """
+    avisos = validar(_pr(titulo="fix(x): algo"))
+    assert len(avisos) == 1
+    assert "prefijo de tipo" in avisos[0]
+    assert "algo" in avisos[0], "el aviso dice como quedo el titulo"
+
+
+def test_titulo_de_release_please_no_bloquea() -> None:
+    """El caso concreto que rompio la primera version."""
+    avisos = validar(_pr(titulo="chore(release): v0.2.19"))
+    assert avisos, "un titulo de release-please deberia avisar, no fallar"
+    assert "v0.2.19" in avisos[0]
+
+
+def test_el_mensaje_del_merge_quita_el_prefijo_aunque_el_titulo_lo_traiga() -> None:
+    """Esta es la garantia real: el cuerpo del merge nunca lleva tipo."""
+    pr = _pr(titulo="chore(release): v0.2.19")
+    validar(pr)  # avisa
+    m = mensaje_merge(pr)
+    assert m == "Merge PR #42: v0.2.19"
+    assert "chore(" not in m, "el cuerpo del merge lleva el prefijo: duplica el changelog"
+
+
+def test_validar_sin_prefijo_no_avisa() -> None:
+    assert validar(_pr(titulo="algo sin tipo")) == []
 
 
 def test_rechaza_pr_cerrado() -> None:

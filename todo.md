@@ -17,7 +17,7 @@
 - [x] `todo.md` creado
 - [x] `tests/` con pruebas end-to-end de todo lo construido
 
-## A1 — Volumen con medición de tiempo y memoria — ALTA
+## A1 — Volumen con medición de tiempo y memoria — ALTA — **HECHO**
 
 - [x] `tools/fuzzvolumen.py`: generador determinista de N filas (streaming) — PR #50
 - [x] Test: N justo debajo del límite → pasa
@@ -28,7 +28,7 @@
 - [x] Marcado `slow`, corre solo con `BR_SLOW=1`
 - [x] Prueba de mordida: `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae
 
-## A2 — Escritura atómica de artefactos — ALTA
+## A2 — Escritura atómica de artefactos — ALTA — **HECHO**
 
 - [x] Sonda honesta: dos corridas con contenido **distinto**. Resultado: **ambas
       salían con exit 0** y solo sobrevivía una. La reconciliación perdida no
@@ -61,27 +61,24 @@
 - [ ] Comparar **contenido de celdas**, no hash del `.xlsx` (zip con timestamps)
 - [ ] Prueba de mordida: meter `datetime.now()` en el fingerprint
 
-## A5 — Invariante 1:1 del matching en la taxonomía — MEDIA
+## A5 — Invariante 1:1 del matching en la taxonomía — MEDIA — **HECHO**
 
-- [ ] Confirmar qué exit produce hoy el `ValueError` del invariante
-- [ ] Test: forzar la violación con monkeypatch y ver que la excepción es de dominio
-- [ ] Cambiar a `ErrorIngestion` (o el error que corresponda) con la entidad repetida
-- [ ] Prueba de mordida: cambiar `ErrorIngestion` por `ValueError`
+- [x] Confirmar qué exit produce hoy el `ValueError` del invariante → **exit 10**
+- [x] Test: forzar la violación y ver que la excepción es de dominio
+- [x] Cambiar a `ErrorIngestion` (exit 4) con la entidad repetida
+- [x] Extraído a `verificar_invariante_1a1()`, porque el invariante es
+      **inalcanzable desde los datos** y inline no tenía test posible
+- [x] Prueba de mordida: `ValueError` → 3 tests caen; invariante desconectado
+      del motor → 1 cae; no detecta la repetición → 3 caen
 
-## A6 — XML sin descarga de red — MEDIA
+## A7 — Informe de riesgo al día — BAJA — **HECHO**
 
-- [ ] Test: `urlopen` monkeypatcheado que **explota** si alguien hace fetch
-- [ ] Parsear los 4 XML con DTD/entidad externa
-- [ ] Test: XXE de archivo, de HTTP y a la metadata del proveedor
-- [ ] Control negativo: sin el monkeypatch, el test pasa (para no auto-verificarse)
-- [ ] Prueba de mordida: quitar el monkeypatch y ver que el test sigue pasando
-
-## A7 — Informe de riesgo al día — BAJA
-
-- [ ] Actualizar `docs/stress_test_2026-09-29.md`: H1–H5 ya no están abiertos
-- [ ] Añadir los hallazgos del round 2: moneda, zip bomb, fusión de columnas, fórmulas
-- [ ] Test: el informe no puede listar un hallazgo cerrado como abierto
-- [ ] Prueba de mordida: marcar H1 como abierto y ver que el test falla
+- [x] Actualizar la tabla: H1–H18 con estado, PR y test
+- [x] Reescribir "qué no se cubrió" con dónde quedó cada hueco
+- [x] Añadir la sección "lo que sigue abierto y por qué" con el trade-off
+- [x] `tests/test_docs_actualizados.py`: un hallazgo cerrado tiene que tener PR
+      real y test existente, y spec.md/todo.md no pueden contradecirse
+- [x] Prueba de mordida: el test detecta un hallazgo marcado como abierto
 
 ## A8 — Re-verificar el commit sin revisión (H12) — PROC
 

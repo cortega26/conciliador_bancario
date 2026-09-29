@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
+from conciliador_bancario.ingestion.base import ErrorIngestion
 from conciliador_bancario.models import (
     CampoConConfianza,
     ConfiguracionCliente,
@@ -133,6 +134,55 @@ def _bloqueado_por_confianza(
             return True, "Confianza insuficiente en referencia (esperado)."
 
     return False, None
+
+
+def verificar_invariante_1a1(matches: list[Match]) -> None:
+    """Una entidad no puede aparecer conciliada en dos matches distintos.
+
+    ## Por que vive en una función y no inline
+
+    Porque **no se puede provocar desde los datos**: los bucles de cada regla ya
+    marcan `used_tx`/`used_exp`, asi que la condicion es inalcanzable por la via
+    normal. Un check inalcanzable e inline no tiene test posible, y un check sin
+    test es una suposicion. Extrayéndolo se puede llamar directamente con un
+    `matches` duplicado a proposito, que es la unica forma de verificar que el
+    error que sale es del tipo correcto.
+
+    ## Por que `ErrorIngestion` y no `ValueError`
+
+    Con `ValueError` pelado, `_validate_error_type` lo mapeaba a `"internal"` y el
+    CLI salia con **exit 10**, que significa "la herramienta se rompio". Eso manda
+    al operador a abrir un ticket de soporte en vez de a revisar sus archivos, y el
+    problema es del dato: movimientos que el motor no logro separar.
+
+    `ErrorIngestion` da exit 4 con un mensaje que dice que revisar. El tipo de la
+    excepcion no es cosmetico: decide a donde va el operador con el error.
+    """
+    tx_vistos: set[str] = set()
+    exp_vistos: set[str] = set()
+    for m in matches:
+        for tx_id in m.transacciones_bancarias:
+            if tx_id in tx_vistos:
+                raise ErrorIngestion(
+                    f"El motor produjo un resultado inconsistente: la transaccion "
+                    f"bancaria {tx_id} aparece conciliada en dos matches distintos "
+                    f"(fail-closed, no se reporta ninguna conciliacion).",
+                    details={"entidad": "banco", "entidad_id": tx_id, "invariante": "1:1"},
+                    hint="Verifique que el archivo del banco no tenga movimientos "
+                    "duplicados y que las referencias no se repitan.",
+                )
+            tx_vistos.add(tx_id)
+        for exp_id in m.movimientos_esperados:
+            if exp_id in exp_vistos:
+                raise ErrorIngestion(
+                    f"El motor produjo un resultado inconsistente: el movimiento "
+                    f"esperado {exp_id} aparece conciliado en dos matches distintos "
+                    f"(fail-closed, no se reporta ninguna conciliacion).",
+                    details={"entidad": "esperado", "entidad_id": exp_id, "invariante": "1:1"},
+                    hint="Verifique que el archivo de esperados no tenga movimientos "
+                    "duplicados con el mismo identificador.",
+                )
+            exp_vistos.add(exp_id)
 
 
 def conciliar(
@@ -578,18 +628,7 @@ def conciliar(
         )
     )
 
-    # Invariante: una entidad no puede aparecer en dos matches distintos (fail-closed).
-    tx_in_matches: set[str] = set()
-    exp_in_matches: set[str] = set()
-    for m in matches:
-        for tx_id in m.transacciones_bancarias:
-            if tx_id in tx_in_matches:
-                raise ValueError(f"Invariante violada: tx_id repetido en matches: {tx_id}")
-            tx_in_matches.add(tx_id)
-        for exp_id in m.movimientos_esperados:
-            if exp_id in exp_in_matches:
-                raise ValueError(f"Invariante violada: exp_id repetido en matches: {exp_id}")
-            exp_in_matches.add(exp_id)
+    verificar_invariante_1a1(matches)
 
     matches = sorted(matches, key=lambda m: m.id)
     hallazgos = sorted(hallazgos, key=lambda h: h.id)

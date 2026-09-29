@@ -17,6 +17,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # El guard de changelog compara contra el ultimo tag, asi que necesita
+          # el historial y los tags; el checkout shallow no los trae.
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -39,6 +43,9 @@ jobs:
       # con TypeError en vez de reportar el error. Configurado en pyproject.toml.
       - name: Types (mypy)
         run: python -m mypy src
+
+      - name: Changelog (merge commits no duplican entradas)
+        run: python tools/check_changelog_commits.py
 
       - name: Security (bandit)
         run: python -m bandit -c .bandit.yml -r src

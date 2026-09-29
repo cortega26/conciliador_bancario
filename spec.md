@@ -41,20 +41,22 @@ La Define of Done no es "los tests pasan". Es:
 | H12 | Gate de entorno unidireccional decía OK en falso | (main) | `test_meta_suite.py` |
 | H13 | `data_only=True` sin test (propiedad de seguridad) | #46 | `test_fuzz_tabular.py` |
 | H14 | **1000 USD se conciliaba contra 1000 CLP** | #48 | `test_fuzz_matching.py` |
+| H15 | **`run` aceptaba un archivo sin transacciones con exit 0** | #53 | `test_p0_contrato_cli.py` |
+| H16 | **`--max-xlsx-uncompressed-bytes` era un flag muerto**, y el error lo recomendaba | #53 | ídem |
 
 ### Abierto — el backlog real de este documento
 
 | ID | Severidad | Qué falta | Por qué importa |
 |---|---|---|---|
-| **A1** | ALTA | Volumen: filas/celdas más allá de los límites declarados, con **medición de tiempo y memoria** | Los límites existen pero nunca se midió si son alcanzables ni qué pasan al cruzarlos. Un límite que solo se prueba con `--max-*` a mano no está probado. |
+| **A1** | ALTA | ~~Volumen~~ **HECHO en #50**: límites probados en el borde y default medido | 200k filas = 13,3 s y 1.396 MB de RSS. El default es alcanzable, pero **la memoria es el recurso escaso**. |
 | **A2** | ALTA | Escritura de artefactos **no atómica**: `run.json`, `audit.jsonl`, `reporte.xlsx` con `write_text`/`wb.save` | Dos corridas sobre el mismo `--out` pueden truncar o pisar. Sonda inicial: no se observó corrupción, pero la sonda usó conten idénticos y `run.json` no incluía los montos, así que **no prueba nada**. |
 | **A3** | MEDIA | OCR pierde la descripción de una celda que era fórmula, **en silencio** | Es pérdida de información: el operador ve una descripción vacía sin saber que el origen la tenía. Ya documentado; falta decidir con criterio de producto. |
 | **A4** | MEDIA | Idempotencia del audit log y determinismo de `run_id` entre corridas idénticas | `run_id` es un hash del input. Dos corridas idénticas deben dar el mismo `run_id` y artefactos byte-idénticos. No verificado. |
 | **A5** | MEDIA | El invariante 1:1 del matching lanza `ValueError`, **fuera de la taxonomía** | Si se violara, sería exit 10 "internal error" cuando el problema es del dato. Hoy es inalcanzable, pero un invariante que lanza la excepción equivocada confunde al operador. |
-| **A6** | MEDIA | XML: el oráculo `no_debe_producir_transacciones` para `dtd_externo` es débil | No verifica que **no haya descarga de red**. Probé que XXE no cae con `xml.etree` porque el parser estándar no resuelve entidades, no porque `defusedxml` lo impida. La afirmación real (no hay E/S) no está probada. |
+| **A6** | MEDIA | ~~XML sin red~~ **HECHO en #52**, **con un límite declarado**: ni `defusedxml` ni `xml.etree` resuelven entidades externas, así que la prueba de red nunca se dispara. Lo que se afirma es la **precondición** (el parser es el protegido). |
 | **A7** | BAJA | `docs/stress_test_2026-09-29.md` está desactualizado: lista H1–H5 como "abierto" | El documento que describe el estado del riesgo miente. En un repo YMYL, un informe de riesgo obsoleto es peor que ninguno. |
 | **A8** | PROC | El commit del gate bidireccional (H12) entró a `main` **sin revisión humana** | Único cambio de la serie sin PR. Verificado por tests que muerden, pero "tests verdes" ≠ "revisado". |
-| **A9** | PROC | Release 0.2.21 abierto (PR #47) sin mergear | Los fixes de moneda (H14) no llegan a los usuarios hasta que se mergee. |
+| **A9** | PROC | ~~Release 0.2.21~~ **HECHO**: mergeado, `verify_published` en verde, H14 verificado en un venv limpio. |
 
 ## 3. Implementación por ítem
 
@@ -169,10 +171,10 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 |---|---|---|
 | A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` | Bajar el límite y ver que el caso "justo encima" deja de fallar |
 | A2 | `tests/test_escritura_atomica.py`: matar el proceso a mitad de escritura y verificar que no hay artefacto parcial; dos corridas concurrentes con contenido distinto | Revertir `os.replace` a `write_text` y ver que aparece el artefacto truncado |
-| A3 | Documentación en `walkthrough.md`; sin test (decisión de producto) | N/A |
+| A3 | **PENDIENTE**: la documentación prometida no existe. `walkthrough.md` tiene 59 líneas y cero menciones de `data_only`. Un mensaje de commit no es documentación que un operador pueda encontrar | N/A |
 | A4 | `tests/test_idempotencia.py`: dos corridas → mismo `run_id`, mismas celdas | Introducir `datetime.now()` en el fingerprint y ver que el `run_id` cambia |
 | A5 | `tests/test_invariante_matching.py`: forzar la violación con monkeypatch y afirmar el exit/tipo | Cambiar `ErrorIngestion` por `ValueError` y ver que el test detecta la diferencia |
-| A6 | `tests/test_xml_sin_red.py`: `urlopen` que explota + DTD externo | Quitar el monkeypatch y confirmar que el test pasa (control negativo) |
+| A6 | `tests/test_xml_sin_red.py` | Cambiar `defusedxml` por `xml.etree` → cae la aserción de precondición. **El control negativo del parche no ejercita el fixture**; lo protege la aserción de precondición |
 | A7 | `tests/test_docs_actualizados.py`: el informe no puede listar un hallazgo cerrado como abierto | Marcar H1 como abierto en el doc y ver que el test falla |
 | A8 | Re-verificación de la suite del gate + `preflight` | N/A (proceso) |
 | A9 | `verify_published` + instalación limpia en venv nuevo | N/A (proceso) |
@@ -188,11 +190,67 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 5. Una revisión de sub-agente fresco confirma que no hay huecos entre el
    documento y la implementación, y ese feedback está procesado.
 
-## 5. Fuera de alcance (y por qué)
+## 5. Tensiones conocidas que NO están resueltas
 
-- **Concurrencia real multi-proceso** más allá de dos corridas simultáneas: es
-  otro proyecto. Se cubre el caso de dos procesos, que es el que el operador
-  puede provocar por error.
+Estas no son olvidos: son preguntas de producto que este documento deja abiertas a
+propósito, con el trade-off escrito. Resolverlas por cuenta propia sería inventar
+una regla de negocio.
+
+### 5.1 `run` sale con exit 0 aunque haya hallazgos críticos
+
+Verificado: 1000 USD contra 1000 CLP produce exit 0 con
+`monto_coincide_moneda_difiere` y `referencia_coincide_moneda_difiere`, ambos de
+severidad **critica**. La información está en `run.json` y en la hoja de
+hallazgos, pero el código de salida dice "todo bien".
+
+**Argumento a favor de arreglarlo**: el operador mira el exit code primero, y un
+crítico invisible desde ahí es un cliente que concilió mal sin enterarse.
+
+**Argumento en contra**: un exit distinto de 0 tiene que significar "el comando no
+pudo hacer su trabajo". Con un exit 2 por "hubo hallazgos" se rompe el contrato
+documentado (`0` = conciliación hecha, `4` = error de ingesta) y cualquier
+automatización que use el exit code empezaría a fallar por algo que sí se
+concilió.
+
+**Lo que sí está mal**: `tests/test_e2e_completo.py` fija `assert returncode ==
+EXIT_OK` **en el caso de moneda distinta**, lo que convierte una tensión en un
+comportamiento "correcto". Eso hay que revisarlo cuando se decida.
+
+### 5.2 El PDF texto se puede autoconciliar con umbral bajo
+
+El adaptador de OCR marca `bloquea_autoconcilia=True` (blindaje duro). El de PDF
+texto marca `False`: lo único que lo frena es `umbral_confianza_campos`, y la
+referencia degrada a 0,40. Con umbral 0,35 (un valor legal) una transacción de
+PDF texto queda `conciliado`.
+
+No se cambia: PDF digital es un formato de mayor confianza que un escaneo, y
+`AGENTS.md` solo prohíbe el autoconciliado para OCR. **Pero no hay ningún test que
+fije el comportamiento**, así que un cambio accidental pasaría inadvertido.
+
+### 5.3 El `run_id` no cubre los límites efectivos
+
+El fingerprint incluye `config_sha256`, los tres archivos, `mask`,
+`permitir_ocr` y la versión del modelo, pero **no** los overrides `--max-*`. Dos
+correrías que difieren solo en `--max-tabular-rows` comparten `run_id`.
+
+No produce dinero incorrecto hoy, pero rompe la promesa que
+`test_e2e_completo.py:283` hace explícita ("el `run_id` identifica el input").
+
+### 5.4 No hay verificación aritmética
+
+No existe `Σ banco = Σ esperados` ni `Σ matches + Σ pendientes = total` en ninguna
+capa. `AGENTS.md` lo lista como invariante y este documento no lo nombra en la
+sección 2. Es el control compensatorio estándar contra una fila perdida, y hoy la
+única defensa es la visibilidad por ítem del `pendiente_banco`.
+
+## 6. Fuera de alcance (y por qué)
+
+- **Concurrencia real multi-proceso**: NO se cubre. Una versión anterior de este
+  documento afirmaba que "se cubre el caso de dos procesos" y era **falso**: no
+  hay ningún test de concurrencia en el repo, y A2 sigue abierto. La corrección
+  importa: `JsonlAuditWriter` abre `audit.jsonl` en modo `"w"` desde el
+  constructor, así que una segunda corrida **trunca** el log de la primera antes de
+  hacer nada. Ver A2.
 - **Fuzzing de bytes sobre PDF**: los mutadores destruyen la estructura y solo
   producen "no se puede abrir". Se genera PDF semánticamente hostil, no corrupto.
 - **Tipografías y OCR propeller más allá de lo hecho**: el camino OCR ya tiene
@@ -200,7 +258,7 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 - **Performance tuning**: solo si A1 muestra que un default es inalcanzable.
   "Medir antes de optimizar" (AGENTS.md).
 
-## 6. Invariantes permanentes
+## 7. Invariantes permanentes
 
 Estos valen para todo el código nuevo, no para un ítem:
 

@@ -194,6 +194,13 @@ def ejecutar_validate(
         max_pdf_pages=max_pdf_pages,
         max_pdf_text_chars=max_pdf_text_chars,
         max_xml_movimientos=max_xml_movimientos,
+        # Este se aceptaba y se descartaba: el parametro existia en la firma y
+        # en el diccionario de `_apply_limit_overrides`, pero no en la llamada.
+        # El efecto era que el flag era **muerto**, y peor: el mensaje de error de
+        # la zip bomb le dice al operador que lo use. Un remedio que no funciona
+        # es peor que no dar remedio, porque el operador lo prueba y cree que el
+        # archivo tiene otro problema.
+        max_xlsx_uncompressed_bytes=max_xlsx_uncompressed_bytes,
     )
 
     # Validacion de existencia se hace por typer; aqui chequeamos formato soportado + parseo real.
@@ -292,6 +299,10 @@ def ejecutar_run(
         max_pdf_pages=max_pdf_pages,
         max_pdf_text_chars=max_pdf_text_chars,
         max_xml_movimientos=max_xml_movimientos,
+        # Mismo bug que en `ejecutar_validate`: el flag se aceptaba y se
+        # descartaba. Y aqui importa mas, porque `run` es el camino que el
+        # operador usa de verdad, y el limite de la zip bomb lo frena a el.
+        max_xlsx_uncompressed_bytes=max_xlsx_uncompressed_bytes,
     )
 
     run_fingerprint = {
@@ -316,6 +327,31 @@ def ejecutar_run(
 
     txs = cargar_transacciones_bancarias(bank, cfg=cfg, audit=audit)
     exps = cargar_movimientos_esperados(expected, cfg=cfg, audit=audit)
+
+    # `ejecutar_validate` ya rechazaba un archivo sin transacciones; `run` no lo
+    # hacia, y esa asimetria es el bug. Un CSV con solo el encabezado pasaba por
+    # `run` con exit 0 y generaba un reporte donde los N movimientos esperados
+    # aparecian como "pendientes". La conclusion razonable del operador, "no hay
+    # nada que conciliar del lado del banco", es falsa: lo que paso es que **no se
+    # leyo nada**, y el reporte decia lo contrario con exito.
+    #
+    # Un export de 50 movimientos leido como 0 es indistinguible de un export
+    # vacio si la herramienta sale bien. Por eso es fail-closed, y por eso el
+    # adaptador de OCR ya lo hacia en su camino (`pdf_ocr_adapter.py`).
+    if not txs:
+        raise ErrorIngestion(
+            "No se detectaron transacciones bancarias.",
+            details={"motivo": "cero_transacciones", "archivo": bank.name},
+            hint="El archivo se leyo pero no contiene ninguna transaccion utilizable. "
+            "Verifique que tenga filas de datos y no solo encabezados.",
+        )
+    if not exps:
+        raise ErrorIngestion(
+            "No se detectaron movimientos esperados.",
+            details={"motivo": "cero_esperados", "archivo": expected.name},
+            hint="El archivo se leyo pero no contiene ningun movimiento. "
+            "Verifique que tenga filas de datos y no solo encabezados.",
+        )
 
     # Un id repetido hace que una fila desaparezca de la conciliacion sin dejar
     # hallazgo: el motor marca el id como consumido y la segunda fila no vuelve a

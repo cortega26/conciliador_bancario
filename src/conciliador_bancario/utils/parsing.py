@@ -41,6 +41,9 @@ _PARENTESIS_RE = re.compile(r"^\(.*\)$")
 # Un grupo de miles legitimo tiene exactamente 3 digitos.
 _DIGITOS_GRUPO_MILES = 3
 _DIGITOS_MAX_DECIMAL_AMBIGUO = 2
+# Precision por defecto del contexto `decimal`. Es el limite tecnico real: mas
+# alla, `quantize` en el formateo del reporte lanza InvalidOperation.
+_DIGITOS_MAX_PRECISION = 28
 
 
 def _resolver_separadores(t: str, original: str) -> str:
@@ -61,13 +64,44 @@ def _resolver_separadores(t: str, original: str) -> str:
         return t.replace(".", "").replace(",", ".")
 
     # Un solo tipo de separador, repetido: todos son de miles (1.234.567).
+    #
+    # Pero "separador repetido" no basta: los grupos tienen que ser de 3 digitos.
+    # `1.2.3.4.5` con 5 grupos de 1 digito no es un monto, es una IP, y quitando
+    # los puntos quedaba 12345: un monto inventado con exit 0. Un grupo de miles
+    # es de exactamente 3 digitos, y el primero de 1 a 3.
     sep = "," if tiene_coma else "."
     if t.count(sep) > 1:
+        grupos = t.split(sep)
+        if not all(len(g) == _DIGITOS_GRUPO_MILES for g in grupos[1:]):
+            raise ErrorParseo(
+                f"Monto invalido: {original!r} (grupos de miles de tamano "
+                "irregular: no es un monto, puede ser una IP o un version)"
+            )
+        if not grupos[0] or len(grupos[0]) > _DIGITOS_GRUPO_MILES or grupos[0].startswith("0"):
+            raise ErrorParseo(
+                f"Monto invalido: {original!r} (primer grupo de miles invalido: "
+                "debe tener de 1 a 3 digitos y no empezar en cero)"
+            )
         return t.replace(sep, "")
 
     # Separador unico: solo es inequivoco si cierra un grupo de miles exacto.
     entero, _, decimales = t.partition(sep)
     if len(decimales) == _DIGITOS_GRUPO_MILES:
+        # Un grupo de miles no puede empezar en cero. `0,567` no es 567 pesos:
+        # ningun exportador escribe 567 con un separador de miles al lado de un
+        # cero a la izquierda. Leerlo como grupo da un error de 1000x con exit 0,
+        # y hacia justo la lectura de "puede ser decimal" que las dos lineas de
+        # arriba rechazan. Inconsistente consigo mismo: el mismo repositorio
+        # rechazaba `0,50` y aceptaba `0,567`.
+        if entero.startswith("0") and entero != "0":
+            raise ErrorParseo(
+                f"Monto invalido: {original!r} (grupo de miles con cero a la "
+                "izquierda: no es un separador de miles)"
+            )
+        if entero == "0":
+            raise ErrorParseo(
+                f"Monto ambiguo (separador decimal en moneda sin decimales): {original!r}"
+            )
         return entero + decimales
     if decimales and len(decimales) <= _DIGITOS_MAX_DECIMAL_AMBIGUO:
         raise ErrorParseo(
@@ -96,6 +130,15 @@ def parse_monto_clp(texto: str) -> Decimal:
 
     # El signo se resuelve antes de limpiar: los parentesis de contabilidad
     # envuelven el monto completo y "-" puede preceder o seguir a "(".
+    #
+    # Un signo **unico** y coherente. Antes se resolvia el primer signo y el
+    # resto caia en el filtro de ruido, con resultados que cambian el valor:
+    #   - `--100` -> el primer `-` da negativo, el segundo desaparece: -100, cuando
+    #     el texto no dice eso. Peor aun si se acepta como positivo por un
+    #     segundo parseo: el signo queda a eleccion del parser.
+    #   - `+-100` -> el `+` se descarta y el `-` queda: negativo, cuando el
+    #     documento empezaba con un mas.
+    # Un monto con dos signos no es un monto: es texto que hay que revisar.
     negativo = False
     en_parentesis = _PARENTESIS_RE.match(t)
     if en_parentesis:
@@ -108,6 +151,11 @@ def parse_monto_clp(texto: str) -> Decimal:
         t = t[1:].strip()
     elif t.startswith("+"):
         t = t[1:].strip()
+    # Lo que sobra tiene que ser un digito, un separador, un parentesis de
+    # contabilidad o un signo colgado, y **no** un segundo signo. Se comprueba
+    # aqui, antes de que el filtro de ruido pueda borrarlo en silencio.
+    if t[:1] in ("+", "-"):
+        raise ErrorParseo(f"Monto invalido: {texto!r} (signos duplicados: el signo no es unico)")
 
     # Ruido primero (moneda, espacios), y despues una validacion estricta de lo
     # que queda. Antes se hacia `sub` con una lista de prohibidos, que descartaba
@@ -125,6 +173,26 @@ def parse_monto_clp(texto: str) -> Decimal:
         d = Decimal(t)
     except InvalidOperation as e:
         raise ErrorParseo(f"Monto invalido: {texto!r}") from e
+
+    # H4: el parseo de un numero enorme **funciona**; el trunca aguas abajo.
+    # `Decimal("9"*40)` se construyo bien, y `to_integral_value()` tambien. Lo que
+    # falla es `quantize(Decimal("0.01"))` en el formateo del reporte, que lanza
+    # `InvalidOperation` porque 40 digitos no caben en el contexto de 28.
+    #
+    # Cerrarlo aca, y no en el `except` del reporte, porque la exception que
+    # escapaba no era `ErrorParseo`: era una `InvalidOperation` sin relacion con
+    # la taxonomia, y la frontera la traducía a un "error interno" generico. Un
+    # monto de 40 digitos no es un monto de un banco chileno, asi que la lectura
+    # segura es rechazarlo con un mensaje que diga cual es el problema.
+    #
+    # El limite es el del contexto de precision de `decimal` (28 digitos), no un
+    # limite de negocio inventado: es exactamente donde el pipeline trunca.
+    if len(d.as_tuple().digits) > _DIGITOS_MAX_PRECISION:
+        raise ErrorParseo(
+            f"Monto invalido: {texto!r} (excede {_DIGITOS_MAX_PRECISION} "
+            "digitos significativos: no es un monto de CLP representable sin "
+            "perder precision)"
+        )
 
     # CLP no tiene centavos. Toda operacion bancaria ocurre en pesos enteros, asi
     # que un monto con parte decimal no es un monto de CLP: es otro dato, y

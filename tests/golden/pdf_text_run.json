@@ -21,16 +21,17 @@
     {
       "detalles": {
         "diferencia": "250000",
+        "moneda": "CLP",
         "n_esperados": 2,
         "n_tx": 1,
         "total_banco": "150000",
-        "total_conciliado": "150000",
+        "total_conciliado": "0",
         "total_esperado": "-100000"
       },
       "entidad": "sistema",
       "entidad_id": null,
       "id": "H-59142234b63c79",
-      "mensaje": "El total del banco (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 150000. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
+      "mensaje": "El total del banco en CLP (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 0. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
       "severidad": "advertencia",
       "tipo": "diferencia_de_sumas"
     },

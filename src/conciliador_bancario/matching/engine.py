@@ -630,6 +630,76 @@ def conciliar(
 
     verificar_invariante_1a1(matches)
 
+    # --- La moneda que se asumió y terminó conciliando ------------------------
+    #
+    # H14 obliga a que banco y esperado compartan moneda, pero esa comparacion
+    # solo vale si las dos etiquetas son **reales**. Un extracto en USD sin columna
+    # de moneda y un libro en CLP salen ambos marcados con `moneda_default`, se
+    # concilian y salen con exit 0 sin ninguna señal: la proteccion de H14 queda
+    # vacia por la puerta de atras.
+    #
+    # ## Por que solo los matches conciliados
+    #
+    # Un PDF texto o un OCR nunca traen columna de moneda, asi que ahi el
+    # supuesto es estructural y no una anomalia. Avisar en cada corrida PDF
+    # entrenaria al operador a ignorar el aviso, que es peor que no avisar. Lo que
+    # si es una anomalia es que **el supuesto haya producido una conciliacion**:
+    # ahi el dinero quedo declarado conciliado sobre una etiqueta que nadie
+    # escribio, y eso si merece una linea en el reporte. Es el mismo criterio del
+    # aviso de umbral: se avisa del riesgo real, no de la mera existencia del
+    # supuesto.
+    tx_por_id = {t.id: t for t in transacciones}
+    exp_por_id = {e.id: e for e in esperados}
+    for m in matches:
+        if m.estado is not EstadoMatch.conciliado:
+            continue
+        asumidas = [
+            tx_por_id[i]
+            for i in m.transacciones_bancarias
+            if i in tx_por_id and tx_por_id[i].moneda_asumida
+        ] + [
+            exp_por_id[i]
+            for i in m.movimientos_esperados
+            if i in exp_por_id and exp_por_id[i].moneda_asumida
+        ]
+        if not asumidas:
+            continue
+        monedas = sorted({a.moneda for a in asumidas})
+        hid = _hallazgo_id(
+            run_id,
+            "moneda_asumida_en_match",
+            "match",
+            m.id,
+            {"monedas": monedas},
+        )
+        h = Hallazgo(
+            id=hid,
+            severidad=SeveridadHallazgo.advertencia,
+            tipo="moneda_asumida_en_match",
+            mensaje=(
+                f"El match {m.id} se concilio con la moneda asumida "
+                f"({', '.join(monedas)}): el archivo no informa la divisa y se uso "
+                f"moneda_default. Si la divisa real es otra, esta conciliacion no "
+                f"deberia existir. Verifique que moneda_default sea el valor "
+                f"correcto para este archivo."
+            ),
+            entidad="match",
+            entidad_id=m.id,
+            detalles={
+                "match_id": m.id,
+                "monedas_asumidas": monedas,
+                "regla": m.regla,
+            },
+        )
+        hallazgos.append(h)
+        audit.write(
+            AuditEvent(
+                "hallazgo",
+                "Match conciliado con la moneda asumida por defecto",
+                {"hallazgo_id": hid, "match_id": m.id, "monedas": monedas},
+            )
+        )
+
     # --- La diferencia que todo contador mira primero ------------------------
     #
     # En una conciliacion bancaria, lo primero que se hace es restar el total del

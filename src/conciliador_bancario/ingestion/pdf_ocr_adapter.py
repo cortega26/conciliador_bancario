@@ -257,6 +257,7 @@ def cargar_transacciones_pdf_ocr(
                     fecha_contable=None,
                     monto=_campo(monto, notas="OCR"),
                     moneda=cfg.moneda_default,
+                    moneda_asumida=True,
                     descripcion=_campo(desc, notas="OCR", degrade=0.05),
                     referencia=None,
                     archivo_origen=path.name,

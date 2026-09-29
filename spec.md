@@ -250,12 +250,31 @@ correrías que difieren solo en `--max-tabular-rows` comparten `run_id`.
 No produce dinero incorrecto hoy, pero rompe la promesa que
 `test_e2e_completo.py:283` hace explícita ("el `run_id` identifica el input").
 
-### 5.4 No hay verificación aritmética
+### 5.4 No hay verificación aritmética — **RESUELTO en #63**
 
-No existe `Σ banco = Σ esperados` ni `Σ matches + Σ pendientes = total` en ninguna
-capa. `AGENTS.md` lo lista como invariante y este documento no lo nombra en la
-sección 2. Es el control compensatorio estándar contra una fila perdida, y hoy la
-única defensa es la visibilidad por ítem del `pendiente_banco`.
+`diferencia_de_sumas` compara los totales y reporta la diferencia. Tres correcciones
+que la revisión encontró en esa aritmética, todas con el mismo fondo: **un número
+que parece correcto y no lo es, con exit 0**.
+
+1. **`total_conciliado` contaba matches bloqueados.** Sumaba toda transacción que
+   apareciera en cualquier match, sin mirar `m.estado`. Un match `bloqueado` o
+   `sugerido` no es dinero conciliado, y el campo decía lo contrario.
+2. **Las sumas mezclaban divisas.** 1000 USD + 1000 CLP daban 2000, que no es una
+   cantidad. El motor ya comparaba divisas al decidir cada match (H14), pero esta
+   aritmética se escribió después: la protección de H14 quedaba vacía para el
+   total. **Es H14 por otra puerta**, y por eso se cierra junto con él.
+3. **La moneda se asumía en silencio.** Cuando el archivo no trae columna de
+   `moneda`, los adaptadores la rellenan con `cfg.moneda_default` sin decir nada.
+   Un extracto en USD sin columna contra un libro en CLP queda ambos marcados CLP,
+   se concilian y salen con **exit 0 y ningún hallazgo**: el motor comparó CLP
+   contra CLP, y ambas etiquetas venían del default.
+
+   Ahora el adapter marca `moneda_asumida` (el core no conoce nombres de columnas) y
+   el motor avisa **cuando el supuesto produce una conciliación**. Solo en ese caso:
+   un PDF nunca trae columna de moneda, así que el supuesto es estructural y avisar
+   en cada corrida sería ruido. Lo anómalo es que el supuesto haya movido dinero.
+
+### 5.5 La moneda asumida anula la protección de H14
 
 ## 6. Fuera de alcance (y por qué)
 

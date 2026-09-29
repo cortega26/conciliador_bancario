@@ -59,6 +59,7 @@ def tx(
     ref: str | None = None,
     score: float = 0.95,
     bloquea: bool = False,
+    moneda_asumida: bool = False,
 ) -> TransaccionBancaria:
     return TransaccionBancaria(
         id=tid,
@@ -69,6 +70,7 @@ def tx(
         fecha_contable=None,
         monto=_campo(Decimal(monto), score=score),
         moneda=moneda,
+        moneda_asumida=moneda_asumida,
         descripcion=_campo("desc", score=score),
         referencia=_campo(ref, score=score) if ref else None,
         archivo_origen="banco.csv",
@@ -85,12 +87,14 @@ def exp(
     moneda: str = "CLP",
     ref: str | None = None,
     score: float = 0.95,
+    moneda_asumida: bool = False,
 ) -> MovimientoEsperado:
     return MovimientoEsperado(
         id=eid,
         fecha=_campo(fecha, score=score),
         monto=_campo(Decimal(monto), score=score),
         moneda=moneda,
+        moneda_asumida=moneda_asumida,
         descripcion=_campo("desc", score=score),
         referencia=_campo(ref, score=score) if ref else None,
         tercero=None,

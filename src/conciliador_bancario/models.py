@@ -64,6 +64,14 @@ class TransaccionBancaria(CBModel):
     fecha_contable: CampoConConfianza | None = None
     monto: CampoConConfianza
     moneda: Moneda = "CLP"
+    # True cuando `moneda` no vino del archivo y se relleno con
+    # `cfg.moneda_default`. El motor compara divisas (H14), pero esa comparacion
+    # solo vale si las dos etiquetas son reales: un extracto en USD sin columna de
+    # moneda y un libro en CLP salen ambos marcados CLP y se concilian con exit 0
+    # sin ninguna señal. El flag existe para que el motor pueda decirlo en voz
+    # alta, y el adapter es el unico que sabe si la columna venía o no: el core
+    # no debe conocer nombres de columnas.
+    moneda_asumida: bool = False
     descripcion: CampoConConfianza
     referencia: CampoConConfianza | None = None
     archivo_origen: str = Field(min_length=1)
@@ -100,6 +108,14 @@ class MovimientoEsperado(CBModel):
     fecha: CampoConConfianza
     monto: CampoConConfianza
     moneda: Moneda = "CLP"
+    # True cuando `moneda` no vino del archivo y se relleno con
+    # `cfg.moneda_default`. El motor compara divisas (H14), pero esa comparacion
+    # solo vale si las dos etiquetas son reales: un extracto en USD sin columna de
+    # moneda y un libro en CLP salen ambos marcados CLP y se concilian con exit 0
+    # sin ninguna señal. El flag existe para que el motor pueda decirlo en voz
+    # alta, y el adapter es el unico que sabe si la columna venía o no: el core
+    # no debe conocer nombres de columnas.
+    moneda_asumida: bool = False
     descripcion: CampoConConfianza
     referencia: CampoConConfianza | None = None
     tercero: CampoConConfianza | None = None

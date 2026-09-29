@@ -27,6 +27,31 @@ un operador que no los conoce los lee como bugs (o, peor, no los detecta). Son d
 tomadas a propósito, con su motivo. La fuente de verdad del estado de los hallazgos es
 `spec.md`; este documento explica qué tiene que saber quien **usa** la herramienta.
 
+### Un archivo sin columna de moneda no dice en qué moneda está
+
+Si el archivo no trae columna `moneda`, se usa `moneda_default` de la config (CLP por
+defecto). Un PDF **nunca** trae columna de moneda, así que esto no es una excepción: es
+lo habitual.
+
+Aparece un aviso cuando **el supuesto produce una conciliación**: `moneda_asumida_en_match`.
+No antes, porque un aviso en cada corrida PDF sería ruido, y el ruido entrena a ignorarlo.
+Lo que sí es una anomalía es que el dinero quedara declarado conciliado sobre una etiqueta
+que nadie escribió.
+
+Por qué importa: la conciliación compara las monedas de banco y esperado, pero esa
+comparación solo vale si las dos etiquetas son reales. Un extracto en USD sin columna
+contra un libro en CLP salía conciliado con exit 0 y ninguna señal. Si un archivo no
+informa la divisa, lo correcto es poner `moneda_default` en la moneda que sí tiene.
+
+### La diferencia de sumas se calcula por moneda
+
+La diferencia entre el total del banco y el de los esperados se reporta **por moneda**,
+y solo cuenta como "conciliado" lo que quedó en estado `conciliado`.
+
+Sumar 1000 USD y 1000 CLP daría 2000, que no es una cantidad, y decir "Conciliado:
+150.000" al lado de un match bloqueado sería un número que contradice al resto del
+reporte. Un match bloqueado por confianza o solo sugerido **no** es dinero conciliado.
+
 ### Una celda de XLSX que era fórmula pierde su descripción, en silencio
 
 Si una celda de texto empieza con `=`, openpyxl la guarda como **fórmula** al escribir, y

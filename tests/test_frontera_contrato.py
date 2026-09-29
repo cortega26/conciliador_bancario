@@ -168,26 +168,150 @@ def test_entry_point_respeta_la_frontera(
             )
 
 
+# --- Fixtures minimos validos, uno por formato --------------------------------
+#
+# La primera version de este archivo usaba un unico CSV para todos los entry
+# points. Falla: el CSV no es un XLSX, ni XML, ni PDF, y ademas le faltan
+# columnas, asi que los OCHO entry points terminaban en el camino de error y la
+# asercion de determinismo era `error:ErrorIngestion == error:ErrorIngestion`.
+# Verde, ocho casos, y cero comprobar: exactamente el fallo que el docstring de
+# este archivo advierte contra.
+#
+# Por eso el determinismo se mide sobre un archivo que el adaptador realmente
+# parsea, y ademas se exige que tenga exito. Si un adaptador cambia sus columnas
+# requeridas, el fixture deja de servir y el test avisa en vez de seguir
+# comparando dos errores.
+
+_CSV_BANCO = (
+    b"fecha_operacion,fecha_contable,monto,moneda,descripcion,referencia\n"
+    b"05/01/2026,05/01/2026,150000,CLP,Transferencia a ACME,FAC-1001\n"
+)
+_CSV_ESPERADOS = (
+    b"id,fecha,monto,moneda,descripcion,referencia\n"
+    b"EXP-001,05/01/2026,150000,CLP,Pago a ACME,FAC-1001\n"
+)
+_XML_BANCO = (
+    b'<?xml version="1.0" encoding="UTF-8"?>'
+    b'<cartola banco="Banco Demo" cuenta="123456789012"><movimiento>'
+    b"<fecha_operacion>05/01/2026</fecha_operacion>"
+    b"<fecha_contable>05/01/2026</fecha_contable>"
+    b"<monto>150000</monto><moneda>CLP</moneda>"
+    b"<descripcion>Transferencia a ACME</descripcion>"
+    b"<referencia>FAC-1001</referencia>"
+    b"</movimiento></cartola>"
+)
+
+
+def _xlsx_bytes(encabezado: list[str]) -> bytes:
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(encabezado)
+    ws.append(["05/01/2026", "150000", "Transferencia a ACME", "CLP", "FAC-1001"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _pdf_minimo() -> bytes:
+    """PDF real y vacio de texto.
+
+    Va con bytes de verdad, no con un archivo disfrazado: `pypdf` valida el
+    encabezado, y un PDF de mentira cortaria antes de llegar a la logica que se
+    quiere ejercitar.
+    """
+    import io
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=200, height=200)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _fixture(entry: EntryPoint) -> tuple[str, bytes]:
+    """El archivo minimo que este entry point deberia poder parsear de verdad.
+
+    El formato se deriva del modulo, no se hardcodea por funcion: asi un
+    adaptador nuevo queda cubierto por la regla y no por un caso escrito a mano.
+    """
+    modulo = entry.modulo
+    esperados = entry.nombre.startswith("cargar_movimientos_esperados")
+    if modulo == "csv_adapter":
+        return (".csv", _CSV_ESPERADOS if esperados else _CSV_BANCO)
+    if modulo == "xlsx_adapter":
+        encabezado = (
+            ["fecha", "monto", "descripcion", "moneda", "referencia"]
+            if esperados
+            else ["fecha_operacion", "monto", "descripcion", "moneda", "referencia"]
+        )
+        return (".xlsx", _xlsx_bytes(encabezado))
+    if modulo == "xml_adapter":
+        return (".xml", _XML_BANCO)
+    if modulo == "pdf_text_adapter":
+        return (".pdf", _pdf_minimo())
+    if modulo == "pdf_ocr_adapter":
+        return (".pdf", _pdf_minimo())
+    raise AssertionError(
+        f"{modulo}.{entry.nombre}: no hay fixture definido para este modulo. "
+        "Agregalo a `_fixture`; si el entry point no puede tener un fixture que "
+        "llegue al exito, aniadilo a SIN_EXITO_ESPERADO con el motivo."
+    )
+
+
+# OCR no puede alcanzar el camino de exito con un PDF sintetico: necesita que
+# tesseract devuelva texto, y un PDF sin texto no lo tiene. Su camino de
+# exito ya lo cubre test_property_ingesta.py con los stubs de OCR inyectados.
+SIN_EXITO_ESPERADO = {
+    "pdf_ocr_adapter.cargar_transacciones_pdf_ocr",
+}
+
+
 @pytest.mark.parametrize("entry", ENTRY_POINTS, ids=_IDS)
 def test_entry_point_es_determinista(tmp_path: Path, entry: EntryPoint) -> None:
-    """Misma entrada, mismo resultado, siempre.
+    """Misma entrada, mismo resultado, sobre un archivo que se parsea de verdad.
 
     Sin esto, reprocesar un lote puede dar conciliaciones distintas y nada lo
     detectaria. El id de transaccion es un hash sobre archivo+fila+datos, asi que
     una lectura no determinista se traduce directo en ids distintos entre corridas.
+
+    Ademas de comparar las dos corridas, se exige que la primera tenga exito. Es
+    lo que le da dientes al test: comparar dos errores identicos no comprueba
+    determinismo, comprueba que el fixture esta roto.
     """
+    sufijo, contenido = _fixture(entry)
+    identificador = f"{entry.modulo}.{entry.nombre}"
     argumentos_extra: dict[str, Any] = {}
     if entry.necesita_cfg:
         argumentos_extra = {"cfg": CFG, "audit": NullAuditWriter()}
 
-    archivo = tmp_path / "cartola.csv"
-    archivo.write_bytes(b"fecha_operacion,monto\n05/01/2026,150000\n")
+    archivo = tmp_path / f"cartola{sufijo}"
+    archivo.write_bytes(contenido)
 
-    def correr() -> str:
+    def correr() -> tuple[str, object]:
+        # El resultado se captura como valor, no se propaga: asi el camino de
+        # error tambien se puede comparar, que es determinismo igual.
         try:
-            resultado = entry.fn(archivo, **argumentos_extra)  # type: ignore[arg-type]
+            return ("ok", entry.fn(archivo, **argumentos_extra))  # type: ignore[arg-type]
         except ErrorConciliador as e:
-            return f"error:{type(e).__name__}"
-        return f"ok:{resultado!r}"
+            return ("error", type(e).__name__)
 
-    assert correr() == correr()
+    primera = correr()
+    segunda = correr()
+
+    assert repr(primera) == repr(segunda), f"{identificador} no es determinista"
+
+    if identificador in SIN_EXITO_ESPERADO:
+        return
+
+    assert primera[0] == "ok", (
+        f"{identificador} no pudo parsear su propio fixture valido, asi que la "
+        f"comparacion de determinismo seria vacia (se compararian dos errores "
+        f"identicos). Error: {primera[1]!r}. Si cambiaron las columnas requeridas "
+        "o el formato de entrada, actualiza `_fixture`."
+    )

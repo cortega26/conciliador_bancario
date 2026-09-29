@@ -80,6 +80,44 @@
       real y test existente, y spec.md/todo.md no pueden contradecirse
 - [x] Prueba de mordida: el test detecta un hallazgo marcado como abierto
 
+## A4 — Determinismo de los artefactos — MEDIA — **HECHO**
+
+- [x] Medir que es comparable y que no: `run.json` y `audit.jsonl` son
+      byte-idénticos; el `.xlsx` **no** (es un ZIP con timestamps)
+- [x] Comparar **celdas**, no hashes del `.xlsx`: el hash mide la hora de escritura
+- [x] Tres casos: conciliación simple, con comisión y con referencias
+- [x] Test del `run_id` y del `audit.jsonl` por hash (sí son comparables)
+- [x] **Control negativo**: dos bancos distintos producen reportes distintos, y el
+      reporte tiene contenido real (no vacío). Sin esto, un pipeline que devolviera
+      siempre cero también pasaría "el reporte es determinista"
+- [x] El masking no depende de cuándo se corra
+- [x] Prueba de mordida: PID en una celda → 4 tests caen; PID en `run.json` → 9 caen
+
+### Un test que fallaba por su propia premisa
+
+La primera version escribia `banco_{tag}.csv`, y con eso dos corridas del mismo
+contenido daban `run_id` distintos. El motor es determinista (verificado: los mismos
+archivos dos veces dan el mismo `run_id`); lo que pasa es que `archivo_origen` entra
+en `run.json` y por lo tanto en el fingerprint. Dos archivos con distinto nombre **no
+son la misma entrada**, y el `run_id` tiene razon en distinguirlos.
+
+Un test que usa nombres distintos para probar "misma entrada" estaba probando
+"entradas distintas". Ahora el nombre se mantiene y lo único que cambia es el
+directorio de salida.
+
+### Y una mordida que no mordia
+
+Mi primera verificacion metio `random.random()` en el motor y un timestamp en las
+propiedades del workbook, y **0 tests cayeron**. Dos razones, y las dos son mio error
+de verificacion, no del test:
+
+1. La funcion `_ruido_aleatorio` la agregue y nunca la llame.
+2. `int(time.time())` da el mismo valor a dos corridas del mismo segundo, asi que las
+   dos-producian el mismo score.
+
+Con PID, que es garantizado distinto entre procesos, el reporte cae en 4 tests y
+`run.json` en 9. **Un test de mordida que no muerde no demuestra que el test sirva.**
+
 ## A8 — Re-verificar el commit sin revisión (H12) — PROC
 
 - [ ] Re-verificar la suite del gate bidireccional desde la rama actual

@@ -76,9 +76,14 @@ El PDF escaneado (OCR) nunca se autoconcilia: el adaptador lo bloquea. El PDF **
 no: lo único que lo frena es `umbral_confianza_campos`, y la referencia degrada su
 confianza a 0,40. Con un umbral de 0,35, una transacción de PDF texto queda `conciliado`.
 
-Por qué no se cambió: el PDF digital es un formato de mayor confianza que un escaneo, y
-la política solo prohíbe el autoconciliado para OCR. Cambiarlo sin criterio sería inventar
-una regla de negocio. Está escrito en `spec.md` §5.2.
+Por qué no se cambió la política: el PDF digital es un formato de mayor confianza que un
+escaneo, y la política solo prohíbe el autoconciliado para OCR. El OCR además está
+blindado (`bloquea_autoconcilia=True`, que ningún umbral puede vencer).
+
+Lo que sí cambió es la visibilidad: `run` avisa cuando el umbral baja de 0,5, diciendo
+que se está admitiendo data degradada y que el OCR sigue bloqueado. Con umbral 0,30 una
+referencia de PDF texto (confianza 0,40) se autoconcilia, y el operador que lo bajó para
+otra cosa quizá no lo sabía.
 
 ### El `run_id` no incluye los overrides `--max-*`
 

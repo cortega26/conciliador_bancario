@@ -77,8 +77,14 @@ def mensaje_merge(pr: Pr) -> str:
     return f"Merge PR #{pr.numero}: {sin_prefijo(pr.titulo)}"
 
 
-def validar(pr: Pr) -> None:
-    """Todo lo que impide mergear, en un solo lugar, con mensajes accionables."""
+def validar(pr: Pr) -> list[str]:
+    """Todo que hay que saber antes de mergear.
+
+    Devuelve los **avisos** (no impiden el merge) y lanza `ErrorDeMerge` para lo
+    que si lo impide. Separar los dos importa: un aviso que bloquea deja de ser
+    aviso.
+    """
+    avisos: list[str] = []
     if pr.estado != "OPEN":
         raise ErrorDeMerge(f"el PR #{pr.numero} esta en estado {pr.estado}, no OPEN")
     if pr.mergeable != "MERGEABLE":
@@ -102,13 +108,24 @@ def validar(pr: Pr) -> None:
             "Si es lo esperado, revisalo a mano antes de seguir."
         )
     if CONVENCIONAL.match(pr.titulo):
-        raise ErrorDeMerge(
-            f"el titulo del PR #{pr.numero} tiene prefijo de tipo: {pr.titulo!r}\\n"
-            "Con merge commit, GitHub lo copia al cuerpo del commit y release-please "
-            "lo parsea como un mensaje conventional, con lo que la entrada sale dos "
-            "veces en el changelog.\\n"
-            f"Renombrar a: {sin_prefijo(pr.titulo)!r}"
+        # Aviso, no rechazo. Y el motivo importa: lo que duplica el changelog es
+        # la linea conventional en el **cuerpo del merge commit**, y este script
+        # construye ese cuerpo con `mensaje_merge()`, que ya le saca el prefijo.
+        #
+        # Una version anterior rechazaba aca, y fallo con los PRs de
+        # release-please: su titulo lo genera `pull-request-title-pattern`
+        # ("chore(release): v${version}") y no es una variable del operador.
+        # Bloquearlos habria sido bloquear la ruta de release entera para
+        # proteger algo que este script ya garantiza.
+        #
+        # La proteccion real queda en dos lados: este script arma el mensaje sin
+        # prefijo, y `check_changelog_commits.py` falla en CI si alguien mergea
+        # a mano y deja el titulo conventional en el cuerpo.
+        avisos.append(
+            f"el titulo del PR #{pr.numero} tiene prefijo de tipo: {pr.titulo!r}; "
+            f"se va a quitar para el mensaje del merge -> {sin_prefijo(pr.titulo)!r}"
         )
+    return avisos
 
 
 class ErrorDeGh(ErrorDeMerge):
@@ -174,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         pr = obtener_pr(args.numero)
-        validar(pr)
+        avisos = validar(pr)
     except ErrorDeMerge as e:
         print(f"ERROR: {e}")
         return 1
@@ -183,6 +200,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     mensaje = mensaje_merge(pr)
+    for a in avisos:
+        print(f"AVISO: {a}")
+
     if args.dry_run:
         print(f"PR #{pr.numero} listo para mergear ({pr.rama})")
         print(f"Mensaje del merge commit:\n  {mensaje}")

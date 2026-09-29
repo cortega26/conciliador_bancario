@@ -176,3 +176,94 @@ def test_un_invariante_violado_da_exit_de_ingestion(tmp_path: Path) -> None:
     assert tipo == "ingestion"
     assert CLI_INGESTION == EXIT_INGESTION, "los codigos de exit no coinciden entre capas"
     assert CLI_INGESTION != EXIT_INTERNAL
+
+
+# --- Toda decision de matching deja evidencia ------------------------------
+#
+# `ambiguedad_monto_fecha` emitia el hallazgo y hacia `continue` sin escribir en
+# el audit, mientras su gemelo `ambiguedad_referencia` si lo hacia. La asimetria
+# hacia que una decision fail-closed quedara solo en el run.json: a los tres meses
+# nadie puede reconstruir por que ese movimiento quedo pendiente.
+#
+# Estos tests comparan los dos gemelos, para que una asimetria futura se note.
+
+
+def _eventos_de_ambiguedad(audit) -> list:
+    return [
+        e for e in audit.eventos if "Ambiguedad" in e.mensaje or "ambiguedad" in e.mensaje.lower()
+    ]
+
+
+def test_la_ambiguedad_por_monto_y_fecha_llega_al_audit() -> None:
+    """Un "no concilio" fail-closed tiene que dejar el **por que** en la traza."""
+    import json
+    import tempfile
+    from pathlib import Path as _Path
+
+    from conciliador_bancario.audit.audit_log import JsonlAuditWriter
+    from conciliador_bancario.matching.engine import conciliar
+    from conciliador_bancario.models import ConfiguracionCliente
+
+    from tools.fuzzmatch import exp, tx
+
+    with tempfile.TemporaryDirectory() as td:
+        ruta = _Path(td) / "audit.jsonl"
+        audit = JsonlAuditWriter(ruta, run_id="r")
+        # Dos esperados con el mismo monto y fecha: la regla no sabe cual es, asi
+        # que no concilia.
+        r = conciliar(
+            cfg=ConfiguracionCliente(cliente="X"),
+            transacciones=[tx("TX1", "1000")],
+            esperados=[exp("EXP1", "1000"), exp("EXP2", "1000")],
+            audit=audit,
+            run_id="r",
+        )
+        audit.cerrar()
+        assert "ambiguedad_monto_fecha" in [h.tipo for h in r.hallazgos]
+        eventos = [json.loads(line) for line in ruta.read_text(encoding="utf-8").splitlines()]
+        assert any(
+            "mbiguedad" in e["mensaje"] for e in eventos
+        ), f"el hallazgo esta en run.json pero no deja traza.\n{eventos}"
+
+
+def test_los_dos_gemelos_de_ambiguedad_se_comportan_igual() -> None:
+    """Si uno audita y el otro no, algo se va a olvidar. La asimetria es el bug."""
+    import json as _json
+    import tempfile
+    from pathlib import Path as _Path
+
+    from conciliador_bancario.audit.audit_log import JsonlAuditWriter
+    from conciliador_bancario.matching.engine import conciliar
+    from conciliador_bancario.models import ConfiguracionCliente
+
+    from tools.fuzzmatch import exp, tx
+
+    casos = {
+        # tipo -> (transacciones, esperados) que lo producen
+        "ambiguedad_referencia": (
+            [tx("TX1", "1000", ref="R1")],
+            [exp("EXP1", "1000", ref="R1"), exp("EXP2", "1000", ref="R1")],
+        ),
+        "ambiguedad_monto_fecha": (
+            [tx("TX1", "1000")],
+            [exp("EXP1", "1000"), exp("EXP2", "1000")],
+        ),
+    }
+    for tipo, (txs, exps) in casos.items():
+        with tempfile.TemporaryDirectory() as td:
+            ruta = _Path(td) / "audit.jsonl"
+            audit = JsonlAuditWriter(ruta, run_id="r")
+            r = conciliar(
+                cfg=ConfiguracionCliente(cliente="X"),
+                transacciones=txs,
+                esperados=exps,
+                audit=audit,
+                run_id="r",
+            )
+            audit.cerrar()
+            assert tipo in [h.tipo for h in r.hallazgos], f"{tipo} no se produjo"
+            eventos = _json.loads("[" + ",".join(ruta.read_text().splitlines()) + "]")
+            assert any("mbiguedad" in e["mensaje"] for e in eventos), (
+                f"{tipo} aparece en run.json pero no deja traza en el audit. "
+                "Toda decision fail-closed tiene que explicar por que en la traza."
+            )

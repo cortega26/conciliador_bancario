@@ -28,6 +28,21 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
 
 
+def _consola_stderr() -> Console:
+    """Consola que escribe a **stderr**.
+
+    Los avisos van a stderr y no a stdout a proposito: `concilia run > /dev/null`
+    (o un pipe a otro programa) se lleva el stdout. Un aviso que sobrevive intacto
+    al redirect es un aviso que el operador no puede perder, y el de los hallazgos
+    criticos es el **unico** mecanismo de visibilidad de la seccion 5.1 de
+    `spec.md`.
+
+    Se crea por llamada y no como constante global porque `Console()` captura
+    `sys.stderr` al construirse, y el test necesita redirigirlo.
+    """
+    return Console(stderr=True)
+
+
 @app.command("init")
 def cmd_init(
     out_dir: Path = typer.Option(Path("."), "--out-dir", help="Directorio de salida"),
@@ -220,21 +235,22 @@ def cmd_run(
     # Hay un precedente en el repo: las transacciones de OCR se marcan "requieren
     # revision humana" y la corrida **igualmente sale con 0**. Un hallazgo critico
     # es lo mismo: la herramienta trabajo bien y encontro algo sospechoso. Lo que
-    # no puede pasar es que el operador no se entere, y por eso va en stderr con
+    # no puede pasar es que el operador no se entere, y por eso va en **stderr** con
     # color y con el detalle de cada hallazgo, no solo un numero.
     #
     # Para quien quiera el exit estricto esta `--fail-on-critico`.
     criticos = [h for h in resultado.hallazgos if h.severidad.value == "critica"]
     if criticos:
-        console.print()
-        console.print(
+        aviso = _consola_stderr()
+        aviso.print()
+        aviso.print(
             f"[bold red]{len(criticos)} hallazgo(s) critico(s): "
             f"la conciliacion se completo, pero hay que revisarlos antes de "
             f"confiar en el resultado.[/bold red]"
         )
         for h in criticos:
-            console.print(f"  [red]-[/red] [{h.tipo}] {h.mensaje}")
-        console.print(
+            aviso.print(f"  [red]-[/red] [{h.tipo}] {h.mensaje}")
+        aviso.print(
             "[dim]Estan en run.json, en el audit log y en la hoja Hallazgos del " "reporte.[/dim]"
         )
         if fail_on_critico:
@@ -250,12 +266,13 @@ def cmd_run(
     # el numero para otra cosa dejo de distinguir "confiable" de "adivinada".
     umbral = _cargar_config(config).umbral_confianza_campos
     if umbral < 0.5:
-        console.print()
-        console.print(
+        aviso = _consola_stderr()
+        aviso.print()
+        aviso.print(
             f"[bold yellow]Aviso:[/bold yellow] `umbral_confianza_campos` esta en "
             f"{umbral}, por debajo de 0.5."
         )
-        console.print(
+        aviso.print(
             "  A partir de ese valor, los campos extraidos de formatos heuristicos "
             "(PDF texto, referencias reconstruidas) pueden llegar a "
             "autoconciliarse. El OCR sigue bloqueado siempre."

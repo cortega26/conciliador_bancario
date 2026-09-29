@@ -507,6 +507,18 @@ def conciliar(
                     detalles={"tx_id": tx.id, "candidatos": [e.id for e in cands]},
                 )
             )
+            # El gemelo `ambiguedad_referencia` si escribe en el audit. Este no, y
+            # esa asimetria hacia que una decision fail-closed ("no concilio porque
+            # hay dos candidatos") quedara solo en el run.json, sin traza: a los
+            # tres meses nadie puede reconstruir por que ese movimiento quedo
+            # pendiente. Toda decision de matching deja evidencia.
+            audit.write(
+                AuditEvent(
+                    "hallazgo",
+                    "Ambiguedad por monto y fecha",
+                    {"hallazgo_id": hid, "tx_id": tx.id, "candidatos": [e.id for e in cands]},
+                )
+            )
             continue
 
         exp = cands[0]

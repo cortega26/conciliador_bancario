@@ -3,6 +3,15 @@
     "bank_sha256": "eff788ef6c04ec293d174cab0bb604c3cd36ac483af2d85c24327f33c510c77e",
     "config_sha256": "e945e0648ad08a255d9dc1043e7227db54a69048693fd293d242ad27af9a6f4d",
     "expected_sha256": "c04e806df53b6f13267dc95ac55bd0c2a8eec8d92d5786b26b72a00144e77abc",
+    "limites": {
+      "max_input_bytes": 25000000,
+      "max_pdf_pages": 200,
+      "max_pdf_text_chars": 5000000,
+      "max_tabular_cells": 5000000,
+      "max_tabular_rows": 200000,
+      "max_xlsx_uncompressed_bytes": 200000000,
+      "max_xml_movimientos": 200000
+    },
     "mask": true,
     "modelo_interno_version": "2",
     "permitir_ocr": false,
@@ -20,7 +29,7 @@
       },
       "entidad": "sistema",
       "entidad_id": null,
-      "id": "H-5a92dad01c7ead",
+      "id": "H-59142234b63c79",
       "mensaje": "El total del banco (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 150000. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
       "severidad": "advertencia",
       "tipo": "diferencia_de_sumas"
@@ -29,7 +38,7 @@
       "detalles": {},
       "entidad": "banco",
       "entidad_id": "TX-a1ae3a1b1085",
-      "id": "H-967ec317c20097",
+      "id": "H-824d16c21b8910",
       "mensaje": "Transaccion bancaria con match (ver Matches).",
       "severidad": "info",
       "tipo": "tx_con_match"
@@ -38,7 +47,7 @@
       "detalles": {},
       "entidad": "esperado",
       "entidad_id": "EXP-002",
-      "id": "H-ac0cda60863f69",
+      "id": "H-b2f8aa9f4cfa69",
       "mensaje": "Movimiento esperado sin match (pendiente).",
       "severidad": "advertencia",
       "tipo": "pendiente_esperado"
@@ -49,7 +58,7 @@
       "bloqueado_por_confianza": true,
       "estado": "pendiente",
       "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto. BLOQUEADO: Confianza insuficiente en fecha_operacion (banco).",
-      "id": "M-e48bf3eab60c44",
+      "id": "M-bbdc49c3280848",
       "movimientos_esperados": [
         "EXP-001"
       ],
@@ -60,6 +69,6 @@
       ]
     }
   ],
-  "run_id": "886f3f8d613d0eeb",
+  "run_id": "ac9a15891f6a0f92",
   "schema_version": "1.0.0"
 }

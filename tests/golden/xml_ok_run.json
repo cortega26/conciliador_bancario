@@ -3,12 +3,39 @@
     "bank_sha256": "86fa5f17e262fd93025a6836f012cba26ccda0c24c0442eba973eb3aa3ba10da",
     "config_sha256": "e945e0648ad08a255d9dc1043e7227db54a69048693fd293d242ad27af9a6f4d",
     "expected_sha256": "c04e806df53b6f13267dc95ac55bd0c2a8eec8d92d5786b26b72a00144e77abc",
+    "limites": {
+      "max_input_bytes": 25000000,
+      "max_pdf_pages": 200,
+      "max_pdf_text_chars": 5000000,
+      "max_tabular_cells": 5000000,
+      "max_tabular_rows": 200000,
+      "max_xlsx_uncompressed_bytes": 200000000,
+      "max_xml_movimientos": 200000
+    },
     "mask": true,
     "modelo_interno_version": "2",
     "permitir_ocr": false,
     "version": "0.2.21"
   },
   "hallazgos": [
+    {
+      "detalles": {},
+      "entidad": "esperado",
+      "entidad_id": "EXP-002",
+      "id": "H-359c32e64a2450",
+      "mensaje": "Movimiento esperado sin match (pendiente).",
+      "severidad": "advertencia",
+      "tipo": "pendiente_esperado"
+    },
+    {
+      "detalles": {},
+      "entidad": "banco",
+      "entidad_id": "TX-b56741ed53a5",
+      "id": "H-3b6fdd971c8312",
+      "mensaje": "Transaccion bancaria con match (ver Matches).",
+      "severidad": "info",
+      "tipo": "tx_con_match"
+    },
     {
       "detalles": {
         "diferencia": "250000",
@@ -20,28 +47,10 @@
       },
       "entidad": "sistema",
       "entidad_id": null,
-      "id": "H-143a6226fd5439",
+      "id": "H-b3631b3f53b6ea",
       "mensaje": "El total del banco (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 150000. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
       "severidad": "advertencia",
       "tipo": "diferencia_de_sumas"
-    },
-    {
-      "detalles": {},
-      "entidad": "esperado",
-      "entidad_id": "EXP-002",
-      "id": "H-a19f617eeb645c",
-      "mensaje": "Movimiento esperado sin match (pendiente).",
-      "severidad": "advertencia",
-      "tipo": "pendiente_esperado"
-    },
-    {
-      "detalles": {},
-      "entidad": "banco",
-      "entidad_id": "TX-b56741ed53a5",
-      "id": "H-a7a65fdbcd2933",
-      "mensaje": "Transaccion bancaria con match (ver Matches).",
-      "severidad": "info",
-      "tipo": "tx_con_match"
     }
   ],
   "matches": [
@@ -49,7 +58,7 @@
       "bloqueado_por_confianza": false,
       "estado": "conciliado",
       "explicacion": "Match por referencia exacta (FAC-1001) y monto exacto.",
-      "id": "M-69d7b945c54e47",
+      "id": "M-07461643f031f3",
       "movimientos_esperados": [
         "EXP-001"
       ],
@@ -60,6 +69,6 @@
       ]
     }
   ],
-  "run_id": "29c4b5ce91b384f4",
+  "run_id": "c867d0c25874417e",
   "schema_version": "1.0.0"
 }

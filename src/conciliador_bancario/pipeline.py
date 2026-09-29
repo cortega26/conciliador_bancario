@@ -312,6 +312,18 @@ def ejecutar_run(
         "expected_sha256": sha256_archivo(expected),
         "mask": mask,
         "permitir_ocr": cfg.permitir_ocr,
+        # Los limites **efectivos**, no los del archivo de config.
+        #
+        # `config_sha256` hashea el archivo, pero un `--max-tabular-rows` por CLI
+        # cambia `cfg.limites_ingesta` despues de leerlo, y ese cambio no estaba en
+        # ninguna parte del fingerprint. Dos corridas que difieren solo en un
+        # override compartian `run_id`, o sea que el identificador no identificaba
+        # la corrida.
+        #
+        # Se agrega el diccionario entero y no solo los que se pueden pasar por
+        # flag: asi el `run_id` depende de lo que la corrida realmente permitio,
+        # y agregar un limite nuevo no requiere acordarse de tocar el fingerprint.
+        "limites": cfg.limites_ingesta.model_dump(mode="json"),
         "modelo_interno_version": MODELO_INTERNO_VERSION,
         "version": __version__,
     }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import types
@@ -193,4 +194,23 @@ def test_golden_pdf_ocr_stub_determinista(tmp_path: Path, monkeypatch) -> None:
     _assert_run_ids_well_formed(got)
     assert got["fingerprint"]["version"] == CORE_VERSION
     expected["fingerprint"]["version"] = CORE_VERSION
+
+    # Regeneracion explicita, porque los modulos fake viven en este test y
+    # reconstruirlos afuera es fragile. Se compara antes de escribir: solo se
+    # regenera si lo unico que cambio es el fingerprint, porque un `-u` a
+    # ciegas es exactamente donde se esconde una regresion.
+    if os.environ.get("BR_REGENERAR_GOLDEN") == "1":
+        gn = _normalize_run_json(got)
+        en = _normalize_run_json(expected)
+        dif = [k for k in set(gn) | set(en) if gn.get(k) != en.get(k)]
+        if set(dif) - {"fingerprint"}:
+            raise AssertionError(
+                f"cambio fuera del fingerprint: {dif}. No se regenera: eso "
+                "seria tapar una regresion."
+            )
+        (Path("tests") / "golden" / "pdf_ocr_run.json").write_text(
+            json.dumps(got, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        return
+
     assert _normalize_run_json(got) == _normalize_run_json(expected)

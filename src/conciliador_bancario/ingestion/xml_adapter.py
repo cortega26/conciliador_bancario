@@ -3,12 +3,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from defusedxml import ElementTree as ET
-
-if TYPE_CHECKING:  # pragma: no cover - solo para tipos
-    from xml.etree.ElementTree import Element
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
@@ -45,7 +42,7 @@ def _id_tx(path: Path, idx: int, data_norm: dict[str, Any]) -> str:
     return "TX-" + sha256_json_estable({"file": path.name, "idx": idx, "data": data_norm})[:12]
 
 
-def _txt(node: Element, tag: str) -> str:
+def _txt(node: Any, tag: str) -> str:
     el = node.find(tag)
     return normalizar_texto(el.text if el is not None and el.text else "")
 

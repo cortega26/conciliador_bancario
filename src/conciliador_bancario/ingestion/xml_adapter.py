@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 from conciliador_bancario.audit.audit_log import AuditEvent, JsonlAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion, error_de_fila
@@ -74,6 +75,19 @@ def cargar_transacciones_xml(
 
     try:
         tree = ET.parse(path)
+    except DefusedXmlException as e:
+        # defusedxml bloquea el ataque (DTD, entidades, referencias externas), pero
+        # lanza DefusedXmlException, que hereda de ValueError y NO de ParseError.
+        # Sin este catch el `except ET.ParseError` de abajo no lo alcanza y la
+        # excepcion escapa de la taxonomia: el CLI la reporta como exit 10
+        # "internal error" con traceback, en vez de un exit 4 de ingesta que dice
+        # que el archivo trae construcciones prohibidas.
+        raise ErrorIngestion(
+            f"XML rechazado por proteccion anti-entidades: {e}",
+            details={"motivo": type(e).__name__},
+            hint="El archivo declara un DTD, entidades o referencias externas; "
+            "exporte la cartola sin DTD.",
+        ) from e
     except ET.ParseError as e:
         raise ErrorIngestion(f"XML invalido: {e}") from e
     root = tree.getroot()

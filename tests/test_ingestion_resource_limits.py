@@ -154,7 +154,7 @@ def test_limit_max_pdf_text_chars_via_patch(
     p.write_bytes(b"%PDF-1.4\n%fake\n")
 
     monkeypatch.setattr(
-        "conciliador_bancario.ingestion.pdf_text_adapter.PdfReader", _FakeReader, raising=True
+        "conciliador_bancario.ingestion.pdf_reader.PdfReader", _FakeReader, raising=True
     )
     cfg = _cfg(max_input_bytes=1_000_000, max_pdf_pages=10, max_pdf_text_chars=10)
     audit = JsonlAuditWriter(tmp_path / "audit.jsonl")

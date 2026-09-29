@@ -378,3 +378,72 @@ def test_el_verificador_instala_el_archivo_y_no_resuelve_por_indice() -> None:
     assert (
         inspect.getsource(crear_venv).count("str(wheel)") == 1
     ), "crear_venv deberia pasar la ruta del wheel a pip, no un spec de version"
+
+
+# --- 6. preflight: los comandos se arman al correr, no al importar ----------
+
+
+def test_ningun_gate_declara_una_dependencia_inexistente() -> None:
+    """`depende_de` tiene que apuntar a gates reales, o el aviso miente."""
+    from preflight import GATES
+
+    nombres = {g.nombre for g in GATES}
+    for g in GATES:
+        for d in g.depende_de:
+            assert d in nombres, f"{g.nombre} depende de '{d}', que no es un gate"
+
+
+def test_los_gates_con_dependencia_no_estan_en_los_rapidos() -> None:
+    """Un gate que depende de otro no puede correr en el set rapido.
+
+    Si `twine` entrara en los rapidos, correria antes de `build` y daria un rojo
+    por un `dist/` vacio: un fallo de preflight, no del repo.
+    """
+    from preflight import GATES, RAPIDOS
+
+    for g in GATES:
+        if g.depende_de:
+            assert (
+                g.nombre not in RAPIDOS
+            ), f"{g.nombre} depende de {g.depende_de} y no puede ser un gate rapido"
+
+
+def test_los_comandos_que_dependen_del_filesystem_se_arman_al_correr() -> None:
+    """Un comando no puede capturar el estado del disco al importar el modulo.
+
+    El caso real: el glob de `dist/` se resolvia al construir la lista de gates,
+    o sea al importar, que es antes de que `build` corra. twine recibia una lista
+    vacia en la misma corrida donde build habia pasado.
+
+    Se verifica con la funcion pura, sin correr gates: el comando tiene que
+    incluir los archivos que existen *en ese momento*.
+    """
+    import tempfile
+
+    from preflight import _twine_check
+
+    with tempfile.TemporaryDirectory() as d:
+        destino = Path(d) / "dist"
+        destino.mkdir()
+        (destino / "a.whl").write_bytes(b"x")
+        original = preflight_mod().RAIZ
+        try:
+            preflight_mod().RAIZ = destino.parent
+            cmd = _twine_check()
+            assert any(
+                a.endswith("a.whl") for a in cmd
+            ), f"el comando no capturo el archivo que existia: {cmd}"
+            (destino / "a.whl").unlink()
+            (destino / "b.whl").write_bytes(b"x")
+            cmd = _twine_check()
+            assert any(
+                a.endswith("b.whl") for a in cmd
+            ), "el comando esta cacheado: no vio el archivo nuevo"
+        finally:
+            preflight_mod().RAIZ = original
+
+
+def preflight_mod() -> object:
+    import preflight
+
+    return preflight

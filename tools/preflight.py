@@ -50,6 +50,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,19 +64,40 @@ INFO = "--   "
 
 @dataclass(frozen=True)
 class Gate:
-    """Un gate, con su comando y si CI tambien lo corre."""
+    """Un gate, con su comando y si CI tambien lo corre.
+
+    `cmd` es un comando fijo (tupla) o una funcion sin argumentos que lo arma en
+    el momento de correr. La segunda forma es la unica valida cuando el comando
+    depende de algo queTodavia no existe, como los archivos de `dist/`.
+    """
 
     nombre: str
-    cmd: tuple[str, ...]
+    cmd: tuple[str, ...] | Callable[[], tuple[str, ...]]
     en_ci: bool
     # Si True, este gate no se puede verificar en este entorno. Se reporta como
     # "no verificado" en vez de "pasado": la diferencia es todo el punto.
     requiere_docker: bool = False
     requiere_red: bool = False
+    # Gates que este necesita haber corrido antes. Se declara en el dato y no
+    # como un if suelto en el bucle, para que la dependencia se vea al leer la
+    # lista de gates.
+    depende_de: tuple[str, ...] = ()
 
 
 def _py(*args: str) -> tuple[str, ...]:
     return (str(VENV / "bin" / "python"), *args)
+
+
+def _twine_check() -> tuple[str, ...]:
+    """El comando de `twine check` con los archivos que haya en `dist/`.
+
+    Se resuelve aca y no al construir la lista de gates, porque en ese momento
+    `dist/` todavia no tiene nada: `build` corre despues. Con el glob resuelto
+    antes, twine recibia una lista vacia en la misma corrida en que build habia
+    pasado, que es el peor momento para un falso rojo.
+    """
+    archivos = sorted(str(p) for p in (RAIZ / "dist").glob("*") if p.is_file())
+    return (*_py("-m", "twine", "check"), *archivos)
 
 
 GATES: tuple[Gate, ...] = (
@@ -84,12 +106,51 @@ GATES: tuple[Gate, ...] = (
     Gate("mypy", _py("-m", "mypy", "src"), en_ci=True),
     Gate("changelog", _py("tools/check_changelog_commits.py"), en_ci=True),
     Gate("bandit", _py("-m", "bandit", "-c", ".bandit.yml", "-r", "src"), en_ci=True),
-    Gate("semgrep", ("docker", "run", "--rm"), en_ci=True, requiere_docker=True),
+    # El comando de semgrep va entero, con su volumen y su imagen. La primera
+    # version de esta lista traia solo `("docker", "run", "--rm")`, que corre sin
+    # imagen y falla siempre: el gate no podia pasar nunca. Un gate que solo puede
+    # dar rojo entrena a ignorar rojos, que es peor que no tener gate.
+    Gate(
+        "semgrep",
+        (
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{RAIZ}:/src",
+            "-w",
+            "/src",
+            "returntocorp/semgrep:1.95.0",
+            "semgrep",
+            "scan",
+            "--config",
+            ".semgrep.yml",
+            "--error",
+            "--metrics=off",
+            "src",
+        ),
+        en_ci=True,
+        requiere_docker=True,
+    ),
     Gate("supply-chain", _py("tools/pip_audit_gate.py"), en_ci=True, requiere_red=True),
     Gate("tests", _py("-m", "pytest", "-q", "-p", "no:cacheprovider"), en_ci=True),
     Gate("build", _py("-m", "build"), en_ci=True, requiere_red=True),
-    Gate("twine", _py("-m", "twine", "check", "dist", "*"), en_ci=True),
+    # `dist/*` se expande en la shell. Como el comando se corre sin shell, el
+    # asterisco llega literal a twine y falla con "Unknown distribution format".
+    # Se expande aqui, o se le pasan los archivos uno por uno.
+    # El comando se construye **al correr**, no al importar el modulo. Con el
+    # glob resuelto en el `Gate(...)`, la lista de archivos se capturaba cuando
+    # se importaba preflight, antes de que `build` produjera `dist/`: twine
+    # recibia una lista vacia y fallaba, en la misma corrida donde build habia
+    # pasado. La forma perezosa de ahi es la unica correcta.
+    Gate(
+        "twine",
+        _twine_check,
+        en_ci=True,
+        depende_de=("build",),
+    ),
 )
+
 
 # Rapidos por defecto: los que no dependen de red. `build` y `supply-chain`
 # resuelven dependencias y tardan minutos.
@@ -165,6 +226,12 @@ def trabajo_sin_commitear() -> list[str]:
 def _disponible(g: Gate) -> tuple[bool, str]:
     if g.requiere_docker and not shutil.which("docker"):
         return False, "sin docker"
+    if g.nombre == "twine":
+        # Sin el gate `build` delante, `dist/` puede no existir o estar vacio.
+        # twine acepta una lista vacia y sale 0, con lo que el gate pasaria sin
+        # comprobar nada. Se falla aca, con un mensaje que dice que falta.
+        if not list((RAIZ / "dist").glob("*")):
+            return False, "no hay nada en dist/ (falta el gate build)"
     return True, ""
 
 
@@ -178,7 +245,8 @@ def correr(g: Gate, verboso: bool) -> tuple[str, str, str]:
     ok, motivo = _disponible(g)
     if not ok:
         return INFO, motivo, ""
-    p = subprocess.run(list(g.cmd), cwd=RAIZ, capture_output=not verboso, text=True)
+    cmd = g.cmd() if callable(g.cmd) else g.cmd
+    p = subprocess.run(list(cmd), cwd=RAIZ, capture_output=not verboso, text=True)
     salida = ""
     if p.returncode != 0:
         partes = [x for x in ((p.stdout or ""), (p.stderr or "")) if x]
@@ -217,6 +285,21 @@ def gates_a_correr(solo: list[str] | None, saltar: list[str], todos: bool) -> li
     return elegidos
 
 
+def sin_dependencias(elegidos: list[Gate]) -> list[tuple[Gate, str]]:
+    """Gates cuya dependencia no corrio en esta invocacion, con el motivo.
+
+    `--only twine` sin `build` no puede verificar nada: `dist/` no existe. Es
+    preferible decir "no se pudo verificar porque faltó build" que correr twine
+    sobre una lista vacia y reportar un rojo, o peor, un verde.
+    """
+    presentes = {g.nombre for g in elegidos}
+    return [
+        (g, f"necesita {'+'.join(g.depende_de)} y no se piden en esta corrida")
+        for g in elegidos
+        if any(d not in presentes for d in g.depende_de)
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -237,7 +320,10 @@ def main(argv: list[str] | None = None) -> int:
         for g in GATES:
             marcas = ", requiere docker" if g.requiere_docker else ""
             marcas += ", requiere red" if g.requiere_red else ""
-            print(f"  {g.nombre:14s} {' '.join(g.cmd[1:4])}{marcas}")
+            if g.depende_de:
+                marcas += f", necesita {'+'.join(g.depende_de)}"
+            cmd = g.cmd() if callable(g.cmd) else g.cmd
+            print(f"  {g.nombre:14s} {' '.join(cmd[1:4])}{marcas}")
         return 0
 
     print(f"preflight en {RAIZ}")
@@ -276,7 +362,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{PULSO} arbol       limpio\n")
 
     # 2. Gates.
-    for g in gates_a_correr(args.only, args.skip, args.all):
+    #
+    # `twine` depende de `build`: revisa lo que este produce. Sin declarar esa
+    # dependencia, `twine` corria antes y fallaba por un `dist/` vacio, que es un
+    # fallo de preflight y no del repo. Los gates con dependencia se corroboran y
+    # se saltan con un motivo explicito en vez de dar un rojo enganoso.
+    elegidos = gates_a_correr(args.only, args.skip, args.all)
+    saltados = {g.nombre: motivo for g, motivo in sin_dependencias(elegidos)}
+    for g in elegidos:
+        if g.nombre in saltados:
+            no_verificados.append(f"{g.nombre} ({saltados[g.nombre]})")
+            print(f"{INFO} {g.nombre:11s} {saltados[g.nombre]}")
+            continue
         estado, detalle, salida = correr(g, args.verbose)
         print(f"{estado} {g.nombre:11s} {detalle}")
         if estado == FALLO:

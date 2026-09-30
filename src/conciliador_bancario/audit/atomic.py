@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import errno
 import os
+import stat
 import time
 from pathlib import Path
 from typing import Any
@@ -71,9 +72,10 @@ def escribir_atomico(destino: Path, escribir: Any, *, sufijo: str = ".tmp") -> N
     atómico dentro del mismo filesystem.
     """
     destino.parent.mkdir(parents=True, exist_ok=True)
-    temporal = destino.with_name(f"{destino.name}{sufijo}-{os.getpid()}")
+    temporal = destino.with_name(f".{destino.name}{sufijo}-{os.getpid()}")
     try:
         escribir(temporal)
+        _conservar_permisos(temporal, destino)
         os.replace(temporal, destino)
     except BaseException:
         # Si falla la escritura o el replace, el temporal no se queda dando vueltas.
@@ -81,6 +83,31 @@ def escribir_atomico(destino: Path, escribir: Any, *, sufijo: str = ".tmp") -> N
         # artefacto viejo sigue siendo el bueno.
         temporal.unlink(missing_ok=True)
         raise
+
+
+def _conservar_permisos(temporal: Path, destino: Path) -> None:
+    """Deja el temporal con los permisos que ya tenia el destino.
+
+    `os.replace` cambia el inode, asi que el archivo nuevo nace con los permisos
+    del umask y **los del destino anterior se pierden**: un `run.json` que el
+    operador dejo en `0600` porque contiene datos de clientes quedaba en `0664`.
+
+    Es un archivo financiero, y el permiso puesto a mano es una decision del
+    operador que la herramienta no tiene por que deshacer. Solo se copia la
+    mascara, no el propietario: el archivo lo crea el mismo proceso.
+    """
+    try:
+        modo_destino = stat.S_IMODE(destino.stat().st_mode)
+    except OSError:
+        # El destino no existe todavia (primera corrida): se queda el umask, que
+        # es lo correcto para un archivo que nadie ha declarado restricted.
+        return
+    try:
+        os.chmod(temporal, modo_destino)
+    except OSError:
+        # Un filesystem que no soporta chmod (algunos montajes) no es motivo para
+        # tumbar la corrida: el contenido esta bien y el permiso ya no.
+        pass
 
 
 class CerrojoDeSalida:
@@ -155,10 +182,18 @@ class CerrojoDeSalida:
             return False
         if not contenido:
             return self._sin_pid_pero_viejo()
+        # El nombre del archivo va en el mismo `write` que el PID, asi que su
+        # presencia acts como una especie de checksum. Sin esta comprobacion, una
+        # lectura parcial —el archivo se escribe justo mientras se lee— puede
+        # devolver `"9"` de un `"999999 ..."` a medio escribir: se consultaria el
+        # PID 9, que probablemente no exista, y se reclamaria el cerrojo de una
+        # corrida **viva**. Un cerrojo robado deja pasar dos procesos al mismo
+        # `--out`, que es el bug que este archivo arregla.
+        if not contenido.endswith(self._path.name):
+            return self._sin_pid_pero_viejo()
         try:
             pid = int(contenido.split()[0])
         except (ValueError, IndexError):
-            # Hay contenido pero no es un PID: no se puede probar que este muerto.
             return self._sin_pid_pero_viejo()
         try:
             os.kill(pid, 0)
@@ -202,9 +237,25 @@ class CerrojoDeSalida:
         raise AssertionError("adquirir no deberia agotar los intentos")
 
     def liberar(self) -> None:
-        if self._tomado:
+        """
+        Suelta el cerrojo, y **nunca falla**.
+
+        Se llama desde un `finally`: si `unlink` levantara, la excepcion escaparia
+        sustituyendo a la que se estaba propagando y el cerrojo se quedaria puesto.
+        Un cerrojo huerfano deja la herramienta inservible hasta que alguien borre
+        un archivo a mano, que es el remedio que nadie recuerda.
+
+        Por eso no hay `raise` aqui, ni siquiera con `--debug`: no hay nada que el
+        operador pueda hacer con este error, y dejar el cerrojo puesto es peor que
+        perder una limpieza.
+        """
+        if not self._tomado:
+            return
+        self._tomado = False
+        try:
             self._path.unlink(missing_ok=True)
-            self._tomado = False
+        except OSError:
+            pass
 
     def __enter__(self) -> CerrojoDeSalida:
         self.adquirir()

@@ -78,6 +78,15 @@ class JsonlAuditWriter:
         page cache del kernel. `fsync` los baja a disco: sin esto, un corte de luz
         puede perder los ultimos eventos, que son justo los del error que se esta
         investigando. Es idempotente y no hace nada si el archivo no existe.
+
+        ## Por que hasta el `close` va protegido
+
+        El `pipeline` la llama dentro de un `finally` **antes** de
+        `cerrojo.liberar()`. Si `os.close` fallara con `OSError` y escapara, la
+        excepcion recorreria el `finally` del pipeline y el cerrojo se quedaria
+        puesto: la herramienta quedaria inservible hasta que alguien borrara
+        `.concilia.lock` a mano, que es exactamente el fallo que `CerrojoDeSalida`
+        promete evitar. Un `close` que falla no es motivo para deixar un cerrojo.
         """
         try:
             fd = os.open(self._path, os.O_RDONLY)
@@ -88,7 +97,10 @@ class JsonlAuditWriter:
         except OSError:
             pass
         finally:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 class NullAuditWriter:

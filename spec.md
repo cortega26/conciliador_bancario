@@ -281,9 +281,20 @@ que parece correcto y no lo es, con exit 0**.
    contra CLP, y ambas etiquetas venían del default.
 
    Ahora el adapter marca `moneda_asumida` (el core no conoce nombres de columnas) y
-   el motor avisa **cuando el supuesto produce una conciliación**. Solo en ese caso:
-   un PDF nunca trae columna de moneda, así que el supuesto es estructural y avisar
-   en cada corrida sería ruido. Lo anómalo es que el supuesto haya movido dinero.
+   el motor avisa **cuando el supuesto produce una conciliación**. Es el criterio: un
+   PDF nunca trae columna de moneda, así que el supuesto por fila es estructural y
+   avisar por cada una sería ruido. Lo anómalo es que el supuesto haya movido dinero.
+
+   El aviso va además, y por separado, cuando **la divisa de un total** es asumida
+   (#73): los totales se calculan siempre, así que un banco sin columna de moneda
+   contra un libro en USD|reportaba "Total banco: 1000 CLP" con una etiqueta
+   inventada y sin decir nada, incluso sin que hubiera Conciliación alguna.
+
+   **Límite del criterio, medido**: un PDF *sí* genera avisos cuando
+   `umbral_confianza_campos` baja lo suficiente para que sus referencias
+   reconstruidas (confianza 0,40) concilien. Con el umbral por defecto no. El
+   criterio no es "un PDF no hace ruido" sino "el aviso va donde el supuesto produjo
+   dinero".
 
 ### 5.6 Dos defectos en el cálculo de diferencias (corregidos en #70)
 

@@ -306,3 +306,60 @@ def test_el_aviso_llega_al_audit(tmp_path: Path) -> None:
         json.loads(line) for line in (out / "audit.jsonl").read_text(encoding="utf-8").splitlines()
     ]
     assert any("moneda asumida" in json.dumps(e, ensure_ascii=False) for e in eventos), eventos
+
+
+# --- La divisa de un TOTAL tambien puede ser inventada ----------------------
+#
+# El aviso de arriba cubre el caso en que el supuesto produjo una conciliacion.
+# Faltaba el otro: los totales se calculan **siempre**, y con la etiqueta de divisa
+# incluida. Un banco sin columna de moneda contra un libro en USD no produce ningun
+# match, asi que no hay aviso de conciliacion, pero el reporte dice
+# "El total del banco en CLP (1000)" sin decir que nadie escribio CLP.
+
+
+def test_avisa_si_la_divisa_de_un_total_es_asumida() -> None:
+    """El total lleva etiqueta de divisa, y esa etiqueta puede ser inventada.
+
+    Las cifras pueden ser ciertas y la etiqueta estar inventada. Con la hoja
+    `Resumen` poniendo esos numeros en primer plano, es peor que no mostrar nada.
+    """
+    caso = _caso(
+        "totales con etiqueta",
+        [tx("TX1", "1000", moneda="CLP", moneda_asumida=True)],
+        [exp("EXP1", "1000", moneda="USD")],
+    )
+    r = correr(caso)
+    avisos = [h for h in r.hallazgos if h.tipo == "moneda_asumida_en_totales"]
+    assert len(avisos) == 1, [h.tipo for h in r.hallazgos]
+    assert avisos[0].detalles["moneda_asumida"] == "CLP", avisos[0].detalles
+    assert "moneda_default" in avisos[0].mensaje, avisos[0].mensaje
+
+
+def test_no_avisa_si_la_moneda_viene_del_archivo() -> None:
+    """Control negativo: sin supuesto, sin aviso."""
+    caso = _caso(
+        "moneda real",
+        [tx("TX1", "1000", moneda="CLP")],
+        [exp("EXP1", "1000", moneda="USD")],
+    )
+    r = correr(caso)
+    assert not [h for h in r.hallazgos if h.tipo == "moneda_asumida_en_totales"]
+
+
+def test_el_aviso_de_totales_es_uno_por_moneda_no_por_fila() -> None:
+    """5.000 filas de un PDF son 5.000 veces el mismo aviso.
+
+    Un aviso por transaccion seria ruido, que es justo lo que el criterio de "una
+    vez por moneda" evita.
+    """
+    caso = _caso(
+        "muchas",
+        [tx(f"T{i}", str(1000 + i), moneda="CLP", moneda_asumida=True) for i in range(50)],
+        [exp(f"E{i}", str(1000 + i), moneda="CLP", moneda_asumida=True) for i in range(50)],
+    )
+    r = correr(caso)
+    avisos = [h for h in r.hallazgos if h.tipo == "moneda_asumida_en_totales"]
+    assert len(avisos) == 1, f"50 filas, {len(avisos)} avisos: uno por moneda"
+    # Y el aviso de match conciliado si es uno por match (cada uno con su id).
+    matches = [h for h in r.hallazgos if h.tipo == "moneda_asumida_en_match"]
+    assert len(matches) == len(r.matches), "un aviso de match por match conciliado"

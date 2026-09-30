@@ -534,3 +534,72 @@ def test_csv_siempre_dentro_de_la_taxonomia(tmp_path: Path, payload: str) -> Non
         lambda: cargar_movimientos_esperados_csv(p, cfg=cfg, audit=NullAuditWriter()),
     ):
         _resultado(lambda path, _fn=fn: _fn(), p)
+
+
+# --- Una fecha ilegible no se descarta en silencio --------------------------
+#
+# `fecha_operacion` ilegible falla la corrida con exit 4. `fecha_contable` ilegible
+# caia al `None` sin hallazgo y sin evento de auditoria: el operador veia una celda
+# vacia y no tenia forma de saber si el archivo no traia la columna o si traia una
+# fecha que no se pudo leer.
+#
+# La distincion importante es esa: **vacia** se tolera (muchos archivos no la
+# traen), **ilegible** no (alguien la escribio y no se entiende).
+
+
+def _cargar(encabezado: str, fila: str) -> list:
+    import tempfile
+    from pathlib import Path
+
+    from conciliador_bancario.audit.audit_log import JsonlAuditWriter
+    from conciliador_bancario.ingestion.csv_adapter import cargar_transacciones_csv
+    from conciliador_bancario.models import ConfiguracionCliente
+
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "banco.csv"
+        p.write_text(f"{encabezado}\n{fila}\n", encoding="utf-8")
+        audit = JsonlAuditWriter(Path(td) / "a.jsonl", run_id="r")
+        txs = cargar_transacciones_csv(p, cfg=ConfiguracionCliente(cliente="X"), audit=audit)
+        audit.cerrar()
+        return txs
+
+
+def test_una_fecha_contable_ilegible_falla_la_corrida() -> None:
+    """Si alguien escribio una fecha y no se puede leer, no se inventa una.
+
+    `fecha_contable` es informacion del banco. Rellenarla con `None` en silencio
+    hace que el operador crea que el archivo no la traia, y la conciliacion
+    sigue sin el dato que el banco si entrego.
+    """
+    import pytest
+    from conciliador_bancario.ingestion.base import ErrorIngestion
+
+    with pytest.raises(ErrorIngestion) as exc:
+        _cargar(
+            "fecha_operacion,fecha_contable,monto,descripcion",
+            "05/01/2026,NO-ES-UNA-FECHA,1000,Pago",
+        )
+    # El mensaje tiene que decir que fila es, para que el operador la encuentre.
+    assert "Fila 2" in str(exc.value), exc.value
+    assert "fecha_contable" in str(exc.value), exc.value
+
+
+def test_una_fecha_contable_vacia_se_tolera() -> None:
+    """La columna vacia NO es un dato ilegible.
+
+    Muchos_extractos no traen `fecha_contable`, y algunos la traen vacia en
+    algunas filas. Tratar eso como error haria la herramienta inservible para el
+    caso mas comun, que es un archivo que simplemente no tiene esa columna.
+    """
+    txs = _cargar(
+        "fecha_operacion,fecha_contable,monto,descripcion",
+        "05/01/2026,,1000,Pago",
+    )
+    assert txs[0].fecha_contable is None
+    assert txs[0].fecha_operacion.valor is not None
+
+
+def test_un_archivo_sin_la_columna_tampoco_falla() -> None:
+    """Si la columna no existe, no hay nada que leer y nada que fallar."""
+    txs = _cargar("fecha_operacion,monto,descripcion", "05/01/2026,1000,Pago")
+    assert txs[0].fecha_contable is None

@@ -663,3 +663,141 @@ def test_dos_corridas_sobre_el_mismo_out_se_chocan_por_el_cerrojo(
 
     # Y el cerrojo nunca queda puesto.
     assert not (out / NOMBRE_CERROJO).exists(), "el cerrojo quedo puesto tras las corridas"
+
+
+def test_un_cerrojo_vacio_y_fresco_no_se_roba(tmp_path: Path) -> None:
+    """Un cerrojo sin PID todavia se esta adquiriendo: no es basura.
+
+    ## La carrera que este test reproduce
+
+    `os.open(..., O_EXCL)` crea el archivo **vacio** y el PID se escribe despues, en
+    otra operacion. Entre las dos hay una ventana en la que el cerrojo existe y no
+    tiene contenido.
+
+    El codigo anterior trataba "sin contenido" como "dueño muerto" y lo reclamaba.
+    Con eso, la corrida B veia el archivo vacio de la corrida A, creia que A habia
+    muerto, lo borraba y entraba: las dos escribian en el mismo `--out` y el
+    `audit.jsonl` quedaba con los `run_id` de las dos mezclados.
+
+    Se vio en CI y no en local. Este test la reproduce sin depender de que dos
+    procesos se solapen, que es la razon por la que paso desapercibida: en una
+    maquina rapida las dos corridas nunca coinciden.
+    """
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    # Cerrojo vacio y recien creado: exactamente lo que ve la otra corrida en la
+    # ventana entre el O_EXCL y la escritura del PID.
+    (tmp_path / NOMBRE_CERROJO).write_text("", encoding="utf-8")
+
+    assert not cerrojo._propietario_muerto(), (
+        "un cerrojo vacio y fresco se esta adquiriendo: declararlo muerto hace que "
+        "la otra corrida robe el cerrojo y las dos escriban en el mismo --out"
+    )
+
+
+def test_un_cerrojo_vacio_y_viejo_si_se_reclama(tmp_path: Path) -> None:
+    """El otro lado: un cerrojo vacio y viejo es basura y hay que recuperarlo.
+
+    Sin esto, un proceso muerto entre las dos operaciones dejaria la herramienta
+    inservible hasta que alguien borrara un archivo a mano, que es el remedio que
+    nadie recuerda.
+    """
+    import os
+    import time
+
+    import conciliador_bancario.audit.atomic as atomic
+    from conciliador_bancario.audit.atomic import (
+        _SEGUNDOS_PARA_DECLARAR_BASURA,
+        CerrojoDeSalida,
+    )
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    ruta = tmp_path / NOMBRE_CERROJO
+    ruta.write_text("", encoding="utf-8")
+    # El umbral se fija a proposito en vez de leerse del modulo: si el test usa la
+    # constante, entonces cambiar la constante cambia el test y no se nota. Lo que
+    # se verifica es que **la decision por edad** funciona, con un umbral conocido.
+    original = atomic._SEGUNDOS_PARA_DECLARAR_BASURA
+    atomic._SEGUNDOS_PARA_DECLARAR_BASURA = 1.0
+    try:
+        # Mas viejo que el umbral: es basura.
+        viejo = time.time() - 10
+        os.utime(ruta, (viejo, viejo))
+        assert cerrojo._propietario_muerto(), (
+            "un cerrojo vacio y viejo es basura de un proceso muerto y tiene que ser "
+            "reclamable, o la herramienta queda inservible"
+        )
+        # Y mas nuevo que el umbral: se esta adquiriendo, no se toca.
+        recien = time.time()
+        os.utime(ruta, (recien, recien))
+        assert (
+            not cerrojo._propietario_muerto()
+        ), "un cerrojo vacio pero reciente esta en plena adquisicion"
+    finally:
+        atomic._SEGUNDOS_PARA_DECLARAR_BASURA = original
+    assert _SEGUNDOS_PARA_DECLARAR_BASURA > 0, "el umbral por defecto tiene que ser positivo"
+
+
+def test_un_cerrojo_con_pid_vivo_no_se_roba(tmp_path: Path) -> None:
+    """El caso de siempre: un PID vivo es un cerrojo vivo.
+
+    Este PID es el del propio proceso de test, que obviamente esta vivo.
+    """
+    import os
+
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    (tmp_path / NOMBRE_CERROJO).write_text(f"{os.getpid()} lock", encoding="utf-8")
+
+    assert not cerrojo._propietario_muerto(), "el proceso del test esta vivo: no es basura"
+
+
+def test_el_umbral_por_defecto_distingue_lo_viejo_de_lo_reciente() -> None:
+    """El umbral por defecto tiene que separar "basura" de "adquisicion en curso".
+
+    Un umbral absurdo rompe en una de dos direcciones y las dos son malas:
+
+    - **Demasiado grande**: un cerrojo de un proceso muerto nunca se declara
+      basura, y la herramienta queda inservible hasta que alguien borre un archivo
+      a mano. Es el remedio que nadie recuerda.
+    - **Demasiado pequeno**: un cerrojo en plena adquisicion se declara basura y
+      la otra corrida se lo roba, que es la carrera que este PR arregla.
+
+    Se verifica sobre el valor del modulo y no sobre una constante local, porque un
+    umbral de una hora en el codigo tiene que hacer fallar **este** test, no uno
+    que se acomode a el.
+    """
+    import os
+    import time
+
+    import conciliador_bancario.audit.atomic as atomic
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    umbral = atomic._SEGUNDOS_PARA_DECLARAR_BASURA
+    # Un umbral que no separa nada no sirve para nada: tiene que caber entre lo que
+    # tarda una adquisicion (microsegundos) y lo que tarda una persona en decidir
+    # que borre un archivo (minutos).
+    assert 0.1 < umbral < 300, (
+        f"el umbral por defecto es {umbral}s: si es muy chico se roban los cerrojos "
+        "en plena adquisicion, y si es muy grande la herramienta queda inservible "
+        "tras un kill -9"
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        ruta = Path(td) / NOMBRE_CERROJO
+        ruta.write_text("", encoding="utf-8")
+        cerrojo = CerrojoDeSalida(Path(td))
+
+        # Lo que dejaria una persona pensando: cerrojo huerfano de hace minutos.
+        huerfano = time.time() - umbral - 5
+        os.utime(ruta, (huerfano, huerfano))
+        assert cerrojo._propietario_muerto(), "un cerrojo huerfano debe ser reclamable"
+
+        # Y lo que veria la otra corrida en la ventana de adquisicion.
+        ahora = time.time()
+        os.utime(ruta, (ahora, ahora))
+        assert not cerrojo._propietario_muerto(), "un cerrojo recien creado esta vivo"

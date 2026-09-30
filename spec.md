@@ -285,16 +285,33 @@ que parece correcto y no lo es, con exit 0**.
    un PDF nunca trae columna de moneda, así que el supuesto es estructural y avisar
    en cada corrida sería ruido. Lo anómalo es que el supuesto haya movido dinero.
 
+### 5.6 Dos defectos en el cálculo de diferencias (corregidos en #70)
+
+La revalidación encontró dos problemas en el bloque de arriba, ambos introducidos al
+corregirlo:
+
+1. **O(n·m) y pagado para nada.** El cálculo de `total_conciliado` recorría *todas*
+   las transacciones por cada match conciliado. Medido: 4.000 filas tardaban 1,5 s y
+   12.000 unos 27 s; a las 200.000 del default, horas. Y cuando las sumas **cuadran**
+   —el caso normal— el número se calculaba y se descartaba. Ahora es O(n+m) y solo se
+   calcula si hay alguna diferencia.
+2. **Dos hallazgos con el mismo `id`.** `diferencia_de_sumas` es `entidad="sistema"`
+   con `entidad_id=None`, así que su `id` sale solo de `tipo` + `extra`. El `extra`
+   llevaba los totales pero no la moneda: dos divisas con los mismos totales
+   producían el mismo `id`, y `explain <id>` solo alcanzaba a uno de los dos. El
+   `id` tiene que identificar el hallazgo, y `RunPayload` no validaba unicidad.
+
 ### 5.5 La moneda asumida anula la protección de H14
 
 ## 6. Fuera de alcance (y por qué)
 
-- **Concurrencia real multi-proceso**: NO se cubre. Una versión anterior de este
-  documento afirmaba que "se cubre el caso de dos procesos" y era **falso**: no
-  hay ningún test de concurrencia en el repo, y A2 sigue abierto. La corrección
-  importa: `JsonlAuditWriter` abre `audit.jsonl` en modo `"w"` desde el
-  constructor, así que una segunda corrida **trunca** el log de la primera antes de
-  hacer nada. Ver A2.
+- **Concurrencia real multi-proceso**: se cubre el caso de **dos** procesos con el
+  mismo `--out` (cerrojo `O_EXCL` + reclamation de PID muerto, con test). **Tres o
+  más** procesos simultáneos, o dos sobre un `--out` en un filesystem que no
+  garantiza `O_EXCL` (algunos NFS), no están cubiertos. La carrera de la ventana
+  entre `O_EXCL` y la escritura del PID se corrigio en el #73 juzgando por edad del
+  archivo; sigue dependiendo de `time.time()`, que un reloj mal sincronizado o un
+  NFS con `mtime` desviado pueden falsear.
 - **Fuzzing de bytes sobre PDF**: los mutadores destruyen la estructura y solo
   producen "no se puede abrir". Se genera PDF semánticamente hostil, no corrupto.
 - **Tipografías y OCR propeller más allá de lo hecho**: el camino OCR ya tiene

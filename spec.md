@@ -178,7 +178,7 @@ protocolo es mechanically ejecutable y no depende de que alguien se acuerde.
 
 | Ítem | Cómo se prueba | Prueba de mordida (se revierte y debe fallar) |
 |---|---|---|
-| A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` (**HECHO en #50**) | `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae |
+| A1 | `tests/test_fuzz_volumen.py`, `@pytest.mark.slow` (**HECHO en #50, medir el default real en #69**) | `enforce_counter` sin cortar → 3 tests caen; `budgets()` vacío → 1 cae; **subir `max_tabular_rows` sin agregar el volumen correspondiente → 1 cae** |
 | A2 | `tests/test_escritura_atomica.py` (11 tests): atomicidad, cerrojo, zombie, secuencial, concurrente | Cerrojo como no-op → cae la concurrencia; sin reclamation → cae el zombie; sin limpiar temporal → cae la atomicidad |
 | A3 | **HECHO en #58**: `data_only=True` se queda (es lo correcto) y el límite quedó documentado en `walkthrough.md`, que es donde un operador busca un comportamiento que no entiende | N/A |
 | A4 | **HECHO en #58**: los tests viven en `tests/test_determinismo_reporte.py` (no en `test_idempotencia.py`, que nunca existió) y comparan **celdas**, no hash del `.xlsx` | **HECHO**: introducir PID en una celda cae en 4 tests, y en `run.json` en 9 |

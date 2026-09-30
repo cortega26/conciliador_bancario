@@ -251,27 +251,42 @@ def test_corridas_reales_en_paralelo_nunca_dejan_artefactos_mixtos(
     reintentar.
     """
     out = cliente["raiz"] / "out"
-    base = [
-        "run",
-        "--config",
-        str(cliente["config"]),
-        "--bank",
-        str(cliente["raiz"] / "b.csv"),
-        "--expected",
-        str(cliente["esperados"]),
-        "--out",
-        str(out),
-    ]
-    (cliente["raiz"] / "b.csv").write_text(
+    raiz = cliente["raiz"]
+
+    def argumentos(banco: str) -> list[str]:
+        return [
+            "run",
+            "--config",
+            str(cliente["config"]),
+            "--bank",
+            str(raiz / banco),
+            "--expected",
+            str(cliente["esperados"]),
+            "--out",
+            str(out),
+        ]
+
+    # Las dos entradas son **distintas** a proposito. Con la misma entrada el
+    # `run_id` es identico por construccion, y entonces "el audit log no mezcla
+    # dos corridas" es una tautologia: no podria mezclarlas aunque el cerrojo
+    # no existiera. Con entradas distintas, cada corrida trae su `run_id`, y que
+    # el archivo final tenga mas de uno significa que dos procesos escribieron en
+    # el mismo lugar. Ahi el test muerde.
+    (raiz / "a.csv").write_text(
         "fecha_operacion,monto,descripcion\n"
-        + "".join(f"05/01/2026,{1000 + i},fila {i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        + "".join(f"05/01/2026,{1000 + i},fila A{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+    (raiz / "b.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{2000 + i},fila B{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
         encoding="utf-8",
     )
 
     resultados: dict[str, int] = {}
 
     def correr(tag: str) -> None:
-        resultados[tag] = _cli(*base).returncode
+        resultados[tag] = _cli(*argumentos(f"{tag.lower()}.csv")).returncode
 
     hilos = [threading.Thread(target=correr, args=(t,)) for t in ("A", "B")]
     for h in hilos:
@@ -285,8 +300,22 @@ def test_corridas_reales_en_paralelo_nunca_dejan_artefactos_mixtos(
     for tag, code in resultados.items():
         assert code in (EXIT_OK, EXIT_IO), f"corrida {tag}: exit inesperado {code}"
 
-    if not exitosas:
-        pytest.skip("las dos corridas chocaron con el cerrojo; no hay log que verificar")
+    # ## Por que no se puede aceptar "cero exitosas" como resultado valido
+    #
+    # La version anterior de este test aceptaba 0, 1 o 2 exits 0 y hacia `skip`
+    # si las dos chocaban. Eso lo hacia unable de detectar el bug que dice medir:
+    # con dos entradas identicas el `run_id` es el mismo por construccion, asi que
+    # `len(rids) == 1` era una tautologia, y el `skip` tapaba justo el caso en que
+    # el cerrojo.rejecta a las dos.
+    #
+    # Ahora el test exige que **al menos una** termine, y que la otra o bien
+    # termine o bien falle por el cerrojo. Y usa entradas **distintas** (abajo),
+    # que es lo que hace que dos `run_id` diferentes compitan por el mismo `--out`
+    # y que el audit log mezclado sea detectable.
+    assert exitosas, (
+        "las dos corridas fallaron: el cerrojo tiene que dejar pasar al menos a "
+        f"una. resultados={resultados}"
+    )
 
     # El invariante: el audit log pertenece a una sola corrida.
     log = out / "audit.jsonl"
@@ -551,3 +580,86 @@ def test_una_corrida_real_no_deja_temporales() -> None:
         assert sobras == [], f"la corrida dejo temporales: {sobras}"
         assert (d / "out" / "run.json").exists()
         assert (d / "out" / "reporte_conciliacion.xlsx").exists()
+
+
+def test_dos_corridas_sobre_el_mismo_out_se_chocan_por_el_cerrojo(
+    cliente: dict[str, Path],
+) -> None:
+    """Dos entradas **distintas** sobre el mismo `--out` no pueden entrar juntas.
+
+    ## Por que esta prueba existe y no la anterior
+
+    La primera version de este archivo lanzaba dos corridas con la **misma** entrada,
+    y por lo tanto el mismo `run_id` por construccion. Entonces "el audit no mezcla
+    dos corridas" era una tautologia: no podia mezclarlas aunque el cerrojo no
+    existiera. Y se aceptaba 0, 1 o 2 exitosas, con `skip` si las dos chocaban, que
+    es tapar justo el caso que importa.
+
+    Aqui las entradas son distintas, asi que cada corrida trae su `run_id` y el
+    archivo mezclado seria detectable. Y se exige que **al menos una** termine, para
+    que el cerrojo no pueda "ganar" rejecting a las dos.
+
+    No se desactiva el cerrojo para demostrar la mezcla: hacerlo exigiria una puerta
+    trasera en produccion (una variable de entorno que lo apague), que es un
+    agujero esperando a que alguien lo use. La mezcla sin proteccion se razona en el
+    docstring de `CerrojoDeSalida`; lo que se verifica aqui es lo que se puede
+    verificar sin abrir ese agujero.
+    """
+    out = cliente["raiz"] / "out"
+    raiz = cliente["raiz"]
+
+    def argumentos(banco: str) -> list[str]:
+        return [
+            "run",
+            "--config",
+            str(cliente["config"]),
+            "--bank",
+            str(raiz / banco),
+            "--expected",
+            str(cliente["esperados"]),
+            "--out",
+            str(out),
+        ]
+
+    (raiz / "a.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{1000 + i},fila A{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+    (raiz / "b.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{2000 + i},fila B{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+
+    resultados: dict[str, int] = {}
+
+    def correr(tag: str) -> None:
+        resultados[tag] = _cli(*argumentos(f"{tag.lower()}.csv")).returncode
+
+    hilos = [threading.Thread(target=correr, args=(t,)) for t in ("A", "B")]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    exitosas = [c for c in resultados.values() if c == EXIT_OK]
+    assert exitosas, (
+        f"las dos corridas fallaron: el cerrojo tiene que dejar pasar al menos a "
+        f"una. resultados={resultados}"
+    )
+    for tag, code in resultados.items():
+        assert code in (EXIT_OK, EXIT_IO), f"corrida {tag}: exit inesperado {code}"
+
+    # Si gano una, el audit log pertenece a una sola corrida.
+    log = out / "audit.jsonl"
+    if log.exists():
+        rids = {
+            json.loads(ln)["run_id"]
+            for ln in log.read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        }
+        assert len(rids) == 1, f"el audit log mezcla {len(rids)} corridas: {rids}"
+
+    # Y el cerrojo nunca queda puesto.
+    assert not (out / NOMBRE_CERROJO).exists(), "el cerrojo quedo puesto tras las corridas"

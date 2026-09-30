@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -204,3 +206,142 @@ def test_payload_con_espacios_iniciales_nunca_es_formula(payload: str, espacios:
         path = Path(tmp) / "reporte.xlsx"
         generar_reporte_excel(path, resultado, mask=False, cfg=ConfiguracionCliente(cliente="X"))
         assert _celdas_formula(path, ["Esperados"]) == []
+
+
+# --- El numero que se mira primero, a la vista ----------------------------
+#
+# `diferencia_de_sumas` existia como hallazgo con sus tres totales, pero la hoja
+# `Resumen` no los mostraba: el operador tenia que ir a `Hallazgos` y buscar una
+# fila ordenada por hash entre cientos de `pendiente_banco`. El numero estaba en el
+# archivo y no a la vista, que es una forma de que no se use.
+
+
+def _reporte_con_diferencia(tmp_path: Path):
+    """Corre una conciliacion con diferencia de sumas y devuelve el libro."""
+    import subprocess
+
+    from openpyxl import load_workbook
+
+    cli = [sys.executable, "-c", "from conciliador_bancario.cli import app; app()"]
+    ini = subprocess.run(
+        cli + ["init", "--out-dir", str(tmp_path / "c")],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert ini.returncode == 0, ini.stdout + ini.stderr
+    config = next((tmp_path / "c").rglob("*.yaml"))
+    d = config.parent
+    # Dos transacciones de 150.000 contra un esperado de 150.000: hay diferencia.
+    (d / "banco.csv").write_text(
+        "fecha_operacion,monto,descripcion,cuenta\n"
+        "05/01/2026,150000,Pago,123\n"
+        "05/01/2026,150000,Otro,123\n",
+        encoding="utf-8",
+    )
+    (d / "esperados.csv").write_text(
+        "fecha,monto,descripcion\n05/01/2026,150000,Pago\n", encoding="utf-8"
+    )
+    r = subprocess.run(
+        cli
+        + [
+            "run",
+            "--config",
+            str(config),
+            "--bank",
+            str(d / "banco.csv"),
+            "--expected",
+            str(d / "esperados.csv"),
+            "--out",
+            str(d / "out"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    # Bajo pytest la terminal es angosta y rich ENVUELVE el path del reporte en
+    # varias lineas, partiendo hasta el nombre del archivo. Por eso el patron
+    # permite un salto de linea y espacios entre "Reporte:" y el `.xlsx`.
+    xlsx = Path(re.sub(r"\s+", "", re.search(r"Reporte:\s*(.*?\.xlsx)", r.stdout, re.S).group(1)))
+    return load_workbook(xlsx), xlsx
+
+
+def test_el_resumen_muestra_los_totales(tmp_path: Path) -> None:
+    """La hoja `Resumen` lleva la diferencia y los tres totales.
+
+    Es la hoja que se abre primero. Si el numero no esta ahi, el operador tiene que
+    ir a buscarlo entre hallazgos ordenados por hash de id.
+    """
+    wb, _ = _reporte_con_diferencia(tmp_path)
+    ws = wb["Resumen"]
+    celdas = {str(fila[0]).strip(): fila[1] for fila in ws.iter_rows(values_only=True) if fila[0]}
+    assert "Diferencia de sumas" in celdas, sorted(celdas)
+    assert str(celdas.get("Total banco")) == "300000", celdas
+    assert str(celdas.get("Total esperados")) == "150000", celdas
+    assert str(celdas.get("Diferencia")) == "150000", celdas
+
+
+def test_el_resumen_dice_de_que_moneda_habla(tmp_path: Path) -> None:
+    """Un total sin divisa es ambiguo para un contador.
+
+    El valor va junto a la etiqueta de la moneda, no escondido en el hallazgo.
+    """
+    wb, _ = _reporte_con_diferencia(tmp_path)
+    ws = wb["Resumen"]
+    filas = [(str(f[0]).strip(), f[1]) for f in ws.iter_rows(values_only=True) if f[0]]
+    rotulo = next((v for k, v in filas if k == "Diferencia de sumas"), None)
+    assert rotulo == "CLP", f"el resumen no dice la moneda: {rotulo}"
+
+
+def test_sin_diferencia_el_resumen_no_inventa_la_seccion(tmp_path: Path) -> None:
+    """Cuando las sumas cuadran, no aparece una seccion de diferencia vacia.
+
+    El control negativo: una seccion que siempre aparece, aunque no haya nada
+    que decir, hace que el operador deje de mirarla.
+    """
+    import subprocess
+
+    from openpyxl import load_workbook
+
+    cli = [sys.executable, "-c", "from conciliador_bancario.cli import app; app()"]
+    ini = subprocess.run(
+        cli + ["init", "--out-dir", str(tmp_path / "c")],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert ini.returncode == 0
+    config = next((tmp_path / "c").rglob("*.yaml"))
+    d = config.parent
+    (d / "banco.csv").write_text(
+        "fecha_operacion,monto,descripcion,cuenta\n05/01/2026,150000,Pago,123\n",
+        encoding="utf-8",
+    )
+    (d / "esperados.csv").write_text(
+        "fecha,monto,descripcion\n05/01/2026,150000,Pago\n", encoding="utf-8"
+    )
+    r = subprocess.run(
+        cli
+        + [
+            "run",
+            "--config",
+            str(config),
+            "--bank",
+            str(d / "banco.csv"),
+            "--expected",
+            str(d / "esperados.csv"),
+            "--out",
+            str(d / "out"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    # El path del reporte se envuelve en varias lineas porque la terminal es
+    # angosta, asi que se busca con regex en vez de cortar por lineas.
+    xlsx = Path(re.sub(r"\s+", "", re.search(r"Reporte:\s*(.*?\.xlsx)", r.stdout, re.S).group(1)))
+    ws = load_workbook(xlsx)["Resumen"]
+    etiquetas = [str(f[0]).strip() for f in ws.iter_rows(values_only=True) if f[0]]
+    assert "Diferencia de sumas" not in etiquetas, etiquetas

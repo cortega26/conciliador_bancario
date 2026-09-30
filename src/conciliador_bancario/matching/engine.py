@@ -748,6 +748,21 @@ def conciliar(
     # bloqueado (`bloqueado_por_confianza`) o solo sugerido no es dinero
     # conciliado. Decir "Conciliado: 150000" al lado de un match en estado
     # `pendiente` es un numero que contradice al resto del reporte.
+    #
+    # ## Por que esto se calcula despues y no antes
+    #
+    # La primera version recorria **todas** las transacciones por cada match
+    # conciliado. Eso es O(n*m): medido, 4.000 filas tardaban 1,5 s, 8.000 unos 6 s
+    # y 12.000 unos 27 s. A 200.000 filas, el default documentado de
+    # `max_tabular_rows`, son horas.
+    #
+    # Y lo peor no era la lentitud: cuando las sumas **cuadran** —el caso normal de
+    # esta herramienta— no hay nada que reportar, asi que el numero se calculaba y
+    # se tiraba. 6.000 transacciones conciliadas, 0 hallazgos, y 4,16 s pagados para
+    # nada.
+    #
+    # Ahora se calcula solo si hay alguna diferencia, y en una pasada: un indice
+    # por id (O(n)) y despues un recorrido por match (O(m)).
     bancos_por_moneda: dict[str, Decimal] = {}
     for t in transacciones:
         bancos_por_moneda[t.moneda] = bancos_por_moneda.get(t.moneda, Decimal(0)) + _valor_monto_tx(
@@ -759,21 +774,36 @@ def conciliar(
             e.moneda, Decimal(0)
         ) + _valor_monto_exp(e)
 
-    conciliado_por_moneda: dict[str, Decimal] = {}
-    for m in matches:
-        if m.estado is not EstadoMatch.conciliado:
-            continue
-        for t in transacciones:
-            if t.id in set(m.transacciones_bancarias):
-                conciliado_por_moneda[t.moneda] = conciliado_por_moneda.get(
-                    t.moneda, Decimal(0)
-                ) + _valor_monto_tx(t)
-
     # La union de las dos fuentes, no solo la del banco: si el libro tiene
     # movimientos que el banco no registra, esa moneda tiene que aparecer igual
     # con total_banco 0. Iterar solo sobre `bancos_por_moneda` hacia que un
     # archivo de banco vacio no reportara nada, que es justo el caso en que el
     # operador mas necesita el numero.
+    #
+    # Antes de entrar se calcula `conciliado_por_moneda`, y **solo si hay alguna
+    # diferencia**: si todas las monedas cuadran, el numero no se usa para nada y
+    # recorrer los matches seria tiempo perdido. Ver la nota de arriba sobre por que
+    # esto es O(n+m) y no O(n*m).
+    hay_diferencia = any(
+        bancos_por_moneda.get(m, Decimal(0)) != esperados_por_moneda.get(m, Decimal(0))
+        for m in set(bancos_por_moneda) | set(esperados_por_moneda)
+    )
+    conciliado_por_moneda: dict[str, Decimal] = {}
+    if hay_diferencia:
+        # Indice por id, construido una vez. Antes se recorria la lista completa de
+        # transacciones por cada match, que es O(n*m).
+        valor_por_tx_id = {t.id: t for t in transacciones}
+        for m in matches:
+            if m.estado is not EstadoMatch.conciliado:
+                continue
+            for tx_id in m.transacciones_bancarias:
+                tx_conciliada = valor_por_tx_id.get(tx_id)
+                if tx_conciliada is None:
+                    continue
+                conciliado_por_moneda[tx_conciliada.moneda] = conciliado_por_moneda.get(
+                    tx_conciliada.moneda, Decimal(0)
+                ) + _valor_monto_tx(tx_conciliada)
+
     for moneda in sorted(set(bancos_por_moneda) | set(esperados_por_moneda)):
         total_banco = bancos_por_moneda.get(moneda, Decimal(0))
         total_esperado = esperados_por_moneda.get(moneda, Decimal(0))
@@ -781,12 +811,24 @@ def conciliar(
         if diferencia == 0:
             continue
         total_conciliado = conciliado_por_moneda.get(moneda, Decimal(0))
+        # ## Por que la moneda va en el hash del id
+        #
+        # `diferencia_de_sumas` es `entidad="sistema"` con `entidad_id=None`, asi
+        # que su id sale solo de `tipo` + `extra`. Con dos divisas que tengan los
+        # mismos totales, el `extra` era identico y **las dos compartian id**: el
+        # hallazgo de una moneda quedaba en `run.json` pero `explain <id>` devolvia
+        # solo la otra, porque el id no lo distingue. El id tiene que identificar
+        # el hallazgo, y dos hallazgos distintos no pueden compartirlo.
         hid = _hallazgo_id(
             run_id,
             "diferencia_de_sumas",
             "sistema",
             None,
-            {"total_banco": str(total_banco), "total_esperado": str(total_esperado)},
+            {
+                "moneda": moneda,
+                "total_banco": str(total_banco),
+                "total_esperado": str(total_esperado),
+            },
         )
         h = Hallazgo(
             id=hid,

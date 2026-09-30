@@ -281,3 +281,89 @@ def test_el_hallazgo_dice_de_que_moneda_habla() -> None:
     h = _hallazgo(caso)
     assert h is not None
     assert "USD" in h.mensaje, h.mensaje
+
+
+def test_dos_monedas_con_los_mismos_totales_no_comparten_id() -> None:
+    """El id tiene que distinguir los hallazgos, o `explain` no alcanza a uno.
+
+    `diferencia_de_sumas` es `entidad="sistema"` con `entidad_id=None`, asi que su
+    id sale solo de `tipo` + `extra`. Con la moneda fuera del `extra`, dos divisas
+    con los mismos totales producian **el mismo id**: los dos hallazgos existian en
+    `run.json` y en la hoja `Hallazgos`, pero `explain <id>` devolvia solo uno,
+    porque el id no los distinguia.
+
+    Los montos son identicos a proposito: es exactamente la condicion que dispara la
+    colision. El test de dos monedas que ya existia usaba 400 y 600, o sea justo lo
+    que la evita.
+    """
+    caso = _caso(
+        "mismos totales",
+        [tx("TX1", "1000", moneda="CLP"), tx("TX2", "1000", moneda="USD")],
+        [exp("EXP1", "500", moneda="CLP"), exp("EXP2", "500", moneda="USD")],
+    )
+    r = correr(caso)
+    diffs = [h for h in r.hallazgos if h.tipo == "diferencia_de_sumas"]
+    assert len(diffs) == 2, [h.detalles for h in diffs]
+    ids = [h.id for h in diffs]
+    assert len(set(ids)) == 2, f"los dos hallazgos comparten id {ids}: uno es inalcanzable"
+    # Y cada id sigue siendo alcanzable: el detalle de cada moneda esta en su hallazgo.
+    por_id = {h.id: h.detalles for h in diffs}
+    assert {d["moneda"] for d in por_id.values()} == {"CLP", "USD"}, por_id
+
+
+def test_los_ids_de_hallazgo_no_se_repiten_en_una_corrida() -> None:
+    """Invariante general: un id identifica a un hallazgo.
+
+    Es la propiedad que el caso anterior rompe de forma especifica, y `run.json`
+    no la validaba: `RunPayload` no comprueba unicidad de `hallazgos[].id`. Sin ese
+    invariante, una colision futura vuelve a dejar evidencia inalcanzable sin que
+    nada se entere.
+    """
+    caso = _caso(
+        "varios",
+        [
+            tx("TX1", "1000", moneda="CLP"),
+            tx("TX2", "1000", moneda="USD"),
+            tx("TX3", "700", moneda="CLP", bloquea=True),
+        ],
+        [exp("EXP1", "500", moneda="CLP"), exp("EXP2", "500", moneda="USD")],
+    )
+    r = correr(caso)
+    ids = [h.id for h in r.hallazgos]
+    assert len(ids) == len(set(ids)), f"hay ids de hallazgo repetidos: {ids}"
+
+
+def test_el_calculo_de_lo_conciliado_no_cuesta_todo_el_cuadrado() -> None:
+    """La aritmetica del total conciliado no puede recorrer n*m.
+
+    Este test es un guard de rendimiento con un presupuesto, no una medicion fina:
+    si el calculo vuelve a recorrer todas las transacciones por cada match, el
+    tiempo crece al cuadrado y este test lo detecta comparando el tiempo de n
+    contra el doble de n.
+    """
+    import time
+
+    fecha = __import__("datetime").date(2026, 1, 5)
+
+    def medir(n: int) -> float:
+        txs = [tx(f"T{i}", str(1000 + i), fecha=fecha) for i in range(n)]
+        exps = [exp(f"E{i}", str(1000 + i), fecha=fecha) for i in range(n)]
+        t0 = time.perf_counter()
+        r = correr(CasoMatching(nombre="perf", txs=txs, exps=exps, descripcion=""))
+        dt = time.perf_counter() - t0
+        assert not [h for h in r.hallazgos if h.tipo == "diferencia_de_sumas"], (
+            "se esperaba que las sumas cuadraran: el caso rapido es justamente "
+            "cuando no hay nada que reportar"
+        )
+        return dt
+
+    n = 1500
+    t_n = medir(n)
+    t_2n = medir(2 * n)
+    # Cuadratico seria ~4x. Con margen amplio para no ser flaky en CI: el punto es
+    # distinguir O(n) de O(n^2), y 2,5x ya esta del lado bueno de esa frontera.
+    assert t_2n < t_n * 2.5 + 0.5, (
+        f"el tiempo crecio {t_2n / max(t_n, 1e-6):.1f}x al duplicar las filas "
+        f"({t_n:.2f}s -> {t_2n:.2f}s). Cuadratico serian ~4x: el calculo de "
+        "lo conciliado esta recorriendo n*m otra vez."
+    )

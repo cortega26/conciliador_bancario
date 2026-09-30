@@ -39,6 +39,7 @@ from conciliador_bancario.audit.audit_log import NullAuditWriter
 from conciliador_bancario.ingestion.base import ErrorIngestion
 from conciliador_bancario.ingestion.csv_adapter import cargar_transacciones_csv
 from conciliador_bancario.ingestion.xml_adapter import cargar_transacciones_xml
+from conciliador_bancario.matching.engine import conciliar
 from conciliador_bancario.models import ConfiguracionCliente
 
 from tools.fuzzvolumen import budgets, escribir_csv, escribir_xml, iter_volumenes
@@ -173,19 +174,55 @@ def test_el_default_de_filas_es_alcanzable(tmp_path: Path, nombre: str, filas: i
 @SLOW
 @_requiere_slow
 def test_la_memoria_no_explota_con_el_default_de_filas(tmp_path: Path) -> None:
-    """100k filas no pueden pasar de ~1.5 GB de RSS.
+    """El default completo, con matching, no puede pasar de 1.500 MB de RSS.
 
-    Es un techo deliberadamente holgado, para que solo se rompa si algo empieza a
-    retener datos de forma patológica. La cifra viene de la medición: 100k filas
-    badan ~410 MB y el pico del proceso llegó a ~712 MB. Si esto se dispara, lo
-    que cambió es que algo **dejó de ser streaming**, y eso hay que saber.
+    ## Por que este test cambió de 100k a 200k, y de ingesta a pipeline
+
+    La primera version media **100k filas y solo la ingesta**: llamaba a
+    `cargar_transacciones_csv` y nada más. Dos problemas, ambos del mismo tipo que
+    los que se vienen cerrando en este repo.
+
+    1. **Medía la mitad de lo que promete proteger.** El matching no estaba dentro
+       de la medición, así que el presupuesto de memoria era el de un sistema que no
+       concilia. Con `esperados=[]` y todos los montos distintos, el matching es
+       barato; con un caso real, no lo es.
+    2. **Medía la mitad del default.** `max_tabular_rows` son 200k. Un techo de
+       memoria probado a 100k es un techo más holgado del que importa.
+
+    Medido en un proceso limpio, pipeline completo, `esperados=[]`:
+
+    | filas | carga | matching | total | RSS pico |
+    |---|---|---|---|---|
+    | 50k  |  3,0 s |  1,1 s |  4,2 s |  321 MB |
+    | 100k |  7,5 s |  4,7 s | 12,2 s |  901 MB |
+    | 200k | 18,8 s |  4,7 s | 23,5 s | 1.776 MB |
+
+    El techo de 1.500 MB sale de la medición con margen, no de un numero redondo.
+
+    ## Por que el pico y no el final
+
+    El OOM killer mata por **pico**, no por lo que queda al final. Un pipeline que
+    retiene 1,8 GB mientras concilia y libera despues muere igual. Por eso se
+    asserts sobre el pico (`ru_maxrss`) y no sobre el RSS al terminar.
     """
-    ruta = escribir_csv(tmp_path / "v.csv", 100_000)
+    ruta = escribir_csv(tmp_path / "v.csv", 200_000)
     antes = _rss_mb()
-    cargar_transacciones_csv(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
-    despues = _rss_mb()
-    print(f"\n  100k filas: RSS {antes} MB -> {despues} MB")
-    assert despues < 1_500, f"RSS de {despues} MB con 100k filas: algo dejo de ser streaming"
+    txs = cargar_transacciones_csv(ruta, cfg=_cfg(), audit=NullAuditWriter())  # type: ignore[arg-type]
+    conciliar(
+        cfg=_cfg(),
+        transacciones=txs,
+        esperados=[],
+        audit=NullAuditWriter(),  # type: ignore[arg-type]
+        run_id="volumen",
+    )
+    pico = _rss_mb()
+    print(f"\n  200k filas (pipeline completo): RSS {antes} MB -> pico {pico} MB")
+    assert pico < 1_500, (
+        f"RSS de {pico} MB con 200k filas y matching: el techo de memoria del "
+        "default real se paso. Si esto sube, lo que cambio es la representacion "
+        "de las transacciones (cada una son 9 objetos pydantic anidados), no el "
+        "algoritmo. Mide antes de tocar el algoritmo."
+    )
 
 
 @SLOW

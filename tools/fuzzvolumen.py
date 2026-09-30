@@ -95,10 +95,11 @@ def budgets() -> dict[str, float]:
         "10k_filas": 3.0,
         "50k_filas": 12.0,
         "100k_filas": 25.0,
-        # 200k es el default real de `max_tabular_rows`, asi que el techo de
-        # memoria se tiene que medir ahi y no a la mitad. Medido: 33,3 s de
-        # ingesta+matching y 1.215 MB de RSS. El presupuesto es 1,5x el observado,
-        # con el mismo margen que los otros.
+        # 200k es el default real de `max_tabular_rows`. Medido en un proceso
+        # limpio, **pipeline completo** (carga + matching), sin esperados: 31,7 s
+        # y 1.201 MB de RSS pico. El presupuesto de tiempo cubre ese total, no solo
+        # la carga: el gate se corrigio para medir lo que promete proteger, asi que
+        # el presupuesto tiene que corresponder a lo mismo.
         "200k_filas": 50.0,
     }
 

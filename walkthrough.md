@@ -12,6 +12,17 @@
   vía `CampoConConfianza` + `MetadataConfianza`) para soportar auditabilidad futura.
 - Stubs por fase: el core evita heurísticas agresivas; cualquier extensión futura (especialmente premium) debe ir por
   interfaces y flags, no por ramas ocultas.
+- Las reglas de matching son clases plugged en `matching/reglas.py`, una por regla, y `conciliar()` las recorre sin saber
+  qué reglas existen. El motivo no es el tamaño de la función: es que **agregar una regla era riesgoso**, porque había que
+  razonar sobre el cuerpo entero de `conciliar()` al escribirla, y los tres P0 de la revisión entraron exactamente así,
+  por retrofit sobre esa función. El criterio de aceptación del refactor fue "¿puedo agregar una regla sin abrir
+  `engine.py`?", no "la función quedó más corta". `matching/primitivas.py` existe solo para romper el import circular que
+  apareció al extraer las reglas.
+- **Trampa conocida**: una regla recibe **una** transacción por llamada, porque el motor ya las recorre. La primera versión
+  de la regla de referencia conservó su `for` propio de cuando vivía dentro de `conciliar()`, y con el bucle del motor
+  encima quedó en O(n²) — 4,8x al duplicar las filas, medido por
+  `test_el_calculo_de_lo_conciliado_no_cuesta_todo_el_cuadrado`, que es exactamente el gate que lo detectó. Por eso
+  `Contexto` no expone la lista de transacciones: dejar el campo ahí sería dejar la trampa puesta para la próxima regla.
 
 ## Riesgos conocidos (Core)
 

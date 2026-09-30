@@ -30,10 +30,21 @@
       },
       "entidad": "sistema",
       "entidad_id": null,
-      "id": "H-59142234b63c79",
+      "id": "H-2d120a729925c2",
       "mensaje": "El total del banco en CLP (150000) no coincide con el total de los movimientos esperados (-100000). Diferencia: 250000. Conciliado: 0. La diferencia puede ser legitima (comisiones, movimientos aun no reflejados) o puede ser un archivo incompleto: revise los pendientes.",
       "severidad": "advertencia",
       "tipo": "diferencia_de_sumas"
+    },
+    {
+      "detalles": {
+        "moneda_asumida": "CLP"
+      },
+      "entidad": "sistema",
+      "entidad_id": null,
+      "id": "H-590695a2b85a2a",
+      "mensaje": "Los totales se reportan en CLP, pero esa moneda no viene del archivo: se asume desde 'moneda_default'. Las cifras pueden ser ciertas y la etiqueta de divisa ser inventada. Si el archivo es de otra moneda, la conciliacion completa esta mal.",
+      "severidad": "advertencia",
+      "tipo": "moneda_asumida_en_totales"
     },
     {
       "detalles": {},

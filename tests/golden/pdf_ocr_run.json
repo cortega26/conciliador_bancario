@@ -26,6 +26,17 @@
       "mensaje": "Transaccion bancaria con match (ver Matches).",
       "severidad": "info",
       "tipo": "tx_con_match"
+    },
+    {
+      "detalles": {
+        "moneda_asumida": "CLP"
+      },
+      "entidad": "sistema",
+      "entidad_id": null,
+      "id": "H-64ed5da86c2a47",
+      "mensaje": "Los totales se reportan en CLP, pero esa moneda no viene del archivo: se asume desde 'moneda_default'. Las cifras pueden ser ciertas y la etiqueta de divisa ser inventada. Si el archivo es de otra moneda, la conciliacion completa esta mal.",
+      "severidad": "advertencia",
+      "tipo": "moneda_asumida_en_totales"
     }
   ],
   "matches": [

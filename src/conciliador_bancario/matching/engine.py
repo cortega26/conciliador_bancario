@@ -653,13 +653,25 @@ def conciliar(
     # ## Por que solo los matches conciliados
     #
     # Un PDF texto o un OCR nunca traen columna de moneda, asi que ahi el
-    # supuesto es estructural y no una anomalia. Avisar en cada corrida PDF
+    # supuesto es estructural y no una anomalia. Avisar por cada fila asunida
     # entrenaria al operador a ignorar el aviso, que es peor que no avisar. Lo que
     # si es una anomalia es que **el supuesto haya producido una conciliacion**:
     # ahi el dinero quedo declarado conciliado sobre una etiqueta que nadie
     # escribio, y eso si merece una linea en el reporte. Es el mismo criterio del
     # aviso de umbral: se avisa del riesgo real, no de la mera existencia del
     # supuesto.
+    #
+    # ## El limite de este criterio, medido
+    #
+    # Un PDF **si** puede generar avisos: con `umbral_confianza_campos` bajo, sus
+    # referencias reconstruidas (confianza 0,40) llegan a conciliar y cada match
+    # produce una linea. Con el umbral por defecto no, porque 0,40 < 0,80.
+    #
+    # La version anterior de este comentario afirmaba que un PDF nunca conciliaba,
+    # y de ahi venia la justificacion de "nunca habra ruido". Era una
+    # generalizacion sin medir, y el test de volumen con 200k filas habria
+    # producido 200.000 lineas de aviso. El criterio no es "un PDF no genera
+    # ruido" sino "el aviso va donde el supuesto produjo dinero".
     tx_por_id = {t.id: t for t in transacciones}
     exp_por_id = {e.id: e for e in esperados}
     for m in matches:
@@ -773,6 +785,54 @@ def conciliar(
         esperados_por_moneda[e.moneda] = esperados_por_moneda.get(
             e.moneda, Decimal(0)
         ) + _valor_monto_exp(e)
+
+    # ## Aviso cuando la DIVISA de un total es asumida
+    #
+    # El aviso de `moneda_asumida_en_match` cubre el caso en que el supuesto
+    # produjo una conciliacion. Faltaba el otro: los totales se calculan **siempre**,
+    # y si la etiqueta de divisa viene del default, el reporte dice "El total del
+    # banco en CLP (1000)" sin decir que nadie escribio CLP.
+    #
+    # El caso: banco sin columna de moneda (asumida CLP) contra un libro en USD. La
+    # conciliacion no produce ningun match, asi que no hay aviso de moneda, pero la
+    # hoja `Resumen` pone "Total banco: 1000 CLP" en primer plano con una etiqueta
+    # inventada.
+    #
+    # Se avisa una vez por moneda, no por transaccion: 5.000 filas de un PDF
+    # _LABEL_ de moneda CLP son 5.000 veces el mismo aviso.
+    monedas_asumidas_totales = {t.moneda for t in transacciones if t.moneda_asumida} | {
+        e.moneda for e in esperados if e.moneda_asumida
+    }
+    for moneda in sorted(monedas_asumidas_totales):
+        hid = _hallazgo_id(
+            run_id,
+            "moneda_asumida_en_totales",
+            "sistema",
+            None,
+            {"moneda": moneda},
+        )
+        h = Hallazgo(
+            id=hid,
+            severidad=SeveridadHallazgo.advertencia,
+            tipo="moneda_asumida_en_totales",
+            mensaje=(
+                f"Los totales se reportan en {moneda}, pero esa moneda no viene del "
+                f"archivo: se asume desde 'moneda_default'. Las cifras pueden ser "
+                f"ciertas y la etiqueta de divisa ser inventada. Si el archivo es de "
+                f"otra moneda, la conciliacion completa esta mal."
+            ),
+            entidad="sistema",
+            entidad_id=None,
+            detalles={"moneda_asumida": moneda},
+        )
+        hallazgos.append(h)
+        audit.write(
+            AuditEvent(
+                "hallazgo",
+                "Totales calculados con la moneda asumida por defecto",
+                {"hallazgo_id": hid, "moneda": moneda},
+            )
+        )
 
     # La union de las dos fuentes, no solo la del banco: si el libro tiene
     # movimientos que el banco no registra, esa moneda tiene que aparecer igual

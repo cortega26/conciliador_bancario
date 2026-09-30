@@ -52,7 +52,10 @@ LIMITES_REQUERIDOS = {
     "PDF texto se puede autoconciliar": [
         "umbral_confianza_campos",
     ],
-    "run_id no incluye overrides": [
+    # Este limite se RESOLVIO en el #61, asi que el test ya no puede exigir que el
+    # walkthrough lo documente como limite: estaria blindando una afirmacion
+    # falsa. Lo que se exige ahora es que documente el comportamiento nuevo.
+    "run_id si incluye los limites efectivos": [
         "max_tabular_rows",
     ],
     "DTD externo no se descarga": [

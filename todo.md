@@ -54,36 +54,6 @@
       comportamiento que no entiende (un mensaje de commit no lo encuentra nadie)
 - [x] Con test que verifica que el límite está escrito
 
-## A4 — Determinismo de los artefactos — MEDIA — **HECHO en #58**
-
-- [x] Medir qué es comparable y qué no: `run.json` y `audit.jsonl` byte-idénticos;
-      el `.xlsx` no (ZIP con timestamps)
-- [x] Comparar **celdas**, no hash del `.xlsx`
-- [x] `run_id` y `audit.jsonl` por hash
-- [x] Control negativo: bancos distintos → reportes distintos, y contenido real
-- [x] El masking no depende de cuándo se corre
-- [x] Prueba de mordida: PID en una celda → 4 tests caen
-- [x] `run_id` distingue overrides distintos (en #61)
-
-## A5 — Invariante 1:1 del matching en la taxonomía — MEDIA — **HECHO**
-
-- [x] Confirmar qué exit produce hoy el `ValueError` del invariante → **exit 10**
-- [x] Test: forzar la violación y ver que la excepción es de dominio
-- [x] Cambiar a `ErrorIngestion` (exit 4) con la entidad repetida
-- [x] Extraído a `verificar_invariante_1a1()`, porque el invariante es
-      **inalcanzable desde los datos** y inline no tenía test posible
-- [x] Prueba de mordida: `ValueError` → 3 tests caen; invariante desconectado
-      del motor → 1 cae; no detecta la repetición → 3 caen
-
-## A7 — Informe de riesgo al día — BAJA — **HECHO**
-
-- [x] Actualizar la tabla: H1–H18 con estado, PR y test
-- [x] Reescribir "qué no se cubrió" con dónde quedó cada hueco
-- [x] Añadir la sección "lo que sigue abierto y por qué" con el trade-off
-- [x] `tests/test_docs_actualizados.py`: un hallazgo cerrado tiene que tener PR
-      real y test existente, y spec.md/todo.md no pueden contradecirse
-- [x] Prueba de mordida: el test detecta un hallazgo marcado como abierto
-
 ## A4 — Determinismo de los artefactos — MEDIA — **HECHO**
 
 - [x] Medir que es comparable y que no: `run.json` y `audit.jsonl` son
@@ -121,6 +91,26 @@ de verificacion, no del test:
 
 Con PID, que es garantizado distinto entre procesos, el reporte cae en 4 tests y
 `run.json` en 9. **Un test de mordida que no muerde no demuestra que el test sirva.**
+
+
+## A5 — Invariante 1:1 del matching en la taxonomía — MEDIA — **HECHO**
+
+- [x] Confirmar qué exit produce hoy el `ValueError` del invariante → **exit 10**
+- [x] Test: forzar la violación y ver que la excepción es de dominio
+- [x] Cambiar a `ErrorIngestion` (exit 4) con la entidad repetida
+- [x] Extraído a `verificar_invariante_1a1()`, porque el invariante es
+      **inalcanzable desde los datos** y inline no tenía test posible
+- [x] Prueba de mordida: `ValueError` → 3 tests caen; invariante desconectado
+      del motor → 1 cae; no detecta la repetición → 3 caen
+
+## A7 — Informe de riesgo al día — BAJA — **HECHO**
+
+- [x] Actualizar la tabla: H1–H18 con estado, PR y test
+- [x] Reescribir "qué no se cubrió" con dónde quedó cada hueco
+- [x] Añadir la sección "lo que sigue abierto y por qué" con el trade-off
+- [x] `tests/test_docs_actualizados.py`: un hallazgo cerrado tiene que tener PR
+      real y test existente, y spec.md/todo.md no pueden contradecirse
+- [x] Prueba de mordida: el test detecta un hallazgo marcado como abierto
 
 ## A8 — Re-verificar el commit sin revisión (H12) — PROC — **HECHO**
 

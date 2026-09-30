@@ -144,14 +144,23 @@ def test_spec_y_todo_no_se_contradicen() -> None:
         if siguiente:
             seccion_todo = seccion_todo[: len(f"## {item}") + siguiente.start()]
 
-        hecho_todo = "**HECHO**" in seccion_todo
+        # Se busca "HECHO" a secas, no "**HECHO**": el marcador de cierre real
+        # es "**HECHO en #NN**", y con la busqueda literal el guard era ciego a la
+        # forma que el documento usa de verdad. Un guard que depende de la
+        # redaccion no previene nada: se desactiva solo cuando alguien escribe
+        # "HECHO en #12" en vez de "HECHO".
+        hecho_todo = "HECHO" in seccion_todo
         # En spec, la fila del item: "| **A2** |" o "| A2 |"
         fila = next(
             (ln for ln in spec.splitlines() if re.match(rf"^\|\s*\**{item}\**\s*\|", ln)), None
         )
         if fila is None:
             continue
-        hecho_spec = "cerrado" in fila.lower() or "HECHO" in fila
+        # "PENDIENTE" gana sobre "cerrado"/"HECHO": una fila que dice
+        # "PENDIENTE: la documentacion prometida no existe" ya contiene "HECHO"
+        # en la frase de contexto, y se contaria como cerrada.
+        fila_low = fila.lower()
+        hecho_spec = "pendiente" not in fila_low and ("cerrado" in fila_low or "hecho" in fila_low)
 
         if hecho_todo != hecho_spec:
             disagreements.append(

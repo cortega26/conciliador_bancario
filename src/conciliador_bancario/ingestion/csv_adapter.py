@@ -168,8 +168,17 @@ def cargar_transacciones_csv(
             if c_fecha_ct and (row.get(c_fecha_ct) or "").strip():
                 try:
                     fecha_ct_val = parse_fecha_chile(row[c_fecha_ct] or "")
-                except ErrorParseo:
-                    fecha_ct_val = None
+                except ErrorParseo as e:
+                    # No se descarta en silencio. `fecha_operacion` ilegible falla
+                    # la corrida con exit 4, y esta caia al `None` sin hallazgo y
+                    # sin evento de auditoria: el operador veia una celda vacia y
+                    # no tenia forma de saber si el archivo no traia la columna o
+                    # si traia una fecha que no se pudo leer.
+                    #
+                    # Falla con exit 4 y no con un aviso porque no hay dato
+                    # recuperable: `fecha_contable` es informacion del banco, y
+                    # suponerla seria inventar un hecho de contabilidad.
+                    raise ErrorIngestion(f"Fila {i}: fecha_contable invalida: {e}") from e
             try:
                 monto: Decimal = parse_monto_clp(row[c_monto] or "")
             except ErrorParseo as e:

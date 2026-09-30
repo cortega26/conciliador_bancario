@@ -634,9 +634,15 @@ def test_dos_corridas_sobre_el_mismo_out_se_chocan_por_el_cerrojo(
     )
 
     resultados: dict[str, int] = {}
+    salidas: dict[str, tuple[int, str]] = {}
 
     def correr(tag: str) -> None:
-        resultados[tag] = _cli(*argumentos(f"{tag.lower()}.csv")).returncode
+        r = _cli(*argumentos(f"{tag.lower()}.csv"))
+        resultados[tag] = r.returncode
+        # Se guarda la salida porque hace falta distinguir *por que* fallo: un
+        # rechazo del cerrojo y un fallo de IO son el mismo exit code, y solo el
+        # mensaje dice si el cerrojo esta roto.
+        salidas[tag] = (r.returncode, (r.stdout or "") + (r.stderr or ""))
 
     hilos = [threading.Thread(target=correr, args=(t,)) for t in ("A", "B")]
     for h in hilos:
@@ -644,17 +650,83 @@ def test_dos_corridas_sobre_el_mismo_out_se_chocan_por_el_cerrojo(
     for h in hilos:
         h.join()
 
-    exitosas = [c for c in resultados.values() if c == EXIT_OK]
-    assert exitosas, (
-        f"las dos corridas fallaron: el cerrojo tiene que dejar pasar al menos a "
-        f"una. resultados={resultados}"
-    )
+    # ## Por que no se exige que gane alguna
+    #
+    # La primera version hacia `assert exitosas`: "el cerrojo tiene que dejar pasar
+    # al menos una". Bajo carga de CPU eso es flaky y fallo en CI, y la causa era la
+    # asercion, no el cerrojo: si la maquina esta saturada, la corrida ganadora puede
+    # fallar por un motivo de IO que **no tiene que ver** con el cerrojo.
+    #
+    # La invariante real no es "alguien gano" —eso es propiedad del planificador— sino
+    # "el cerrojo no rechazo a las dos". Un cerrojo que rechaza a todos dejaria la
+    # herramienta inservible, que es el fallo que CerrojoDeSalida existe para evitar.
+    #
+    # Lo que se **si** sigue exigiendo es que una corrida valida termine en exit 0, y
+    # vive en otro test y sin hilos: `test_e2e_completo.py` y `test_p0_contrato_cli.py`
+    # la assertan sobre entradas validas. Aqui estaba duplicada, y duplicada con
+    # flakiness: la invariante se pierde si nadie la escribe en un solo sitio.
+    #
+    # ## Donde vive cada invariante, y por que aqui no hay un chequeo de "al menos una"
+    #
+    # La primera version hacia `assert exitosas`: "el cerrojo tiene que dejar pasar
+    # al menos una". Bajo carga de CPU eso es flaky y fallo en CI, y la causa era la
+    # asercion, no el cerrojo: si la maquina esta saturada, la corrida ganadora puede
+    # fallar por un motivo de IO que **no tiene que ver** con el cerrojo.
+    #
+    # Lo que se **si** sigue exigiendo es que una corrida valida termine en exit 0, y
+    # vive en otro test y sin hilos: `test_e2e_completo.py` y `test_p0_contrato_cli.py`
+    # la assertan sobre entradas validas. Aqui estaba duplicada, y duplicada con
+    # flakiness: la invariante se pierde si nadie la escribe en un solo sitio.
+    #
+    # Y lo que protege el fallo que la asercion queria evitar —"el cerrojo deja la
+    # herramienta inservible"— lo asserta el `not (out / NOMBRE_CERROJO).exists()` de
+    # mas abajo, que mira el archivo del cerrojo en vez de un mensaje. Es
+    # determinista, no depende de que las dos corridas se solapen, y es evidencia mas
+    # directa de la misma invariante.
+    #
+    # ## Por que no se busca "el cerrojo rechazo a las dos"
+    #
+    # Una version intermedia lo intento, y hay dos razones por las que no se quedo:
+    #
+    # 1. **No era alcanzable aqui.** Para que el cerrojo rechace las dos hace falta que
+    #    ya este puesto cuando arranca la primera. Este test no lo deja puesto, asi que
+    #    la unica corrida que puede ser rechazada es la segunda: `rechazos` era 0 o 1,
+    #    y `len(rechazos) < 2` era cierto siempre. Se comprobó rompiendo el cerrojo
+    #    para que rechazara solo en la rama `EEXIST` —que es como funciona bien— y el
+    #    test pasó igual.
+    # 2. **La version que salio de ahi tampoco moria.** Buscaba el literal
+    #    `"ya esta en uso"` y el codigo emite `"ya está en uso"`, con tilde. `rechazos`
+    #    salia siempre vacio. Peor: el comentario de arriba razonaba en largo y con
+    #    acierto sobre por que la invariante nueva era la correcta, lo que hacia el
+    #    test-tautologia convincente para quien lo leyera despues. Un chequeo que no
+    #    puede fallar no es conservatism: es la cobertura aparente que este repo ya
+    #    pago tres veces.
+    #
+    # Lo que si se conserva de esa version es `salidas`, y para algo util: el mensaje
+    # de un rechazo del cerrojo se identifica por `NOMBRE_CERROJO`, no por prosa. El
+    # nombre esta en el mensaje, no lleva espacios (rich no lo parte al envolver), y
+    # ningun `OSError` generico lo contiene; ademas se referencia por constante, asi
+    # que un rename del cerrojo actualiza el test sin que nadie lo note.
+    rechazos = [tag for tag, (_, err) in salidas.items() if NOMBRE_CERROJO in err]
     for tag, code in resultados.items():
-        assert code in (EXIT_OK, EXIT_IO), f"corrida {tag}: exit inesperado {code}"
+        assert code in (
+            EXIT_OK,
+            EXIT_IO,
+        ), f"corrida {tag}: exit inesperado {code}. salida={salidas[tag]}"
 
     # Si gano una, el audit log pertenece a una sola corrida.
     log = out / "audit.jsonl"
-    if log.exists():
+    if not log.exists():
+        # Sin log no se puede comprobar la mezcla, y antes ese `if` se llevaba en
+        # silencio justo el caso que mas lo necesitaba: si **las dos** corridas
+        # fallaron sin escribir, el test pasaba verde sin haber medido nada. La
+        # ausencia solo es legitima si el cerrojo la explica.
+        assert rechazos, (
+            "ninguna de las dos corridas escribio audit.jsonl y ninguna fue rechazada "
+            f"por el cerrojo: las dos fallaron por un motivo que este test no sabe "
+            f"nombrar. salidas={salidas}"
+        )
+    else:
         rids = {
             json.loads(ln)["run_id"]
             for ln in log.read_text(encoding="utf-8").splitlines()

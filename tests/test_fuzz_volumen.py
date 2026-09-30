@@ -260,3 +260,27 @@ def test_los_presupuestos_de_volumen_no_pueden_desaparecer() -> None:
     for nombre, _ in iter_volumenes():
         assert f"{nombre}_filas" in b, f"falta el presupuesto para {nombre} filas: {sorted(b)}"
     assert all(v > 0 for v in b.values()), f"presupuesto no positivo: {b}"
+
+
+def test_se_mide_el_default_real_de_filas() -> None:
+    """El techo de memoria tiene que medirse en `max_tabular_rows`, no a la mitad.
+
+    `spec.md` dice que el test tiene que medir el default real. Durante semanas
+    midio 100k cuando el default son 200k: la mitad, que es un techo de memoria
+    mas holgado y por lo tanto un presupuesto **menos estricto** que el que
+    importa. Un limite que no se alcanza en la prueba no se sabe si aguanta.
+
+    Este test falla si alguien sube el default y no agrega el volumen
+    correspondiente, y viceversa: las dos listas tienen que seguirربعendolas.
+    """
+    from conciliador_bancario.models import LimitesIngesta
+
+    default = LimitesIngesta().max_tabular_rows
+    volumenes = dict(iter_volumenes())
+    assert max(volumenes.values()) == default, (
+        f"el volumen medido mas grande es {max(volumenes.values())} y el default de "
+        f"max_tabular_rows es {default}. Se esta midiendo un techo de memoria mas "
+        "holgado que el que de verdad importa."
+    )
+    # Y el volumen grande tiene que estar efectivamente entre los que se corren.
+    assert any(filas == default for filas in volumenes.values()), sorted(volumenes)

@@ -251,27 +251,42 @@ def test_corridas_reales_en_paralelo_nunca_dejan_artefactos_mixtos(
     reintentar.
     """
     out = cliente["raiz"] / "out"
-    base = [
-        "run",
-        "--config",
-        str(cliente["config"]),
-        "--bank",
-        str(cliente["raiz"] / "b.csv"),
-        "--expected",
-        str(cliente["esperados"]),
-        "--out",
-        str(out),
-    ]
-    (cliente["raiz"] / "b.csv").write_text(
+    raiz = cliente["raiz"]
+
+    def argumentos(banco: str) -> list[str]:
+        return [
+            "run",
+            "--config",
+            str(cliente["config"]),
+            "--bank",
+            str(raiz / banco),
+            "--expected",
+            str(cliente["esperados"]),
+            "--out",
+            str(out),
+        ]
+
+    # Las dos entradas son **distintas** a proposito. Con la misma entrada el
+    # `run_id` es identico por construccion, y entonces "el audit log no mezcla
+    # dos corridas" es una tautologia: no podria mezclarlas aunque el cerrojo
+    # no existiera. Con entradas distintas, cada corrida trae su `run_id`, y que
+    # el archivo final tenga mas de uno significa que dos procesos escribieron en
+    # el mismo lugar. Ahi el test muerde.
+    (raiz / "a.csv").write_text(
         "fecha_operacion,monto,descripcion\n"
-        + "".join(f"05/01/2026,{1000 + i},fila {i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        + "".join(f"05/01/2026,{1000 + i},fila A{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+    (raiz / "b.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{2000 + i},fila B{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
         encoding="utf-8",
     )
 
     resultados: dict[str, int] = {}
 
     def correr(tag: str) -> None:
-        resultados[tag] = _cli(*base).returncode
+        resultados[tag] = _cli(*argumentos(f"{tag.lower()}.csv")).returncode
 
     hilos = [threading.Thread(target=correr, args=(t,)) for t in ("A", "B")]
     for h in hilos:
@@ -285,8 +300,22 @@ def test_corridas_reales_en_paralelo_nunca_dejan_artefactos_mixtos(
     for tag, code in resultados.items():
         assert code in (EXIT_OK, EXIT_IO), f"corrida {tag}: exit inesperado {code}"
 
-    if not exitosas:
-        pytest.skip("las dos corridas chocaron con el cerrojo; no hay log que verificar")
+    # ## Por que no se puede aceptar "cero exitosas" como resultado valido
+    #
+    # La version anterior de este test aceptaba 0, 1 o 2 exits 0 y hacia `skip`
+    # si las dos chocaban. Eso lo hacia unable de detectar el bug que dice medir:
+    # con dos entradas identicas el `run_id` es el mismo por construccion, asi que
+    # `len(rids) == 1` era una tautologia, y el `skip` tapaba justo el caso en que
+    # el cerrojo.rejecta a las dos.
+    #
+    # Ahora el test exige que **al menos una** termine, y que la otra o bien
+    # termine o bien falle por el cerrojo. Y usa entradas **distintas** (abajo),
+    # que es lo que hace que dos `run_id` diferentes compitan por el mismo `--out`
+    # y que el audit log mezclado sea detectable.
+    assert exitosas, (
+        "las dos corridas fallaron: el cerrojo tiene que dejar pasar al menos a "
+        f"una. resultados={resultados}"
+    )
 
     # El invariante: el audit log pertenece a una sola corrida.
     log = out / "audit.jsonl"
@@ -551,3 +580,224 @@ def test_una_corrida_real_no_deja_temporales() -> None:
         assert sobras == [], f"la corrida dejo temporales: {sobras}"
         assert (d / "out" / "run.json").exists()
         assert (d / "out" / "reporte_conciliacion.xlsx").exists()
+
+
+def test_dos_corridas_sobre_el_mismo_out_se_chocan_por_el_cerrojo(
+    cliente: dict[str, Path],
+) -> None:
+    """Dos entradas **distintas** sobre el mismo `--out` no pueden entrar juntas.
+
+    ## Por que esta prueba existe y no la anterior
+
+    La primera version de este archivo lanzaba dos corridas con la **misma** entrada,
+    y por lo tanto el mismo `run_id` por construccion. Entonces "el audit no mezcla
+    dos corridas" era una tautologia: no podia mezclarlas aunque el cerrojo no
+    existiera. Y se aceptaba 0, 1 o 2 exitosas, con `skip` si las dos chocaban, que
+    es tapar justo el caso que importa.
+
+    Aqui las entradas son distintas, asi que cada corrida trae su `run_id` y el
+    archivo mezclado seria detectable. Y se exige que **al menos una** termine, para
+    que el cerrojo no pueda "ganar" rejecting a las dos.
+
+    No se desactiva el cerrojo para demostrar la mezcla: hacerlo exigiria una puerta
+    trasera en produccion (una variable de entorno que lo apague), que es un
+    agujero esperando a que alguien lo use. La mezcla sin proteccion se razona en el
+    docstring de `CerrojoDeSalida`; lo que se verifica aqui es lo que se puede
+    verificar sin abrir ese agujero.
+    """
+    out = cliente["raiz"] / "out"
+    raiz = cliente["raiz"]
+
+    def argumentos(banco: str) -> list[str]:
+        return [
+            "run",
+            "--config",
+            str(cliente["config"]),
+            "--bank",
+            str(raiz / banco),
+            "--expected",
+            str(cliente["esperados"]),
+            "--out",
+            str(out),
+        ]
+
+    (raiz / "a.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{1000 + i},fila A{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+    (raiz / "b.csv").write_text(
+        "fecha_operacion,monto,descripcion\n"
+        + "".join(f"05/01/2026,{2000 + i},fila B{i}\n" for i in range(FILAS_PARA_SOLAPAR)),
+        encoding="utf-8",
+    )
+
+    resultados: dict[str, int] = {}
+
+    def correr(tag: str) -> None:
+        resultados[tag] = _cli(*argumentos(f"{tag.lower()}.csv")).returncode
+
+    hilos = [threading.Thread(target=correr, args=(t,)) for t in ("A", "B")]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    exitosas = [c for c in resultados.values() if c == EXIT_OK]
+    assert exitosas, (
+        f"las dos corridas fallaron: el cerrojo tiene que dejar pasar al menos a "
+        f"una. resultados={resultados}"
+    )
+    for tag, code in resultados.items():
+        assert code in (EXIT_OK, EXIT_IO), f"corrida {tag}: exit inesperado {code}"
+
+    # Si gano una, el audit log pertenece a una sola corrida.
+    log = out / "audit.jsonl"
+    if log.exists():
+        rids = {
+            json.loads(ln)["run_id"]
+            for ln in log.read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        }
+        assert len(rids) == 1, f"el audit log mezcla {len(rids)} corridas: {rids}"
+
+    # Y el cerrojo nunca queda puesto.
+    assert not (out / NOMBRE_CERROJO).exists(), "el cerrojo quedo puesto tras las corridas"
+
+
+def test_un_cerrojo_vacio_y_fresco_no_se_roba(tmp_path: Path) -> None:
+    """Un cerrojo sin PID todavia se esta adquiriendo: no es basura.
+
+    ## La carrera que este test reproduce
+
+    `os.open(..., O_EXCL)` crea el archivo **vacio** y el PID se escribe despues, en
+    otra operacion. Entre las dos hay una ventana en la que el cerrojo existe y no
+    tiene contenido.
+
+    El codigo anterior trataba "sin contenido" como "dueño muerto" y lo reclamaba.
+    Con eso, la corrida B veia el archivo vacio de la corrida A, creia que A habia
+    muerto, lo borraba y entraba: las dos escribian en el mismo `--out` y el
+    `audit.jsonl` quedaba con los `run_id` de las dos mezclados.
+
+    Se vio en CI y no en local. Este test la reproduce sin depender de que dos
+    procesos se solapen, que es la razon por la que paso desapercibida: en una
+    maquina rapida las dos corridas nunca coinciden.
+    """
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    # Cerrojo vacio y recien creado: exactamente lo que ve la otra corrida en la
+    # ventana entre el O_EXCL y la escritura del PID.
+    (tmp_path / NOMBRE_CERROJO).write_text("", encoding="utf-8")
+
+    assert not cerrojo._propietario_muerto(), (
+        "un cerrojo vacio y fresco se esta adquiriendo: declararlo muerto hace que "
+        "la otra corrida robe el cerrojo y las dos escriban en el mismo --out"
+    )
+
+
+def test_un_cerrojo_vacio_y_viejo_si_se_reclama(tmp_path: Path) -> None:
+    """El otro lado: un cerrojo vacio y viejo es basura y hay que recuperarlo.
+
+    Sin esto, un proceso muerto entre las dos operaciones dejaria la herramienta
+    inservible hasta que alguien borrara un archivo a mano, que es el remedio que
+    nadie recuerda.
+    """
+    import os
+    import time
+
+    import conciliador_bancario.audit.atomic as atomic
+    from conciliador_bancario.audit.atomic import (
+        _SEGUNDOS_PARA_DECLARAR_BASURA,
+        CerrojoDeSalida,
+    )
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    ruta = tmp_path / NOMBRE_CERROJO
+    ruta.write_text("", encoding="utf-8")
+    # El umbral se fija a proposito en vez de leerse del modulo: si el test usa la
+    # constante, entonces cambiar la constante cambia el test y no se nota. Lo que
+    # se verifica es que **la decision por edad** funciona, con un umbral conocido.
+    original = atomic._SEGUNDOS_PARA_DECLARAR_BASURA
+    atomic._SEGUNDOS_PARA_DECLARAR_BASURA = 1.0
+    try:
+        # Mas viejo que el umbral: es basura.
+        viejo = time.time() - 10
+        os.utime(ruta, (viejo, viejo))
+        assert cerrojo._propietario_muerto(), (
+            "un cerrojo vacio y viejo es basura de un proceso muerto y tiene que ser "
+            "reclamable, o la herramienta queda inservible"
+        )
+        # Y mas nuevo que el umbral: se esta adquiriendo, no se toca.
+        recien = time.time()
+        os.utime(ruta, (recien, recien))
+        assert (
+            not cerrojo._propietario_muerto()
+        ), "un cerrojo vacio pero reciente esta en plena adquisicion"
+    finally:
+        atomic._SEGUNDOS_PARA_DECLARAR_BASURA = original
+    assert _SEGUNDOS_PARA_DECLARAR_BASURA > 0, "el umbral por defecto tiene que ser positivo"
+
+
+def test_un_cerrojo_con_pid_vivo_no_se_roba(tmp_path: Path) -> None:
+    """El caso de siempre: un PID vivo es un cerrojo vivo.
+
+    Este PID es el del propio proceso de test, que obviamente esta vivo.
+    """
+    import os
+
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    (tmp_path / NOMBRE_CERROJO).write_text(f"{os.getpid()} lock", encoding="utf-8")
+
+    assert not cerrojo._propietario_muerto(), "el proceso del test esta vivo: no es basura"
+
+
+def test_el_umbral_por_defecto_distingue_lo_viejo_de_lo_reciente() -> None:
+    """El umbral por defecto tiene que separar "basura" de "adquisicion en curso".
+
+    Un umbral absurdo rompe en una de dos direcciones y las dos son malas:
+
+    - **Demasiado grande**: un cerrojo de un proceso muerto nunca se declara
+      basura, y la herramienta queda inservible hasta que alguien borre un archivo
+      a mano. Es el remedio que nadie recuerda.
+    - **Demasiado pequeno**: un cerrojo en plena adquisicion se declara basura y
+      la otra corrida se lo roba, que es la carrera que este PR arregla.
+
+    Se verifica sobre el valor del modulo y no sobre una constante local, porque un
+    umbral de una hora en el codigo tiene que hacer fallar **este** test, no uno
+    que se acomode a el.
+    """
+    import os
+    import time
+
+    import conciliador_bancario.audit.atomic as atomic
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    umbral = atomic._SEGUNDOS_PARA_DECLARAR_BASURA
+    # Un umbral que no separa nada no sirve para nada: tiene que caber entre lo que
+    # tarda una adquisicion (microsegundos) y lo que tarda una persona en decidir
+    # que borre un archivo (minutos).
+    assert 0.1 < umbral < 300, (
+        f"el umbral por defecto es {umbral}s: si es muy chico se roban los cerrojos "
+        "en plena adquisicion, y si es muy grande la herramienta queda inservible "
+        "tras un kill -9"
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        ruta = Path(td) / NOMBRE_CERROJO
+        ruta.write_text("", encoding="utf-8")
+        cerrojo = CerrojoDeSalida(Path(td))
+
+        # Lo que dejaria una persona pensando: cerrojo huerfano de hace minutos.
+        huerfano = time.time() - umbral - 5
+        os.utime(ruta, (huerfano, huerfano))
+        assert cerrojo._propietario_muerto(), "un cerrojo huerfano debe ser reclamable"
+
+        # Y lo que veria la otra corrida en la ventana de adquisicion.
+        ahora = time.time()
+        os.utime(ruta, (ahora, ahora))
+        assert not cerrojo._propietario_muerto(), "un cerrojo recien creado esta vivo"

@@ -42,10 +42,16 @@ from __future__ import annotations
 
 import errno
 import os
+import time
 from pathlib import Path
 from typing import Any
 
 NOMBRE_CERROJO = ".concilia.lock"
+
+# Un cerrojo sin PID se declara basura solo si lleva este tiempo sin escribirse.
+# Es la holgura de la ventana entre `O_EXCL` y la escritura del PID: ver
+# `CerrojoDeSalida._sin_pid_pero_viejo`.
+_SEGUNDOS_PARA_DECLARAR_BASURA = 5.0
 
 # `os.O_EXCL` sobre un archivo existente falla con EEXIST. Es la primitiva atómica
 # del sistema operativo para "este nombre lo tomo yo", y no necesita locks de
@@ -101,18 +107,59 @@ class CerrojoDeSalida:
         self._path = out_dir / NOMBRE_CERROJO
         self._tomado = False
 
+    def _sin_pid_pero_viejo(self) -> bool:
+        """Cerrojo sin PID y suficientemente viejo para ser basura.
+
+        ## Por que hace falta esto
+
+        `os.open(..., O_EXCL)` crea el archivo **vacío**. El PID se escribe justo
+        después, en otra operación. Entre las dos hay una ventana: si el cerrojo se
+        lee ahí, no tiene contenido.
+
+        El código anterior trataba "sin contenido" como "dueño muerto" y lo
+        reclamaba. Eso convierte una ventana de microsegundos en una carrera real:
+        la corrida B ve el archivo vacío de la corrida A, cree que A murió, lo borra
+        y entra. Las dos escriben en el mismo `--out` y el `audit.jsonl` queda con
+        los `run_id` de las dos mezclados.
+
+        Se vio en CI, no en local: en una máquina rápida las dos corridas no se
+        solapan. Un test de concurrencia que solo pasa en local es un test que no
+        sabe lo que mide.
+
+        ## Por qué el tiempo y no solo el contenido
+
+        Un cerrojo vacío **fresco** es alguien acquiring en este instante: no se
+        toca. Uno **viejo** es basura de un proceso muerto entre las dos operaciones,
+        y se reclaima para que la herramienta no quede inservible. El umbral es
+        holgado a propósito: preferimos bloquear unos segundos de más a robarle el
+        cerrojo a una corrida viva.
+        """
+        try:
+            edad = time.time() - self._path.stat().st_mtime
+        except OSError:
+            return False
+        return edad > _SEGUNDOS_PARA_DECLARAR_BASURA
+
     def _propietario_muerto(self) -> bool:
-        """True si el cerrojo existe pero su proceso ya no."""
+        """True si el cerrojo existe, tiene PID, y ese proceso ya no.
+
+        Un cerrojo **sin PID** no se puede declarar muerto por el PID, asi que se
+        decide por edad: vacio y viejo es basura, vacio y fresco es una adquisicion
+        en curso. Ver `_sin_pid_pero_viejo`.
+        """
         try:
             contenido = self._path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            return True  # ya no existe: no hay dueño
         except OSError:
             return False
         if not contenido:
-            return True
+            return self._sin_pid_pero_viejo()
         try:
             pid = int(contenido.split()[0])
         except (ValueError, IndexError):
-            return True
+            # Hay contenido pero no es un PID: no se puede probar que este muerto.
+            return self._sin_pid_pero_viejo()
         try:
             os.kill(pid, 0)
         except ProcessLookupError:

@@ -95,6 +95,11 @@ def budgets() -> dict[str, float]:
         "10k_filas": 3.0,
         "50k_filas": 12.0,
         "100k_filas": 25.0,
+        # 200k es el default real de `max_tabular_rows`, asi que el techo de
+        # memoria se tiene que medir ahi y no a la mitad. Medido: 33,3 s de
+        # ingesta+matching y 1.215 MB de RSS. El presupuesto es 1,5x el observado,
+        # con el mismo margen que los otros.
+        "200k_filas": 50.0,
     }
 
 
@@ -103,3 +108,4 @@ def iter_volumenes() -> Iterator[tuple[str, int]]:
     yield "10k", 10_000
     yield "50k", 50_000
     yield "100k", 100_000
+    yield "200k", 200_000

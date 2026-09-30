@@ -2,6 +2,60 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.3.0](https://github.com/cortega26/conciliador_bancario/compare/v0.2.21...v0.3.0) (2026-09-30)
+
+
+### Features
+
+* **cli:** bajar el umbral de confianza ya no es un acto invisible ([3f9a743](https://github.com/cortega26/conciliador_bancario/commit/3f9a743f512cdab2367277c4ad30827343a2185a))
+* **cli:** los hallazgos criticos ya no son invisibles desde el exit code ([a267301](https://github.com/cortega26/conciliador_bancario/commit/a267301a448d4f15b184de5eb881d9c2962d80c7))
+* **matching:** la diferencia de sumas, que no se reportaba en ninguna parte ([1eb7028](https://github.com/cortega26/conciliador_bancario/commit/1eb702802269f0539533e6c7b839a225d63111b4))
+* **reporting:** la diferencia de sumas aparece en la hoja Resumen ([5b2fbca](https://github.com/cortega26/conciliador_bancario/commit/5b2fbca8ebf646107fd45b79ae07da1eae0ea97c))
+
+
+### Bug Fixes
+
+* **audit:** dos corridas al mismo --out no se pisan mas ([d32e646](https://github.com/cortega26/conciliador_bancario/commit/d32e646e7f9391d642f28e81324325c4fec066e2))
+* **audit:** el aviso de criticos iba a stdout, y una decision fail-closed sin traza ([bf0d34f](https://github.com/cortega26/conciliador_bancario/commit/bf0d34fc4f23683cd4fa165aabb634b9d40d49aa))
+* **audit:** la escritura atomica estaba en el codigo y no en el producto ([402acc6](https://github.com/cortega26/conciliador_bancario/commit/402acc64693efee19c0cc4cb5768060f38816ba5))
+* **audit:** permisos, cerrojos huerfanos y lecturas parciales ([e399da9](https://github.com/cortega26/conciliador_bancario/commit/e399da9096dd7c4367d6f5fc2f392a5b3dc30b89))
+* **audit:** una carrera en el cerrojo dejaba pasar dos corridas a la vez ([47d2d8f](https://github.com/cortega26/conciliador_bancario/commit/47d2d8fa640a9f9636c9a1055b21a42ac293293c))
+* **cli:** run aceptaba un archivo vacio, y un flag de limite era muerto ([efb521c](https://github.com/cortega26/conciliador_bancario/commit/efb521c246fc9666bf073410cf55ddc1ff773ece))
+* **docs:** el guard que impedia las contradicciones era ciego a como se escriben ([2ff2848](https://github.com/cortega26/conciliador_bancario/commit/2ff284866f49afdb5192215c4f8b6a4885c42323))
+* **ingestion:** una fecha_contable ilegible ya no se pierde en silencio ([988469b](https://github.com/cortega26/conciliador_bancario/commit/988469bf8e95711e3da01bd4a818ade5f6833c6c))
+* **matching:** el invariante 1:1 daba exit 10 en vez de exit 4; docs al dia ([9e025b6](https://github.com/cortega26/conciliador_bancario/commit/9e025b62558cee8dc620920c9f4c45ee1c5e9314))
+* **matching:** el run_id ahora distingue corridas que difieren en un override ([bd93460](https://github.com/cortega26/conciliador_bancario/commit/bd93460fd3296b93b89111e434ed24300add1ac7))
+* **matching:** la conciliacion no puede apoyarse en una moneda que nadie escribio ([3898ef4](https://github.com/cortega26/conciliador_bancario/commit/3898ef444be6a7a3bdd8f718577135b1e6a3b83d))
+* **matching:** la diferencia de sumas agrupa por moneda y solo cuenta lo conciliado ([17238ca](https://github.com/cortega26/conciliador_bancario/commit/17238caf09be3bf2efbb734d39d4278c43e34d3b))
+* **matching:** la divisa de un total tambien puede ser inventada, y decirlo ([ce205df](https://github.com/cortega26/conciliador_bancario/commit/ce205df1f426dd252145c62268f30db9a3a00e34))
+* **matching:** O(n^2) en el total conciliado, y hallazgos con el mismo id ([47fccf2](https://github.com/cortega26/conciliador_bancario/commit/47fccf2fe7603ac8c8658c93ee753f0fa1e0dcda))
+* **tools:** await_ci no exigia el job de volumen, y por eso no lo requeria ([643af59](https://github.com/cortega26/conciliador_bancario/commit/643af595b742687bf159b815e50228dea218c31f))
+
+
+### Build and toolchain
+
+* los tests de volumen existen pero no se ejecutaban nunca ([9f31da2](https://github.com/cortega26/conciliador_bancario/commit/9f31da2954fb3a014d333745a81261d338261809))
+
+
+### Tests
+
+* **audit:** el test de concurrencia era flaky y no fallaba en CI ([d7e730f](https://github.com/cortega26/conciliador_bancario/commit/d7e730f73e2e2cbe353c90bac75d2ac45917373c))
+* **reporte:** el determinismo del reporte, comparado donde se puede comparar ([11295b3](https://github.com/cortega26/conciliador_bancario/commit/11295b31f37109458a22544b18a71b3383ff2d2c))
+* **volumen:** los limites probados en el borde, y el default medido ([9b96f57](https://github.com/cortega26/conciliador_bancario/commit/9b96f5744a56492c6357bd3bcbd75afd779ce9e1))
+* **volumen:** medir el default real, y un test de concurrencia que no era tautologia ([36e563e](https://github.com/cortega26/conciliador_bancario/commit/36e563e8f81389f1ebe67365031613296f51ea1d))
+* **xml:** prueba de que no hay red, no de que no hay transacciones ([5ae2656](https://github.com/cortega26/conciliador_bancario/commit/5ae26563865f24d9598f5570d1fabd3a20f0faab))
+
+
+### Documentation
+
+* los limites que un operador no puede deducir, por fin escritos ([22cf0d1](https://github.com/cortega26/conciliador_bancario/commit/22cf0d10748b5d5d773f38401a8a8208b884b2e8))
+* **spec:** A8 marcado como hecho, para que spec y todo coincidan ([22aa014](https://github.com/cortega26/conciliador_bancario/commit/22aa0143a5606537691d5aded268cb33cb540238))
+* **spec:** la seccion de fuera de alcance afirmaba que no hay test de concurrencia ([4f23385](https://github.com/cortega26/conciliador_bancario/commit/4f2338510841fdd89788f28d84a5e95154b286d7))
+* **todo:** A8 re-verificado; el unico commit sin PR esta verificado ([884f91b](https://github.com/cortega26/conciliador_bancario/commit/884f91b105dd4d0739ec5156a1102cf40c80c4e0))
+* **todo:** A9 hecho, con evidencia de la publicacion verificada ([b312502](https://github.com/cortega26/conciliador_bancario/commit/b3125026135f4797f544930e2882aae9f6b2aa51))
+* **todo:** cerrar el backlog, con la evidencia de como se cerro ([2b21ea1](https://github.com/cortega26/conciliador_bancario/commit/2b21ea13224771a59b8f665568e2d877d4164161))
+* **todo:** el checklist de A3 y A4 seguia marcando tareas hechas como [ ] ([a21d38c](https://github.com/cortega26/conciliador_bancario/commit/a21d38cd7a968bf5fbc222df18e81688acce505c))
+
 ## [0.2.21](https://github.com/cortega26/conciliador_bancario/compare/v0.2.20...v0.2.21) (2026-09-29)
 
 

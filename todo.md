@@ -136,10 +136,43 @@ técnica está hecha y documentada.
 
 ## Cierre
 
-- [ ] `pytest` verde (suite completa)
-- [ ] `preflight` verde **sin** `--permitir-sucio`
-- [ ] Revisión de sub-agente fresco: spec vs implementación, sin huecos
-- [ ] Procesar el feedback del sub-agente hasta alinear
+- [x] `pytest` verde (suite completa, **con los `slow` como corre CI**): 938 tests
+- [x] `preflight` verde **sin** `--permitir-sucio`, con el árbol limpio
+- [x] Revisión de sub-agente fresco: spec vs implementación, sin huecos
+- [x] Procesar el feedback del sub-agente hasta alinear
+
+### Qué encontró esa revisión y qué pasó con cada cosa
+
+La revisión encontró 3 P0, 6 P1 y varios P2. Todos se corrigieron, y varios eran
+defectos que **yo había introducido** en los PR anteriores, lo cual es lo que hace
+que una revisión independiente valga la pena:
+
+| # | Hallazgo | PR |
+|---|---|---|
+| P0 | `total_conciliado` contaba matches bloqueados | #63 |
+| P0 | La aritmética mezclaba divisas (H14 por otra puerta) | #63 |
+| P0 | La moneda asumida conciliaba en silencio, con exit 0 | #63 |
+| P1 | `escribir_atomico` existía y no lo llamaba nadie | #64 |
+| P1 | `ambiguedad_monto_fecha` sin traza en el audit | #65 |
+| P1 | El aviso de críticos iba a stdout, no a stderr | #65 |
+| P1 | Docs que decían que el `run_id` no incluía overrides | #66 |
+| P1 | El guard que impedía las contradicciones era ciego | #66 |
+| P1 | `fecha_contable` ilegible se descartaba en silencio | #67 |
+| P1 | O(n·m) en el total conciliado, pagado incluso sin uso | #70 |
+| P1 | Dos hallazgos con el mismo `id` (por moneda) | #70 |
+| P2 | `escribir_atomico` perdía los permisos del destino | #71 |
+| P2 | Un `os.close` fallido dejaba el cerrojo puesto para siempre | #71 |
+| P2 | Una lectura parcial podía robar el cerrojo de una corrida viva | #71 |
+| P2 | La etiqueta de divisa de un total, inventada y sin aviso | #72 |
+| P2 | "Un PDF nunca genera ruido": generalización sin medir | #72 |
+
+**Ningún P0 quedó abierto.** El sub-agente no encontró ningún camino a dinero
+incorrecto con exit 0, ni pérdida silenciosa de datos o de evidencia.
+
+La revisión además encontró **una carrera real en el cerrojo** (#69): `O_EXCL` crea el
+archivo vacío y el PID se escribe después, así que la otra corrida veía un cerrojo "sin
+contenido", lo tomaba por basura y se lo robaba. Se vio en CI y no en local, y solo
+apareció cuando el test de concurrencia dejó de ser tautológico.
 
 ---
 

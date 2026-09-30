@@ -58,8 +58,9 @@ ESPERADOS_CON_MONEDA = "fecha,monto,descripcion,moneda\n05/01/2026,150000,Pago,U
 ESPERADOS_SIN_MONEDA = "fecha,monto,descripcion\n05/01/2026,150000,Pago\n"
 
 
-def _hallazgos(caso: CasoMatching) -> list:
-    return [h for h in correr(caso).hallazgos if h.tipo == "moneda_asumida_en_match"]
+def _hallazgos(caso: CasoMatching, conf=None) -> list:
+    r = correr(caso, conf=conf) if conf is not None else correr(caso)
+    return [h for h in r.hallazgos if h.tipo == "moneda_asumida_en_match"]
 
 
 def _caso(nombre: str, txs: list, exps: list) -> CasoMatching:
@@ -114,17 +115,79 @@ def test_no_avisa_si_la_moneda_esta_en_el_archivo() -> None:
 
 
 def test_no_avisa_si_el_match_no_se_concilia() -> None:
-    """Una transacción asumida que queda pendiente no es una anomalía.
+    """Un match pendiente es un match, pero no es dinero conciliado.
 
     El riesgo es que el supuesto produzca dinero conciliado. Una fila que se queda
     pendiente no movió dinero, y avisar por cada PDF corroborado sería ruido.
+
+    ## Por que el caso tiene que TENER un match
+
+    La primera version usaba `tx 150000` contra `exp 999999`: montos distintos, o
+    sea que **no hay match en absoluto**. El test pasaba con o sin el filtro por
+    estado, y no verificaba nada. Este caso produce un match de verdad y lo deja en
+    `pendiente`, que es lo que hay que comprobar.
+
+    Se verifica explicitamente que el match existe y esta pendiente, para que si
+    alguien cambia el comportamiento del motor este test diga "ya no hay match que
+    probar" en vez de pasar en silencio.
     """
+    # Un monto igual y confianza alta SI concilia: para dejar un match pendiente
+    # de verdad hay que bajar la confianza de la fila. Con umbral 0.80 (default) y
+    # una transaccion de confianza 0.40, el match se crea y queda bloqueado, que
+    # es el estado `pendiente` que hay que verificar.
+    #
+    # Nota sobre la ambiguedad: dos esperados con el mismo monto NO producen un
+    # match pendiente, producen cero matches y un hallazgo
+    # `ambiguedad_monto_fecha`. Se comprobo al escribir este test.
     caso = _caso(
         "no conciliado",
-        [tx("TX1", "150000", moneda="CLP", moneda_asumida=True)],
-        [exp("EXP1", "999999", moneda="CLP", moneda_asumida=True)],
+        [tx("TX1", "150000", moneda="CLP", moneda_asumida=True, score=0.40)],
+        [exp("EXP1", "150000", moneda="CLP", moneda_asumida=True)],
     )
-    assert _hallazgos(caso) == [], "no hubo match conciliado: no hay nada que avisar"
+    r = correr(caso)
+    # El caso tiene que producir un match pendiente; si el motor deja de bloquear
+    # por confianza, este test dice "ya no hay match que probar" en vez de pasar.
+    assert len(r.matches) == 1, f"el caso ya no produce match: {r.matches}"
+    assert r.matches[0].estado.value == "pendiente", r.matches[0].estado
+    assert _hallazgos(caso) == [], "hubo match pero no conciliado: no hay nada que avisar"
+
+
+def test_no_avisa_si_el_match_esta_bloqueado() -> None:
+    """Un match bloqueado por confianza tampoco es dinero conciliado.
+
+    Es el otro caso que el filtro tiene que cubrir, y el que mas importa: el
+    operador bajo el umbral, la fila entro con confianza baja, y el match quedo
+    bloqueado. Sin el filtro de estado, se reportaria como conciliado.
+    """
+    caso = _caso(
+        "bloqueado",
+        [tx("TX1", "150000", moneda="CLP", moneda_asumida=True, score=0.40, bloquea=True)],
+        [exp("EXP1", "150000", moneda="CLP", moneda_asumida=True)],
+    )
+    r = correr(caso)
+    assert len(r.matches) == 1, f"el caso no produce match: {r.matches}"
+    assert r.matches[0].bloqueado_por_confianza is True, r.matches[0]
+    assert _hallazgos(caso) == [], "el match estaba bloqueado: no es dinero conciliado"
+
+
+def test_no_avisa_si_el_match_es_sugerido() -> None:
+    """Un `sugerido` es una propuesta sin aprobar: tampoco es dinero.
+
+    Tercer estado que el filtro tiene que excluir, y el que un test de un solo
+    estado no cubriria.
+    """
+    from conciliador_bancario.models import ConfiguracionCliente
+
+    caso = _caso(
+        "sugerido",
+        [tx("TX1", "150000", moneda="CLP", moneda_asumida=True)],
+        [exp("EXP1", "150000", moneda="CLP", moneda_asumida=True)],
+    )
+    # El match por monto exacto puntua 0.9; con umbral 0.95 no se autoconcilia.
+    r = correr(caso, conf=ConfiguracionCliente(cliente="X", umbral_autoconcilia=0.95))
+    cfg = ConfiguracionCliente(cliente="X", umbral_autoconcilia=0.95)
+    assert [m.estado.value for m in r.matches] == ["sugerido"], r.matches
+    assert _hallazgos(caso, conf=cfg) == [], "un match sugerido no es dinero conciliado"
 
 
 def test_avisa_una_vez_por_match_no_por_fila() -> None:

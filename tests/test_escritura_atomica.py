@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 import sys
 import threading
@@ -801,3 +802,150 @@ def test_el_umbral_por_defecto_distingue_lo_viejo_de_lo_reciente() -> None:
         ahora = time.time()
         os.utime(ruta, (ahora, ahora))
         assert not cerrojo._propietario_muerto(), "un cerrojo recien creado esta vivo"
+
+
+# --- La revalidacion: permisos, cerrojo y lecturas parciales ----------------
+
+
+def test_la_escritura_atomica_conserva_los_permisos_del_destino(tmp_path: Path) -> None:
+    """Un `run.json` en 0600 no puede terminar en 0664.
+
+    `os.replace` cambia el inode, asi que el archivo nuevo nace con los permisos del
+    umask y los del destino anterior se pierden. Un operador que restringio el
+    archivo porque contiene datos de clientes ve el permiso deshacido por la
+    herramienta, y `AGENTS.md` lo pide al reves.
+    """
+    destino = tmp_path / "run.json"
+    destino.write_text("viejo", encoding="utf-8")
+    os.chmod(destino, 0o600)
+
+    escribir_atomico(destino, lambda tmp: tmp.write_text("nuevo", encoding="utf-8"))
+
+    modo = stat.S_IMODE(destino.stat().st_mode)
+    assert modo == 0o600, f"los permisos pasaron de 0600 a {oct(modo)}"
+
+
+def test_un_destino_inexistente_no_falla(tmp_path: Path) -> None:
+    """La primera corrida no tiene destino al que copiarle permisos."""
+    destino = tmp_path / "nuevo.json"
+    escribir_atomico(destino, lambda tmp: tmp.write_text("x", encoding="utf-8"))
+    assert destino.read_text(encoding="utf-8") == "x"
+
+
+def test_el_temporal_es_un_archivo_oculto(tmp_path: Path) -> None:
+    """El temporal lleva un punto inicial: no se ve en un listado normal.
+
+    Existe mientras se esta escribiendo el destino, asi que un `ls` del directorio
+    de salida lo puede mostrar junto al reporte. Con un punto inicial sigue la
+    convencion de "archivo oculto" y desaparece de un listado sin `-a`, que es como
+    mira un operador la carpeta para ver que salio.
+
+    Se comprueba el punto, no la extension: un temporal con `.xlsx` al final
+    tampoco haria match de un `glob("*.xlsx")`, asi que un test sobre eso pasaria
+    con y sin el punto y no verificaria nada. La primera version de este test
+    exactamente eso.
+    """
+    destino = tmp_path / "reporte_conciliacion.xlsx"
+    visto_durante: list = []
+
+    def escribe(tmp: Path) -> None:
+        tmp.write_bytes(b"contenido")
+        visto_durante.extend(p.name for p in tmp_path.iterdir())
+
+    escribir_atomico(destino, escribe)
+    assert len(visto_durante) == 1, f"deberia haber solo el temporal: {visto_durante}"
+    assert visto_durante[0].startswith(
+        "."
+    ), f"el temporal no es un archivo oculto: {visto_durante[0]}"
+    assert visto_durante[0] != destino.name, "el temporal no puede llamarse como el destino"
+
+
+def test_un_cerrojo_con_lectura_parcial_no_se_roba(tmp_path: Path) -> None:
+    """Un PID a medio escribir no puede hacer que se robe el cerrojo de una corrida viva.
+
+    El nombre del archivo se escribe en el mismo `write` que el PID, asi que sirve
+    de checksum. Sin comprobarlo, una lectura parcial puede devolver `"9"` de un
+    `"999999 ..."`: se consultaria el PID 9, que no existe, y el cerrojo de la
+    corrida viva se reclamaria.
+    """
+
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    # "999999" truncado a "9": el PID que se leeria no existe, y sin el nombre no
+    # hay forma de saber que la lectura esta incompleta.
+    (tmp_path / NOMBRE_CERROJO).write_text("9", encoding="utf-8")
+
+    # Reciente: no es basura por edad, y ademas esta a medio escribir.
+    assert (
+        not cerrojo._propietario_muerto()
+    ), "una lectura parcial del cerrojo no puedesevinterpretada como dueño muerto"
+
+
+def test_cerrojo_con_nombre_completo_y_pid_muerto_se_reclama(tmp_path: Path) -> None:
+    """El caso bueno del mismo camino: PID muerto con el nombre completo, es basura."""
+
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    # PID 2^22 es normalmente mayor que el maximo de pid del sistema.
+    (tmp_path / NOMBRE_CERROJO).write_text(f"4194303 {NOMBRE_CERROJO}", encoding="utf-8")
+
+    assert (
+        cerrojo._propietario_muerto()
+    ), "un PID que no existe con el nombre completo es basura de verdad"
+
+
+def test_liberar_no_falla_y_no_deja_cerrojo(tmp_path: Path) -> None:
+    """`liberar()` se llama desde un `finally`: no puede levantar excepciones.
+
+    Si `unlink` fallara, la excepcion recorreria el `finally` del pipeline y el
+    cerrojo se quedaria puesto, dejando la herramienta inservible.
+    """
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    cerrojo = CerrojoDeSalida(tmp_path)
+    cerrojo.adquirir()
+    assert (tmp_path / NOMBRE_CERROJO).exists()
+
+    # Liberar dos veces, y con el archivo ya borrado a mano, no debe levantar.
+    cerrojo.liberar()
+    assert not (tmp_path / NOMBRE_CERROJO).exists()
+    cerrojo.liberar()
+
+
+def test_cerrar_del_audit_no_deja_cerrojo_puesto(tmp_path: Path) -> None:
+    """Un `fsync` fallido no puede dejar la salida bloqueada.
+
+    `cerrar()` se llama antes de `cerrojo.liberar()`. Si `os.close` levantara
+    `OSError` desde su `finally`, la excepcion saltaria el `liberar()` y el cerrojo
+    quedaria puesto.
+    """
+    import conciliador_bancario.audit.audit_log as audit_log
+    from conciliador_bancario.audit.atomic import CerrojoDeSalida
+
+    ruta = tmp_path / "audit.jsonl"
+    writer = audit_log.JsonlAuditWriter(ruta, run_id="r")
+
+    # `os.close` falla una sola vez, como pasaria con un descriptor raro.
+    real_close = os.close
+    estado = {"fallo": True}
+
+    def close_que_falla(fd: int) -> None:
+        if estado["fallo"]:
+            estado["fallo"] = False
+            raise OSError("descriptor en estado raro")
+        real_close(fd)
+
+    _monkey = pytest.MonkeyPatch()
+    _monkey.setattr(audit_log.os, "close", close_que_falla)
+    try:
+        writer.cerrar()  # no debe levantar
+    finally:
+        _monkey.undo()
+
+    # Y el cerrojo se suelta igual.
+    cerrojo = CerrojoDeSalida(tmp_path)
+    cerrojo.adquirir()
+    cerrojo.liberar()
+    assert not (tmp_path / NOMBRE_CERROJO).exists()

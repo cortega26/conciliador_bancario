@@ -238,6 +238,57 @@ def gen_casos() -> list[CasoMatching]:
             descripcion="dos esperados con la misma referencia: ambiguo, fail-closed",
             hallazgo_esperado="ambiguedad_referencia",
         ),
+        # --- Ambiguedad CON otras transacciones en el lote ---
+        #
+        # Los dos escenarios de ambiguedad de arriba tienen **una sola** transaccion, y
+        # por eso no alcanzan: un motor que reprocese la transaccion ambigua una vez por
+        # cada iteracion del bucle externo produce el mismo hallazgo N veces, y con N=1
+        # eso es indistinguible del comportamiento correcto.
+        #
+        # Aqui la ambiguedad viene **con** movimientos que si concilian, que es la
+        # forma en que aparece en un extracto real: la ambiguedad es una fila entre
+        # muchas, no el archivo entero. El id del hallazgo tiene que ser el mismo una
+        # sola vez en `run.json`: si se repite, `explain <id>` devuelve el ultimo y el
+        # operador no ve que la decision se tomó cinco veces.
+        CasoMatching(
+            nombre="ref_ambigua_en_lote_con_movimientos_validos",
+            txs=[
+                tx("TX1", "150000", ref="REF-1"),
+                tx("TX2", "200000"),
+                tx("TX3", "300000"),
+                tx("TX4", "400000"),
+            ],
+            exps=[
+                exp("EXP1", "150000", ref="REF-1"),
+                exp("EXP2", "150000", ref="REF-1"),
+                exp("EXP3", "200000"),
+                exp("EXP4", "300000"),
+                exp("EXP5", "400000"),
+            ],
+            descripcion=(
+                "una referencia ambigua junto a movimientos que si concilian: la "
+                "ambiguedad es una fila entre muchas"
+            ),
+            hallazgo_esperado="ambiguedad_referencia",
+            espera_match=True,
+        ),
+        # El caso anterior, pero la ambiguedad es la **ultima** transaccion del lote.
+        # El orden importa: si el motor procesa de adelante hacia atras, aqui el numero
+        # de reprocesamientos cambia, y un invariante que solo se prueba con la
+        # ambiguedad al principio no lo ve.
+        CasoMatching(
+            nombre="ref_ambigua_al_final_del_lote",
+            txs=[tx("TX1", "200000"), tx("TX2", "300000"), tx("TX3", "150000", ref="REF-1")],
+            exps=[
+                exp("EXP1", "200000"),
+                exp("EXP2", "300000"),
+                exp("EXP3", "150000", ref="REF-1"),
+                exp("EXP4", "150000", ref="REF-1"),
+            ],
+            descripcion="la referencia ambigua es la ultima transaccion del archivo",
+            hallazgo_esperado="ambiguedad_referencia",
+            espera_match=True,
+        ),
         # --- Ventana temporal ---
         CasoMatching(
             nombre="fuera_de_ventana_monto_fecha",

@@ -69,6 +69,31 @@ def generar_reporte_excel(
         ("Mask", bool(mask)),
     ]:
         ws.append([k, _mask_cell(v, mask=mask)])
+
+    # ## Por que los totales van aqui y no solo en Hallazgos
+    #
+    # `diferencia_de_sumas` ya existe como hallazgo, y con el mensaje y los tres
+    # totales. Pero un hallazgo se ordena por id, y los ids son hashes: la fila de
+    # la diferencia aparece en un lugar arbitrario de la hoja, entre cientos de
+    # `pendiente_banco`. Es decir, el numero que todo contador mira primero al
+    # abrir un reporte estaba en el archivo, pero no a la vista.
+    #
+    # La hoja `Resumen` es lo primero que se abre. Si el numero no esta ahi, el
+    # operador tiene que ir a buscarlo, y un operador que no busca no lo encuentra.
+    for h in sorted(resultado.hallazgos, key=lambda x: x.tipo):
+        if h.tipo != "diferencia_de_sumas":
+            continue
+        det = h.detalles
+        ws.append([])
+        ws.append(["Diferencia de sumas", det.get("moneda", "")])
+        ws.cell(ws.max_row, 1).font = Font(bold=True)
+        for etiqueta, clave in (
+            ("Total banco", "total_banco"),
+            ("Total esperados", "total_esperado"),
+            ("Total conciliado", "total_conciliado"),
+            ("Diferencia", "diferencia"),
+        ):
+            ws.append([f"  {etiqueta}", det.get(clave, "")])
     ws.freeze_panes = "A2"
 
     # Transacciones (banco)

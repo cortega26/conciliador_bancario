@@ -176,6 +176,41 @@ apareció cuando el test de concurrencia dejó de ser tautológico.
 
 ---
 
+## Decisiones de arquitectura tomadas sin cambiar codigo
+
+Cosas que se midieron y se **descartaron**, con el numero. Están aquí para que la
+próxima persona que se.topa con el problema no lo intente a ciegas.
+
+### `slots=True` en los modelos: medido, no sirve (0% degain)
+
+La hipótesis era que los modelos pydantic usan `__dict__` por instancia y que
+`slots=True` en `ConfigDict` lo eliminaría. **Medido: 4,16 KB por fila antes y
+4,16 KB después.** Idéntico.
+
+Se aplicó y se comprobó que `__slots__` sí estaba en las clases, así que no es un
+falso negativo. El coste **no está en el `__dict__`**: cada transacción son 7 objetos
+pydantic anidados (3 campos `CampoConConfianza` + sus 3 `MetadataConfianza` + la
+transacción), y el overhead es del *número de objetos*, no de cómo guardan sus
+campos.
+
+Además `slots=True` no está en el `TypedDict` de `ConfigDict` con la versión de mypy
+del repo, así que hay que actualizar stubs para un cambio que no aporta nada.
+
+**Lo que sí bajaría la memoria es reducir el número de objetos** (por ejemplo, guardar
+el score en vez del `MetadataConfianza` completo), no cómo se almacenan. Eso sí es un
+cambio de representación, es más invasivo, y **no está justificado mientras el gate
+de volumen pase**: 1.212 MB contra un techo de 1.500 MB en el default real.
+
+También sería KISS lo contrario: añadir un campo binario que no se usa, un test que
+lo vigila, y una regla más que entender. Nada de eso.
+
+### Por qué no se toca el techo de memoria de 1.500 MB
+
+El techo sale de la medición real del pipeline completo (PR #73), con margen para que
+solo se rompa si algo empieza a retener de forma patológica. Bajarlo por bajar sería
+optimización especulativa: nadie concilia más de 200k filas en un archivo, y el
+sistema aguanta ese default con holgura.
+
 ## Registro de hallazgos del propio proceso
 
 Cosas queupuются mal en esta sesión y que hay que rememberspara no repetirlas:

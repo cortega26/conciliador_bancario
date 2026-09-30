@@ -26,6 +26,13 @@ EXIT_INGESTION = 4
 EXIT_CONTRACT = 5
 EXIT_IO = 6
 EXIT_INTERNAL = 10
+# La conciliacion se completo y hubo hallazgos criticos. Vive aqui, y no como un
+# `typer.Exit(code=7)` en `app.py`, por la misma razon que los otros: la taxonomia de
+# exit codes es **la UX scriptable** del cliente, y un numero escrito en el punto de
+# uso no se puede auditar contra el resto. `tests/test_docs_actualizados.py` compara
+# esta lista contra la tabla de `docs/ux_contracts.md`, asi que un codigo emitido que
+# no este aqui no aparece en el contrato y el guard no lo ve.
+EXIT_CRITICOS = 7
 
 
 @dataclass(frozen=True)

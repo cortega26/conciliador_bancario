@@ -8,7 +8,11 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from conciliador_bancario.cli.errors import emit_failure_audit_best_effort, render_and_exit
+from conciliador_bancario.cli.errors import (
+    EXIT_CRITICOS,
+    emit_failure_audit_best_effort,
+    render_and_exit,
+)
 from conciliador_bancario.errors import (
     ErrorConciliador,
     ErrorConfiguracion,
@@ -254,7 +258,7 @@ def cmd_run(
             "[dim]Estan en run.json, en el audit log y en la hoja Hallazgos del " "reporte.[/dim]"
         )
         if fail_on_critico:
-            raise typer.Exit(code=7)
+            raise typer.Exit(code=EXIT_CRITICOS)
 
     # Umbral de confianza por debajo de 0.5: se esta admitiendo data degradada.
     #

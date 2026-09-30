@@ -2,6 +2,18 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.3.1](https://github.com/cortega26/conciliador_bancario/compare/v0.3.0...v0.3.1) (2026-09-30)
+
+
+### Tests
+
+* **volumen:** el gate de memoria media la mitad de lo que prometia proteger ([336a4a5](https://github.com/cortega26/conciliador_bancario/commit/336a4a5a1f9dd462167bba1a9278232f238d1d67))
+
+
+### Documentation
+
+* **todo:** slots=True se midio y no sirve, queda escrito para no repetirlo ([c94f1f2](https://github.com/cortega26/conciliador_bancario/commit/c94f1f2741c6b23cb33dc68bbc8f71c1c97f10c7))
+
 ## [0.3.0](https://github.com/cortega26/conciliador_bancario/compare/v0.2.21...v0.3.0) (2026-09-30)
 
 

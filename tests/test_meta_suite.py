@@ -15,6 +15,7 @@ producen confianza falsa.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -22,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
+from collections.abc import Iterable
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -83,40 +85,106 @@ def test_los_jobs_de_ci_cubren_los_gates_de_preflight() -> None:
     assert not sin_cubrir, f"jobs de CI que preflight no menciona: {sin_cubrir}"
 
 
-def test_los_gates_de_preflight_existen_en_ci() -> None:
-    """Cada gate de preflight tiene que corresponder a algo que CI corre.
+# Prefijo del paso de CI que corresponde a cada gate local. El mapeo esta aca y no
+# derivado de los nombres porque los dos lados nombran lo mismo distinto ("Types" en
+# CI, "mypy" aca), y un mapeo derivado seria un mapeo que no se puede verificar.
+EQUIVALENTE_EN_CI = {
+    "formato": "Format",
+    "lint": "Lint",
+    "mypy": "Types",
+    "changelog": "Changelog",
+    "bandit": "Security (bandit)",
+    "semgrep": "Security (semgrep)",
+    "supply-chain": "Supply chain",
+    "tests": "Tests",
+    "build": "Build",
+    "twine": "Verify dist",
+}
 
-    Un gate local que no existe en CI es ruido: distrae del resultado real y
-    hace creer que hay mas cobertura de la que hay.
-    """
+
+def _pasos_de_ci() -> set[str | None]:
     import yaml
-    from preflight import GATES
 
-    pasos = {
+    return {
         s.get("name")
         for job in yaml.safe_load((RAIZ / ".github/workflows/ci.yml").read_text(encoding="utf-8"))[
             "jobs"
         ].values()
         for s in job["steps"]
     }
-    # El gate local es el espejo de uno de CI; se comprueba por prefijo de nombre.
-    pares = {
-        "formato": "Format",
-        "lint": "Lint",
-        "mypy": "Types",
-        "changelog": "Changelog",
-        "bandit": "Security (bandit)",
-        "semgrep": "Security (semgrep)",
-        "supply-chain": "Supply chain",
-        "tests": "Tests",
-        "build": "Build",
-        "twine": "Verify dist",
-    }
-    for g in GATES:
-        if g.nombre in pares:
-            assert any(
-                p and p.startswith(pares[g.nombre]) for p in pasos
-            ), f"el gate '{g.nombre}' no tiene paso equivalente en ci.yml"
+
+
+def _gates_sin_equivalente_en_ci(gates: Iterable[object], pasos: set[str | None]) -> list[str]:
+    """Gates que el test no estaria comprobando, o que no existen en CI.
+
+    Son dos fallas distintas y se reportan juntas:
+
+    1. **Sin mapeo**: un gate nuevo que nadie agrego a `EQUIVALENTE_EN_CI`. La version
+       anterior hacia `if g.nombre in pares: ...` y lo saltaba en silencio, asi que un
+       gate nuevo pasaba el test **sin comprobarse**. Un guard que no mira y dice que
+       miro es peor que no tenerlo.
+    2. **Sin paso en CI**: un gate con `en_ci=True` cuyo equivalente no esta en el
+       workflow. Aqui se usa `en_ci`: es lo que el campo declara, y antes el test
+       exigia el paso en CI **tambien** para un gate que declara que CI no lo corre,
+       que es lo contrario de lo que dice el campo.
+    """
+    sin_mapeo = [g.nombre for g in gates if g.nombre not in EQUIVALENTE_EN_CI]  # type: ignore[attr-defined]
+    sin_paso = [
+        g.nombre  # type: ignore[attr-defined]
+        for g in gates
+        if g.nombre in EQUIVALENTE_EN_CI  # type: ignore[attr-defined]
+        and g.en_ci  # type: ignore[attr-defined]
+        and not any(
+            p and p.startswith(EQUIVALENTE_EN_CI[g.nombre]) for p in pasos  # type: ignore[attr-defined]
+        )
+    ]
+    return sin_mapeo + sin_paso
+
+
+def test_los_gates_de_preflight_existen_en_ci() -> None:
+    """Cada gate de preflight tiene que corresponder a algo que CI corre.
+
+    Un gate local que no existe en CI es ruido: distrae del resultado real y
+    hace creer que hay mas cobertura de la que hay.
+    """
+    from preflight import GATES
+
+    sin_equivalente = _gates_sin_equivalente_en_ci(GATES, _pasos_de_ci())
+    assert not sin_equivalente, f"gates de preflight sin equivalente en ci.yml: {sin_equivalente}"
+
+
+def test_un_gate_nuevo_no_queda_sin_revisar() -> None:
+    """Un gate que nadie mapeo tiene que hacer caer el test, no pasar sin mirarse.
+
+    El `if g.nombre in pares` de la version anterior hacia justo lo contrario: un gate
+    agregado a `GATES` sin su entrada en el diccionario no se comprobaba y el test
+    pasaba en verde. Con un gate de mentira, aca.
+    """
+    mod = preflight_mod()
+    sin_mapeo = next(g for g in mod.GATES if g.nombre == "supply-chain")  # type: ignore[attr-defined]
+    copia = dataclasses.replace(sin_mapeo, nombre="gate-que-nadie-mapeo")  # type: ignore[arg-type]
+
+    assert _gates_sin_equivalente_en_ci([copia], set()) == ["gate-que-nadie-mapeo"]
+
+
+def test_un_gate_que_dice_que_ci_no_lo_corre_no_se_exige_en_ci() -> None:
+    """`en_ci=False` tiene que exemptar de buscar el paso en CI, y se lee.
+
+    El campo estaba declarado en los diez gates y no lo leia nadie. Con esta prueba
+    pasa a ser lo que dice: si un gate declara que CI no lo corre, buscar su paso en el
+    workflow es un error del test, no del gate.
+    """
+    mod = preflight_mod()
+    original = next(g for g in mod.GATES if g.nombre == "twine")  # type: ignore[attr-defined]
+    sin_ci = dataclasses.replace(original, nombre="twine", en_ci=False)  # type: ignore[arg-type]
+
+    assert (
+        _gates_sin_equivalente_en_ci([sin_ci], set()) == []
+    ), "un gate con en_ci=False no puede exigir su paso en CI"
+    con_ci = dataclasses.replace(original, nombre="twine", en_ci=True)  # type: ignore[arg-type]
+    assert _gates_sin_equivalente_en_ci([con_ci], set()) == [
+        "twine"
+    ], "con en_ci=True y sin pasos, el gate tiene que reportarse"
 
 
 def test_ci_declara_el_guard_de_changelog() -> None:

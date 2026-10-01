@@ -15,6 +15,8 @@ producen confianza falsa.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import sys
@@ -301,6 +303,126 @@ def test_el_entorno_reporta_su_veredicto_como_texto() -> None:
         assert nombre in p.stdout, f"{nombre} no aparece en --list"
 
 
+# --- 5.b el gate de entorno tiene que medir el venv que los gates usan ---------
+#
+# Los gates se ejecutan con `VENV/bin/python` (`_py`). El gate de entorno, en cambio,
+# leia `importlib.metadata` del **proceso** que corre `preflight`. Con la invocacion
+# que documenta `AGENTS.md` — `python tools/preflight.py`, sin fijar interprete —
+# esas dos cosas son distintas casi siempre, con lo que el gate podia responder
+# `OK venv coincide con los pines` sobre un entorno que ningun gate iba a usar.
+#
+# Lo que se verifica abajo no es "el venv de esta maquina tiene los pines", porque
+# eso depende de donde corra el test y no muerde en todas partes: es que **cambiar el
+# venv declarado cambia el veredicto**. Si el gate leyera otro sitio, las dos mitades
+# de cada test darian la misma respuesta.
+
+
+def test_el_gate_de_entorno_mide_el_venv_declarado_y_no_el_proceso(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Un venv declarado que no tiene los pines tiene que salir en rojo."""
+    mod = preflight_mod()
+    conforme = dict(mod.pines_declarados())  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(tmp_path / "ok", conforme))
+    limpio = mod.venv_actualizado()  # type: ignore[attr-defined]
+    # Un pin con otra version es el caso que este gate existe para ver.
+    monkeypatch.setattr(
+        mod, "VENV", _venv_de_prueba(tmp_path / "viejo", {**conforme, "black": "0.0.1"})
+    )
+    viejo = mod.venv_actualizado()  # type: ignore[attr-defined]
+
+    assert limpio == [], f"un venv con todos los pines al dia dio {limpio}"
+    assert len(viejo) == 1 and "black" in viejo[0], f"un pin desfasado no se reporto: {viejo}"
+    assert limpio != viejo, "el veredicto no dependio del venv declarado: lee otro entorno"
+
+
+def test_el_gate_de_extras_mide_el_venv_declarado_y_no_el_proceso(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lo mismo para los extras: un pin de extra en `VENV` tiene que verse."""
+    mod = preflight_mod()
+
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(tmp_path / "con", {"pytesseract": "0.3"}))
+    con = mod.extras_activados()  # type: ignore[attr-defined]
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(tmp_path / "sin", {}))
+    sin = mod.extras_activados()  # type: ignore[attr-defined]
+
+    assert con == ["pdf_ocr (trae pytesseract)"], f"no vio el extra del venv declarado: {con}"
+    assert sin == [], f"invento un extra: {sin}"
+
+
+def test_un_pin_escrito_con_guion_encuentra_el_paquete_que_se_llama_con_guion_bajo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`pip-audit` en el pin y `pip_audit` en el disco son el mismo paquete.
+
+        La sonda devuelve el nombre tal como lo trae la distribucion —`pip_audit`— y el
+        pin esta escrito `pip-audit`. Sin normalizar de los dos lados, el gate reportaba
+        `pip-audit: NO INSTALADO` con el paquete instalado, y el remedio que el propio
+        gate imprime (`pip install -e '.[dev]'`) no servia de nada: instalado dos veces,
+        el mismo mensaje.
+
+    Se usa un caso real del repo en vez de uno inventado porque esto ya paso, y un
+        nombre inventado no lo hubiera atrapado.
+    """
+    mod = preflight_mod()
+    pin = mod.pines_declarados()["pip-audit"]  # type: ignore[attr-defined]
+    # Todos los pines, nombrados como los llama la distribucion: con guion bajo.
+    instalados = {n.replace("-", "_"): v for n, v in mod.pines_declarados().items()}  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(tmp_path / "con", instalados))
+    assert mod.venv_actualizado() == [], (  # type: ignore[attr-defined]
+        f"todos los pines instalados y el gate dice que falta alguno: {mod.venv_actualizado()}"  # type: ignore[attr-defined]
+    )
+    monkeypatch.setattr(
+        mod, "VENV", _venv_de_prueba(tmp_path / "viejo", {**instalados, "pip_audit": "0.0.1"})
+    )
+    viejo = mod.venv_actualizado()  # type: ignore[attr-defined]
+    assert len(viejo) == 1 and "pip-audit" in viejo[0], f"el pin desfasado no se reporto: {viejo}"
+    assert pin == "2.10.1", "el pin cambio; este test tendria que usar otro paquete con guion"
+
+
+def test_un_venv_que_no_existe_no_puede_verificarse(tmp_path: Path) -> None:
+    """Un venv declarado inexistente sale con 2 y sin decir que todo esta bien.
+
+    Es el caso que hacia falta antes: el gate de entorno respondia `OK` sobre un venv
+    que no existia, porque no miraba el venv. No hay forma de que un gate diga OK
+    sobre un entorno que no pudo mirar.
+    """
+    p = subprocess.run(
+        [sys.executable, str(RAIZ / "tools/preflight.py"), "--only", "entorno"],
+        capture_output=True,
+        text=True,
+        cwd=RAIZ,
+        env={**os.environ, "BR_VENV": str(tmp_path / "no-existe")},
+    )
+    assert p.returncode == 2, f"exit {p.returncode}; el codigo 2 es el de entorno imposible"
+    assert "OK" not in p.stdout, f"reporto exito sin poder verificar:\n{p.stdout}"
+    assert "no se puede verificar" in p.stdout
+
+
+def test_el_venv_por_defecto_es_el_del_repo() -> None:
+    """El default tiene que ser un lugar que exista en la maquina de quien lo corre.
+
+    Venia siendo una ruta absoluta de la maquina en la que se escribio el script. En
+    cualquier otra maquina ese path no existe, y un default que no existe convierte el
+    gate de entorno en una medida del interprete equivocado.
+    """
+    fuente = fuente_normalizada("tools/preflight.py")
+    declaracion = re.search(r"VENV = Path\([^)]*\)", fuente)
+    assert declaracion, "no se encuentra la declaracion de VENV en tools/preflight.py"
+    assert "/tmp/" not in declaracion.group(
+        0
+    ), "el default de VENV no puede ser una ruta absoluta que solo existe en una maquina"
+    assert "BR_VENV" in declaracion.group(
+        0
+    ), "BR_VENV tiene que seguir siendo la via para cambiarlo"
+
+    mod = preflight_mod()
+    assert mod.VENV == RAIZ / ".venv", f"el venv por defecto es {mod.VENV}, no el del repo"
+
+
 # --- 5. la verificacion post-publicacion existe y esta conectada -------------
 
 
@@ -451,6 +573,26 @@ def preflight_mod() -> object:
     return preflight
 
 
+def _venv_de_prueba(destino: Path, paquetes: dict[str, str]) -> Path:
+    """Un venv declarado de mentira, cuyo interprete responde una lista de paquetes.
+
+    Es un shell script y no un venv de verdad porque lo que se prueba es **a quien
+    pregunta** el gate, no si `pip` funciona: instalar un venv entero por test seria
+    lento y fragile.
+
+    Falsear `importlib.metadata` en el proceso seria mas rapido, y fue lo que hacia
+    la version anterior de estos tests. Se cambio porque el gate ya no lee el entorno
+    del proceso —reads el venv que va a usar— y falsear la cosa equivocada produce
+    tests que pasan sin probar lo que dicen. Ademas depende de POSIX, que es lo mismo
+    que ya asume `_py` (`bin/python`, no `Scripts/python.exe`).
+    """
+    (destino / "bin").mkdir(parents=True, exist_ok=True)
+    exe = destino / "bin" / "python"
+    exe.write_text(f"#!/bin/sh\nprintf '%s' '{json.dumps(paquetes)}'\n", encoding="utf-8")
+    exe.chmod(0o755)
+    return destino
+
+
 # --- el gate de entorno tiene que ser bidireccional --------------------------
 
 
@@ -486,20 +628,19 @@ def test_el_gate_de_entorno_detecta_un_extra_instalado(monkeypatch: pytest.Monke
     este gate existe para evitar. Un gate que dice OK sobre un venv que no es el
     de los pines es un gate que no dice la verdad.
 
-    ## Por que se falsea `importlib.metadata`
+    ## Por que se falsea el venv declarado y no el entorno del proceso
 
-    El venv de los tests no tiene los extras de OCR, y depender de eso haria que
-    el test solo pase en un entorno concreto. Falsear la version es lo que lo
-    hace determinista, y ademas hace que el test falle si el gate deja de mirar,
-    en vez de pasar por la razon equivocada.
+    Falsear el venv es lo que lo hace determinista, y ademas hace que el test falle si
+    el gate deja de mirar, en vez de pasar por la razon equivocada. Antes falseaba
+    `importlib.metadata`, que era el entorno del proceso: el gate ya no lo consulta,
+    asi que el test habria pasado sin comprobar nada —el mismo fallo que se persigo
+    con el resto de los guards de este archivo.
     """
-    import importlib.metadata as md
-
     mod = preflight_mod()
     extra, paquete = _exclusivo_de_un_extra(mod)
-    real = md.version
+
     monkeypatch.setattr(
-        md, "version", lambda n: "0.0.0-instalada" if n.lower() == paquete else real(n)
+        mod, "VENV", _venv_de_prueba(Path(tempfile.mkdtemp()), {paquete: "0.0.0-instalada"})
     )
 
     detectados = mod.extras_activados()  # type: ignore[attr-defined]
@@ -517,26 +658,13 @@ def test_sin_extras_instalados_el_gate_no_reporta_nada(
     Sin esto, un gate que reportara siempre seguiria verde en los tests y nadie
     notaria que perdio el poder de detectar.
     """
-    import importlib.metadata as md
-
     mod = preflight_mod()
     _exclusivo_de_un_extra(mod)
-    original = md.version
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(Path(tempfile.mkdtemp()), {}))
 
-    def ausente(nombre: str) -> str:
-        # Simula el venv base: los paquetes exclusivos de extras no estan.
-        exclusives = {
-            p
-            for paquetes in mod.pines_por_extra().values()  # type: ignore[attr-defined]
-            for p in paquetes
-            if p not in mod.pines_declarados()  # type: ignore[attr-defined]
-        }
-        if nombre.lower() in exclusives:
-            raise md.PackageNotFoundError(nombre)
-        return original(nombre)
-
-    monkeypatch.setattr(md, "version", ausente)
-    assert mod.extras_activados() == []  # type: ignore[attr-defined]
+    assert mod.extras_activados() == [], (  # type: ignore[attr-defined]
+        "con el venv base, sin extras, el gate no tiene que reportar ninguno"
+    )
 
 
 def test_un_pin_de_dev_no_delata_un_extra(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -553,22 +681,17 @@ def test_un_pin_de_dev_no_delata_un_extra(monkeypatch: pytest.MonkeyPatch) -> No
     `pyproject.toml` esta hoy: la exclusion tiene que seguir valiendo cuando los
     pins se muevan.
     """
-    import importlib.metadata as md
-
     mod = preflight_mod()
     dev_pin = next(iter(mod.pines_declarados()))  # type: ignore[attr-defined]
     monkeypatch.setattr(mod, "pines_por_extra", lambda: {"inventado": {dev_pin: "1.0"}})
-    monkeypatch.setattr(md, "version", lambda n: "1.0" if n.lower() == dev_pin else _no(md, n))
+    # El venv declarado **si** tiene el pin: lo que se prueba es que estar en el venv
+    # no basta para delatar un extra.
+    monkeypatch.setattr(mod, "VENV", _venv_de_prueba(Path(tempfile.mkdtemp()), {dev_pin: "1.0"}))
 
     assert mod.extras_activados() == [], (  # type: ignore[attr-defined]
         "un pin de dev no puede delatar un extra, pero se reporto: "
         f"{mod.extras_activados()}"  # type: ignore[attr-defined]
     )
-
-
-def _no(md: object, nombre: str) -> str:
-    """Como si el paquete no estuviera instalado."""
-    raise md.PackageNotFoundError(nombre)  # type: ignore[attr-defined]
 
 
 def test_el_opt_in_de_extras_normaliza_guion_y_guion_bajo() -> None:
@@ -621,6 +744,11 @@ def test_main_falla_cuando_hay_un_extra_activado(
     monkeypatch.setattr(mod, "extras_activados", lambda: ["pdf_ocr (trae pytesseract)"])
     monkeypatch.setattr(mod, "trabajo_sin_commitear", lambda: [])
     monkeypatch.setattr(mod, "venv_actualizado", lambda: [])
+    # `main` verifica que el venv declarado exista antes de mirar nada. Sin esto, el
+    # test dependeria de que la maquina que lo corre tenga un venv en el lugar
+    # esperado, y en la que no lo tienearia fallar por exit 2 y no por exit 1 — es
+    # decir, pasaria por la razon equivocada.
+    monkeypatch.setattr(mod, "_paquetes_del_venv", lambda: {})
 
     codigo = mod.main(["--permitir-sucio"])  # type: ignore[attr-defined]
     salida = capsys.readouterr().out

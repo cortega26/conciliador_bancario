@@ -2,6 +2,30 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.3.2](https://github.com/cortega26/conciliador_bancario/compare/v0.3.1...v0.3.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **tools:** await_ci reventaba con KeyError justo en el caso que dice vigilar ([f2c82d1](https://github.com/cortega26/conciliador_bancario/commit/f2c82d1fc68d136106f4223da427a432667182c2))
+
+
+### Tests
+
+* **audit:** el test del cerrojo no podia fallar, y su propio comentario lo defendia ([79e5050](https://github.com/cortega26/conciliador_bancario/commit/79e505024a9d9d845e03c35c860824ce69847d2a))
+
+
+### Documentation
+
+* **cli:** el contrato de exit codes decia `3` = "no implementado", y `3` es config invalida ([57f443d](https://github.com/cortega26/conciliador_bancario/commit/57f443d5a207cc66014de4b5ae911c8223ee5db4))
+
+
+### Refactoring
+
+* **matching:** las reglas son clases, para que agregar una sea verifiable ([d86ce60](https://github.com/cortega26/conciliador_bancario/commit/d86ce60f21c2769448f709db001457feb60618ba))
+* **matching:** las reglas son clases, para que agregar una sea verificable ([7eb6873](https://github.com/cortega26/conciliador_bancario/commit/7eb687344d7a8f9a73b6191b178bcbdcef288d2b))
+* **matching:** las reglas son clases, para que agregar una sea verificable ([80e21c8](https://github.com/cortega26/conciliador_bancario/commit/80e21c8b146f951026793d34ed4add94386f43ed))
+
 ## [0.3.1](https://github.com/cortega26/conciliador_bancario/compare/v0.3.0...v0.3.1) (2026-09-30)
 
 

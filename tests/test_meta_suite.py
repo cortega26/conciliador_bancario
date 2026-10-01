@@ -67,6 +67,128 @@ def fuente_normalizada(nombre: str) -> str:
 # --- 1. preflight <-> CI no divergen ------------------------------------------
 
 
+# Checks que produce GitHub y no ningun archivo del repo: el CodeQL por defecto crea
+# su propio workflow y sus checks aparecen con nombres que ningun `jobs:` declara.
+# Declararlos aca es lo que permite que el guard de abajo verifique **todos** los
+# demas contra los archivos, en vez de excepciones que nadie mira.
+PRODUCIDOS_POR_GITHUB = ("CodeQL", "Analyze (actions)", "Analyze (python)")
+
+
+def _jobs_de_los_workflows() -> dict[str, tuple[str, list[str]]]:
+    """Job -> (workflow, versiones de la matriz)."""
+    import yaml
+
+    jobs: dict[str, tuple[str, list[str]]] = {}
+    for archivo in sorted((RAIZ / ".github/workflows").glob("*.yml")):
+        datos = yaml.safe_load(archivo.read_text(encoding="utf-8"))
+        for nombre, job in (datos.get("jobs") or {}).items():
+            versiones = [
+                str(v)
+                for v in ((job.get("strategy") or {}).get("matrix") or {}).get("python-version", [])
+            ]
+            jobs[nombre] = (archivo.name, versiones)
+    return jobs
+
+
+def _nombre_existe_como_job(nombre: str, jobs: dict[str, tuple[str, list[str]]]) -> bool:
+    """`test (3.11)` existe si el job `test` tiene 3.11 en su matriz.
+
+    Los checks de GitHub llegan con el nombre de la combinacion de la matriz
+    (`test (3.11)`), asi que un job no se puede comparar por igualdad de cadena. Y
+    comparar por prefijo sin mas daria por bueno `test (9.99)`.
+    """
+    if "(" in nombre and nombre.endswith(")"):
+        # El `)` va incluido en el nombre, asi que se separa antes de cortar: con
+        # `rpartition` sobre el nombre entero la version sale como "3.11)" y no
+        # coincide con nada. Se vio porque el guard reportaba los tres jobs con
+        # matriz como inexistentes.
+        base, _, version = nombre[:-1].rpartition(" (")
+        job = jobs.get(base)
+        return bool(job) and version in job[1]
+    return nombre in jobs
+
+
+def _sin_productor(nombres: Iterable[str], jobs: dict[str, tuple[str, list[str]]]) -> list[str]:
+    """Nombres que ningun workflow del repo produce como check.
+
+    Vive aca y no duplicado en cada test porque los dos tienen que mirar **lo mismo**:
+    una contraprueba que reimplementa su propia version del filtro verifica que el
+    filtro que escribio en el test funciona, no el que esta en el otro test.
+    """
+    return [
+        n
+        for n in nombres
+        if n not in PRODUCIDOS_POR_GITHUB and not _nombre_existe_como_job(n, jobs)
+    ]
+
+
+def test_lo_que_preflight_afirma_que_verifica_ci_existe() -> None:
+    """Cada entrada de `SOLO_EN_CI` tiene que seguir siendo un job de verdad.
+
+    ## El bug
+
+    `SOLO_EN_CI` es lo que preflight imprime como "lo que CI verifica y preflight NO".
+    Nada lo cruzaba contra `ci.yml`, asi que **borrar un job de CI pasaba
+    desatendido**: el test de arriba sigue en verde porque calcula `jobs - declarados`, y
+    un job borrado ya no esta en `jobs`. Medido: borrado el job `pdf_ocr` del workflow, los
+    47 tests de `test_meta_suite.py` y `test_await_ci.py` pasan.
+
+    Y el efecto es peor que perder cobertura: `preflight` seguia afirmando
+    `pdf_ocr: tesseract + poppler: el unico gate que prueba el camino OCR real` apuntando
+    a un job que ya no existia. Una herramienta de verificacion que describe algo que no
+    esta es peor que una que no lo menciona, porque el operador deja de mirar.
+    """
+    from preflight import SOLO_EN_CI
+
+    jobs = _jobs_de_los_workflows()
+    inexistentes = [n for n in SOLO_EN_CI if n not in PRODUCIDOS_POR_GITHUB and n not in jobs]
+    assert not inexistentes, (
+        f"preflight afirma que CI verifica {inexistentes} y no hay tal job en ningun "
+        f"workflow. Los jobs que existen son: {sorted(jobs)}. O se restaura el job, o se "
+        "saca la entrada de SOLO_EN_CI: afirmar coverage que no existe entrena a ignorar "
+        "el informe."
+    )
+
+
+def test_los_checks_que_await_ci_exige_son_producidos_de_verdad() -> None:
+    """`ESPERADOS_BASE` no puede encogerse sin que algo lo note.
+
+    `await_ci` es lo que impide dar por verde lo que no se midio, y su conjunto esperado
+    es un literal. Si alguien saca un job **y** su entrada de `ESPERADOS_BASE` —dos
+    ediciones, ninguna rompe nada— la maquinaria pasa a exigir menos y a reportar "los N
+    checks estan en verde" sobre N mas chico, sin que nadie note que dejo de mirar el
+    camino OCR.
+
+    Los checks que produce GitHub (CodeQL, Analyze) se declaran: no vienen de ningun
+    `jobs:` del repo, asi que exigirlos contra los archivos seria un falso positivo.
+    """
+    from await_ci import ESPERADOS_BASE
+
+    jobs = _jobs_de_los_workflows()
+    ausentes = _sin_productor(ESPERADOS_BASE, jobs)
+    assert not ausentes, (
+        f"await_ci exige {ausentes} pero ningun workflow produce un check con ese nombre. "
+        f"Los jobs del repo: {sorted(jobs)}. Si el check lo produce GitHub, declaralo en "
+        f"PRODUCIDOS_POR_GITHUB; si lo produce un job, el job tiene que existir con ese "
+        f"nombre."
+    )
+
+
+def test_un_job_nuevo_no_tiene_que_parecer_en_los_dos_lados() -> None:
+    """Contraprueba: el guard no puede ser un 'todo pasa' que no mira.
+
+    Con un job inventado en el conjunto esperado, tiene que reportarlo. Sin esto, un
+    guard que devuelve siempre vacio pasaria en verde siempre, que es lo que se le pide
+    evitar a todo lo demas de este archivo.
+    """
+    from await_ci import ESPERADOS_BASE
+
+    jobs = _jobs_de_los_workflows()
+    inventado = "job-que-no-existe (3.99)"
+    ausentes = _sin_productor((*ESPERADOS_BASE, inventado), jobs)
+    assert ausentes == [inventado], f"el guard de ESPERADOS_BASE no filtra: {ausentes}"
+
+
 def test_los_jobs_de_ci_cubren_los_gates_de_preflight() -> None:
     """Todo job activo de CI debe aparecer en el informe de preflight.
 

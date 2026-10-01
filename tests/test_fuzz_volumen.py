@@ -308,7 +308,7 @@ def test_se_mide_el_default_real_de_filas() -> None:
     importa. Un limite que no se alcanza en la prueba no se sabe si aguanta.
 
     Este test falla si alguien sube el default y no agrega el volumen
-    correspondiente, y viceversa: las dos listas tienen que seguirربعendolas.
+    correspondiente, y viceversa: las dos listas tienen que seguir correspondiendose.
     """
     from conciliador_bancario.models import LimitesIngesta
 

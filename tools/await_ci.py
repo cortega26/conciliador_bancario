@@ -155,12 +155,32 @@ def evaluar(checks: dict[str, Estado], esperados: tuple[str, ...]) -> list[str]:
     return problemas
 
 
-def esperar(pr: int, *, espera_s: int, timeout_s: int, esperados: tuple[str, ...]) -> list[str]:
+def esperar(
+    pr: int, *, espera_s: int, timeout_s: int, esperados: tuple[str, ...]
+) -> dict[str, Estado]:
+    """Espera a que los checks esperados esten en verde. Devuelve **esos** checks.
+
+    ## Por que devuelve los checks y no solo "no hay problemas"
+
+    Antes devolvia `[]` y el que imprimia el reporte volvia a llamar a `leer_checks()`,
+    y luego hacia `checks[nombre]` sin guarda. Entre las dos lecturas GitHub puede
+    devolver un rollup incompleto —pasa en los segundos siguientes a un push, mientras
+    GitHub programa los jobs— y eso era un `KeyError` sin manejar, con traceback, en la
+    unica herramienta del repo que existe para no dar por verde lo que no se midio.
+
+    Fallaba ruidosamente y no en falso, asi que no alcanzo a causar el incidente que
+    previene. Pero una herramienta de verificacion que se rompe con un traceback cuando
+    encuentra justo el caso que dice vigilar no es una herramienta en la que confiar.
+
+    Que devuelva el estado que **ya valido** elimina la segunda lectura: no hay ventana
+    entre "comprobar" e "informar", porque es la misma lectura.
+    """
     limite = time.monotonic() + timeout_s
     while True:
-        problemas = evaluar(leer_checks(pr), esperados)
+        checks = leer_checks(pr)
+        problemas = evaluar(checks, esperados)
         if not problemas:
-            return []
+            return checks
         if time.monotonic() > limite:
             raise FallaDeEspera(
                 "timeout esperando los checks del PR "
@@ -188,26 +208,22 @@ def main(argv: list[str] | None = None) -> int:
 
     esperados = tuple(args.esperados) if args.esperados else ESPERADOS_BASE
     try:
-        problemas = esperar(
+        checks = esperar(
             args.pr, espera_s=args.esperar, timeout_s=args.timeout, esperados=esperados
         )
     except FallaDeEspera as e:
         print(f"ERROR: {e}")
         return 2
 
-    checks = leer_checks(args.pr)
+    # `checks` es la misma lectura que `esperar()` valido. No se vuelve a leer: una
+    # segunda lectura abre una ventana en la que un check puede faltar y el reporte
+    # mentiria sobre lo que se acaba de comprobar.
     for nombre in esperados:
         c = checks[nombre]
         marca = {"ok": "OK ", "fallo": "MAL", "pendiente": "ESP", "desconocido": "???"}[
             clasificar(c)
         ]
         print(f"  {marca} {nombre:22s} {c.estado}/{c.conclusion or '-'}")
-
-    if problemas:
-        print(f"\nERROR: {len(problemas)} check(s) sin resolver:")
-        for p in problemas:
-            print(f"  {p}")
-        return 1
 
     print(f"\nPR #{args.pr}: los {len(esperados)} checks esperados estan en verde.")
     return 0

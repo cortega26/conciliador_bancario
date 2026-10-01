@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
+
+from conciliador_bancario.audit.audit_log import NullAuditWriter
+from conciliador_bancario.matching.engine import conciliar
+from conciliador_bancario.matching.primitivas import _match_id
+from conciliador_bancario.models import EstadoMatch, Match
+
+from tools.fuzzmatch import cfg, exp, tx
+
+RAIZ = Path(__file__).resolve().parents[1]
 
 
 def _load_module(path: Path):
@@ -112,3 +122,119 @@ def _pins_de_requirements_text(grupo: str) -> dict[str, str]:
 
     m = re.match(r"^([A-Za-z0-9_.-]+)==([^\s;]+)$", grupo.strip())
     return {m.group(1): m.group(2)} if m else {}
+
+
+# --- El seam de reglas de matching ----------------------------------------------
+#
+# `conciliar()` recorre las reglas sin saber cuales existen, y ese es el criterio de
+# aceptacion con el que se justifico el refactor: "puedo agregar una regla sin abrir
+# `engine.py`?". El criterio estaba escrito en el commit y en el PR, y nada lo
+# verificaba. Una afirmacion de arquitectura sin test es una suposicion, y este repo
+# ya pago tres bugs por tests que no mordian.
+#
+# ## Por que estos dos tests y no uno
+#
+# El de comportamiento prueba que el seam **anda**: una regla nueva, registrada en
+# `reglas_por_defecto()`, se ejecuta sin tocar el motor.
+#
+# El estructural es el que evita que se **pierda**: si alguien hardcodea
+# `ReglaReferenciaExacta` dentro de `conciliar()`, todo sigue en verde —los tests
+# existen, las reglas matches, el codigo es correcto— y el refactor deja de comprar
+# nada, sin que nada lo diga. Ese test verifica que `engine.py` no menciona ninguna
+# clase de regla por nombre.
+#
+# ## La costura de donde se resuelve la lista
+#
+# `engine.py` hace `from ... import reglas_por_defecto`, asi que el motor resuelve el
+# nombre en sus propios globals al llamar, no en el import. Por eso `monkeypatch` sobre
+# `engine.reglas_por_defecto` funciona sin tocar produccion: si alguna vez se cambia a
+# `reglas.reglas_por_defecto()` —resolucion por atributo, que tampoco se resuelve al
+# import-- este test seguira funcionando, porque lo que hace es replace el callable que
+# el motor llama.
+
+ENGINE_PY = RAIZ / "src" / "conciliador_bancario" / "matching" / "engine.py"
+REGLAS_PY = RAIZ / "src" / "conciliador_bancario" / "matching" / "reglas.py"
+
+
+def test_el_motor_no_nombra_ninguna_regla_concreta() -> None:
+    """`engine.py` recorre reglas; no las conoce.
+
+    Es el guard que mantiene viva la razon del refactor. Sin el, `conciliar()` puede
+    volver a ser la funcion de 752 lineas con las reglas escritas adentro, y lo unico
+    que se pierde es la garantia de que agregar una regla sea verificable de forma
+    aislada.
+    """
+    fuente = ENGINE_PY.read_text(encoding="utf-8")
+    clases = re.findall(r"^class (\w+)", REGLAS_PY.read_text(encoding="utf-8"), re.M)
+    # `Contexto` no es una regla: es el estado compartido, y el motor si lo necesita.
+    reglas = [c for c in clases if c != "Contexto"]
+    assert reglas, f"no se encontro ninguna clase de regla en {REGLAS_PY}"
+    nombradas = [c for c in reglas if re.search(rf"\b{c}\b", fuente)]
+    assert not nombradas, (
+        f"{ENGINE_PY} menciona reglas concretas: {nombradas}. El motor tiene que "
+        "recorrer las reglas por el registro, no conocerlas: si las nombra, agregar "
+        "una regla vuelve a obligar a editar el motor, que es lo que el refactor "
+        "llego a evitar."
+    )
+
+
+def test_una_regla_nueva_se_registra_sin_tocar_el_motor(monkeypatch) -> None:
+    """Una clase nueva + una linea en `reglas_por_defecto()` es toda la integracion.
+
+    Este es el criterio de aceptacion, verificado de forma ejecutable en vez de
+    afirmado en prosa.
+    """
+    from conciliador_bancario.matching import engine as motor
+
+    aplicadas: list[str] = []
+
+    class ReglaSonda:
+        """Una regla minima que cumple el `Protocol` y no decide nada por si misma."""
+
+        nombre = "sonda"
+
+        def indexar(self, ctx) -> None:
+            aplicadas.append(f"indexar:{ctx.run_id}")
+
+        def aplicar(self, ctx, tx) -> None:
+            aplicadas.append(f"aplicar:{tx.id}")
+            # Empareja con el primer esperado libre: es lo mas simple que produce un
+            # match observable desde afuera sin reimplementar las reglas reales.
+            for e in ctx.esperados:
+                if e.id in ctx.used_exp:
+                    continue
+                ctx.used_tx.add(tx.id)
+                ctx.used_exp.add(e.id)
+                ctx.matches.append(
+                    Match(
+                        id=_match_id(ctx.run_id, [tx.id], [e.id], self.nombre),
+                        estado=EstadoMatch.sugerido,
+                        score=0.10,
+                        regla=self.nombre,
+                        explicacion="regla de sonda",
+                        transacciones_bancarias=[tx.id],
+                        movimientos_esperados=[e.id],
+                        bloqueado_por_confianza=False,
+                    )
+                )
+                return
+
+    monkeypatched = [ReglaSonda()]
+    monkeypatch.setattr(motor, "reglas_por_defecto", lambda: monkeypatched)
+
+    # `NullAuditWriter`: lo que se prueba es que el motor corro la regla, no la traza.
+    resultado = conciliar(
+        cfg=cfg(cliente="Sonda"),
+        transacciones=[tx("t1", "1000")],
+        esperados=[exp("e1", "1000")],
+        audit=NullAuditWriter(),
+        run_id="run-sonda",
+    )
+
+    assert aplicadas == [
+        "indexar:run-sonda",
+        "aplicar:t1",
+    ], f"la regla registrada no la ejecuto el motor: {aplicadas}"
+    assert [m.regla for m in resultado.matches] == ["sonda"], (
+        f"el motor no uso la regla registrada: " f"{[m.regla for m in resultado.matches]}"
+    )

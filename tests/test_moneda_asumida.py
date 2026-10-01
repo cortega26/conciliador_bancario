@@ -16,7 +16,7 @@ hallazgos: [('tx_con_match', 'info')]      <- ninguno sobre la moneda
 audit.jsonl: ni una mención
 ```
 
-El motor comparó CLP contra CLP,出兵了, y ambosCHKos venían del default. Es H14 por
+El motor comparo CLP contra CLP, concilio, y ambos losLabels venían del default. Es H14 por
 otra puerta: la regla existe, se ejecuta, y no protege nada.
 
 ## Por qué un aviso y no un error

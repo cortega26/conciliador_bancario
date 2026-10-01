@@ -7,7 +7,7 @@ funciona bien con CSV, porque `max_input_bytes` ve el lado comprimido y el ratio
 lo puede hacer arbitrariamente pequeno. Un archivo de 400 KB puede traer 400 MB
 dentro; se midio 1.2 GB de RSS antes de que ningun codigo del repo lo notara.
 
-Un XML, en cambio, tiene su propia一类 de ataque: las entidades. `defusedxml`
+Un XML, en cambio, tiene su propia clase de ataque: las entidades. `defusedxml`
 ya las bloquea, y estos vectores existen para que siga bloqueadas: un test que
 solo existe mientras la proteccion existe es un test que nadie va a romper, pero
 tampoco nadie va a notar si la proteccion se quita.

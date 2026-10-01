@@ -219,7 +219,7 @@ Cosas queupuются mal en esta sesión y que hay que rememberspara no repetirl
 - `await_ci.py` con el número de PR equivocado: **1 vez** (el #47 era el release).
 - Un `@parametrize` con cero casos: **1 vez** (verde sin probar nada).
 - Un test que **replicaba** la lógica en vez de llamar al código: **2 veces**.
-- El `write` de un archivo技術者 reportado como exitoso sin escribir: **1 vez**.
+- El `write` de un archivo de texto reportado como exitoso sin escribir: **1 vez**.
 - Un `@parametrize` con filtro vacío porque una edición al generador no aplicó: **1 vez**.
 - Oráculos míos que exigían más de lo que el diseño promete: **4 veces**.
 

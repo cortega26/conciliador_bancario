@@ -109,7 +109,7 @@ def _renderizar(
     desenfoque: float = 0.0,
     columnas: int = 1,
 ) -> Image.Image:
-    """Dibuja las lineas y aplica las degradaciones, en orden de严重idad.
+    """Dibuja las lineas y aplica las degradaciones, en orden de severidad.
 
     El orden importa y no es cosmetico: si se desenfoca antes de rotar, el filtro
     de rotacion de PIL reintroduce bordes duros. Se degrada como lo haria un

@@ -111,15 +111,23 @@ The two design decisions below are the ones a maintainer may want to revisit.
   gitignore does not apply to tracked paths, so the command reports nothing for
   it. The rules are correct: checked against paths *inside* the directories, all
   three resolve (`.gitignore:26-28`).
-- **006: a model-level `ValidationError` during ingestion is still classified as
-  exit 10 ("internal error"), not 4 (ingestion).** The new `IdExterno` pattern
-  makes a hostile id fail closed — the formula cell is never written — but the
-  user sees an internal-error message. **This gap is pre-existing, not introduced
-  here**: a bad `moneda` produces byte-identical output (exit 10, same message)
-  at `0704075`. Any `ValidationError` raised while an adapter builds a model
-  escapes `ErrorIngestion`'s classification. Fixing it means wrapping model
-  construction in the CSV/XLSX adapters, which this plan puts out of scope.
-  Worth its own plan; tracked as a real finding, not silently closed.
+- **006: a model-level `ValidationError` during ingestion was classified as exit 10
+  ("internal error") instead of 4 (ingestion). CERRADO en `636b020`.** Cuando se
+  escribio esta nota, un `moneda` invalido producia exit 10 con el mensaje de error
+  interno, y la nota decia "worth its own plan; tracked as a real finding" sin que
+  existiera ese plan ni entrada en `todo.md`. Lo arreglo `636b020` (*fix(ingestion):
+  classify schema violations as ingestion errors*), que envuelve la construccion del
+  modelo en `ingestion/base.py` y convierte el `ValidationError` en `ErrorIngestion`.
+
+  **Re-verificado en `main` antes de anotarlo aqui**, no asumido: una `moneda` invalida,
+  un monto en notacion cientifica, una fecha con dia 32 y un banco sin transacciones
+  salen **todos con exit 4**. La distincion que importa para el operador —"tu archivo
+  esta mal" contra "la herramienta se rompio"— ahora es correcta en los cuatro casos.
+
+  Se deja la nota en vez de borrarla porque el patron de falla sigue siendo real: un
+  `ValidationError` que se escapa de un adaptador nuevo vuelve a ser exit 10 sin que
+  nadie lo note. `ErrorIngestion` se documenta como la frontera en
+  `ingestion/base.py`, y por eso.
 - **006: the `IdExterno` pattern has no lookahead.** pydantic v2 compiles
   `pattern` with the Rust regex engine, which rejects `(?![=+\-@])` at schema
   build time. Expressed as a character class on the first character instead.

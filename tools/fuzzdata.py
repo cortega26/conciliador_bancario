@@ -75,7 +75,7 @@ HOMOGLIFOS = {
     "p": "\u0440",  # р cirilico
     "x": "\u0445",  # х cirilico
     "y": "\u0443",  # у cirilico
-    "I": "\u0406",  # І我喜欢cirilico
+    "I": "\u0406",  # cirilico
 }
 
 # Zero-width: invisibles para el operador, presentes para la maquina.
@@ -161,7 +161,7 @@ def _casos_malos() -> list[CasoMonto]:
     """Montos que NO son CLP y DEBEN rechazarse.
 
     El criterio no es "hay letras" sino "adivinar el valor seria conciliar mal".
-    Un RE de scraping，电子邮件 con 1e5 podria ser 100000 (cientifico) o 15
+    Un RE de scraping,Correo electronico con 1e5 podria ser 100000 (cientifico) o 15
     (referencia a la fila). Elegir una de las dos es inventar el monto, y el
     resultado de un fuzzer que acepta 1e5 es un saldo equivocado con exit 0.
     """

@@ -76,6 +76,7 @@ cliente puede branchear sobre ella, y `tests/test_docs_actualizados.py` la compa
 | `4` | Error de ingesta: un archivo que no se pudo leer o interpretar. | Revisar el archivo. Es el fallo mas comun. |
 | `6` | Error de IO, o **la salida ya esta en uso** por otra corrida. | Para `6`, revisar permisos/espacio. Si es el cerrojo, esperar: la otra corrida lo suelta al terminar. |
 | `7` | Hubo hallazgos criticos y se paso `--fail-on-critico`. | Leer `run.json`. |
+| `8` | La salida esta en uso y se paso `--exit-code-en-uso`. | **Reintentar.** No es un error del archivo. |
 | `10` | Error interno: la herramienta se rompio. | Reportar el bug con los artefactos. |
 
 ### `concilia explain`
@@ -97,16 +98,23 @@ aparecia semanas despues en produccion del cliente, sin rastro local.
 `4`, `6` y `10` no estaban documentados, y `4` es el fallo real mas frecuente: un
 archivo que el banco exporto con una columna de mas.
 
-### Que distingue `6` de "la salida ya esta en uso"
+### `8` y `--exit-code-en-uso`
 
-Hoy no los distingue: **los dos son `6`**, porque el cerrojo se reporta como
-`ErrorOperacionIO`. Un `OSError` de permisos y un cerrojo ocupado son el mismo numero,
-aunque el remedio es distinto —uno hay que corregirlo, el otro hay que reintentar— y
-un script que reintenta en bucle ante un problema de permisos no termina nunca.
+Sin el flag, un cerrojo ocupado y un `OSError` de permisos son **los dos `6`**. El
+remedio es distinto —uno hay que corregirlo, el otro hay que reintentar— y un script que
+reintenta en bucle ante un problema de permisos no termina nunca.
 
-Es una limitacion **documentada**, no un olvido: `6` significa "no se pudo escribir la
-salida", y el mensaje en pantalla si dice cual de los dos es. Distinguirlos con un
-codigo propio es un cambio de contrato, asi que no se hace aqui.
+`--exit-code-en-uso` devuelve `8` en vez de `6` cuando el motivo es el cerrojo, para que
+la reintentos programados sean seguros. **No cambia el mensaje, ni el `run.json`, ni
+`audit.jsonl`**: cambia solo el numero, igual que `--fail-on-critico` con el `7`.
+
+Por que es opt-in y no el comportamiento de siempre: cambiar el `6` de salida rompe a
+quien hoy branch-ea sobre el. El default no cambia para nadie, y quien sepa
+distinguirlo lo pide. Es el mismo trato que se le dio al `7`.
+
+Lo que el flag **no** arregla: un `8` no dice cuanto falta, asi que el que reintenta
+tiene que poner su propia espera. Y un `6` por permisos sigue siendo `6`: para
+distinguirlos hay que leer el mensaje, que si los nombra.
 
 ### `7` y `--fail-on-critico`
 

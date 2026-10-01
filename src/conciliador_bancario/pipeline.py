@@ -343,7 +343,11 @@ def ejecutar_run(
     try:
         cerrojo.adquirir()
     except ErrorSalidaEnUso as e:
-        raise ErrorOperacionIO(str(e), details={"salida": str(out_dir)}) from e
+        # Se relanza el **mismo** tipo con el `salida` agregado, en vez de convertirlo en
+        # `ErrorOperacionIO` a secas. La conversion conservaba el mensaje pero perdia el
+        # motivo, y con el motivo perdido la CLI no puede distinguir "esperar" de
+        # "corregir permisos": los dos son `ErrorOperacionIO` y el mismo `6`.
+        raise ErrorSalidaEnUso(str(e), details={"salida": str(out_dir)}) from e
     try:
 
         try:

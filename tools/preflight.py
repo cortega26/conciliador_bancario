@@ -49,6 +49,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tomllib
@@ -101,6 +102,33 @@ def _py(*args: str) -> tuple[str, ...]:
 def _python_del_venv() -> Path:
     """El interprete del venv declarado, que es el que corre los gates."""
     return VENV / "bin" / "python"
+
+
+# Los dos gates que declaran `requiere_red` necesitan PyPI: `supply-chain` resuelve
+# las distribuciones y consulta la API de vulnerabilidades, y `build` instala sus
+# dependencias en un entorno aislado.
+_RED: dict[str, bool] = {}
+
+
+def _hay_red(destino: tuple[str, int] = ("pypi.org", 443), timeout: float = 3.0) -> bool:
+    """¿Abre el socket? No consulta HTTP, y esa es la pregunta deliberada.
+
+    Interesa distinguir "no hay red" de "el servicio respondio que no", asi que se
+    pregunta lo minimo que separa esos dos casos: si el socket abre, hay red; si no,
+    no la hay. Una consulta HTTP seria peor —daria falso negativo con un 503 de
+    PyPI, que no es un problema de red— y mas lenta.
+
+    El resultado se cachea: se consulta una vez por gate, y `preflight --all` corre
+    varios, y una sonda de red por gate es una sonda de red de mas.
+    """
+    clave = f"{destino[0]}:{destino[1]}"
+    if clave not in _RED:
+        try:
+            with socket.create_connection(destino, timeout=timeout):
+                _RED[clave] = True
+        except OSError:
+            _RED[clave] = False
+    return _RED[clave]
 
 
 # Pregunta al venv que hay instalado, no al proceso que corre este script.
@@ -399,6 +427,8 @@ def trabajo_sin_commitear() -> list[str]:
 def _disponible(g: Gate) -> tuple[bool, str]:
     if g.requiere_docker and not shutil.which("docker"):
         return False, "sin docker"
+    if g.requiere_red and not _hay_red():
+        return False, "sin red (no se pudo abrir conexion a pypi.org:443)"
     if g.nombre == "twine":
         # Sin el gate `build` delante, `dist/` puede no existir o estar vacio.
         # twine acepta una lista vacia y sale 0, con lo que el gate pasaria sin

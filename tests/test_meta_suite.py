@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import unicodedata
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -548,6 +549,78 @@ def test_el_gate_de_tipos_no_depende_del_entorno_que_lo_corre() -> None:
         "verdictos y el gate de tipos depende de quien corrio mypy ultimo. "
         "Ver el comentario de pyproject.toml con la medicion."
     )
+
+
+def test_un_gate_que_necesita_red_no_se_da_por_verificado_sin_red(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`requiere_red` tiene que hacer algo, y no hacia nada.
+
+    ## El bug
+
+    El campo estaba declarado en el dataclass con el comentario de que un gate que
+    no se puede verificar se reporta como tal, y dos gates lo declaraban: `supply-chain`
+    y `build`. Nadie lo consultaba. `_disponible` miraba `requiere_docker` y nada mas,
+    asi que sin red los dos gates se ejecutaban igual y `supply-chain` devolvia el
+    traceback de `requests` — un gate de seguridad que no sabe decir "no pude verificar"
+    y parece que sabe.
+
+    Es la misma familia que H16 (`--max-xlsx-uncompressed-bytes`, un flag que nadie
+    leia y cuyo error lo recomendaba): un knob declarado que no hace nada. El
+    `--list` si lo imprimia, lo que hacia el campo parecer vivo.
+
+    ## Por que compara gates entre si
+
+    Con `supply-chain` en una maquina con red no se puede afirmar nada: si la maquina
+    tiene red, el gate
+    pasa y el test no distingue nada. Lo que si es comprobable en cualquier maquina
+    es que **cambiar la respuesta de la sonda cambia el veredicto**, y que un gate que
+    no declara `requiere_red` no se ve afectado.
+    """
+    mod = preflight_mod()
+    monkeypatch.setattr(mod, "_hay_red", lambda *a, **k: False)
+
+    con_red = next(g for g in mod.GATES if g.requiere_red)
+    ok, motivo = mod._disponible(con_red)
+    assert not ok, f"{con_red.nombre} declara requiere_red y se dio por disponible: {motivo!r}"
+    assert "red" in motivo, f"el motivo tiene que decir que es la red: {motivo!r}"
+
+    # Un gate que no necesita red no puede verse afectado por la sonda.
+    local = next(
+        g for g in mod.GATES if not g.requiere_red and not g.requiere_docker and g.nombre != "twine"
+    )
+    assert mod._disponible(local) == (True, ""), f"{local.nombre} no necesita red y se reporto mal"
+
+
+def test_la_sonda_de_red_responde_y_se_cachea(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La sonda distingue "no hay red" de "el socket abrio", y no se repite.
+
+    Se falsea `socket.create_connection` en vez de usar la red real: un test que
+    depende de la red de la maquina que lo corre se cuelga o miente, y las dos cosas
+    son peores que un test lento.
+    """
+    mod = preflight_mod()
+    mod._RED.clear()
+    llamadas: list[tuple[str, int]] = []
+
+    def cierra(*args: object, **kwargs: object) -> object:
+        llamadas.append(args)  # type: ignore[arg-type]
+        return nullcontext()
+
+    class Aborta(OSError):
+        pass
+
+    def falla(*args: object, **kwargs: object) -> object:
+        raise Aborta("Connection refused")
+
+    monkeypatch.setattr(mod.socket, "create_connection", cierra)
+    assert mod._hay_red() is True
+    assert mod._hay_red() is True, "la sonda se repitio: el cache no funciona"
+    assert len(llamadas) == 1, f"se abrio el socket {len(llamadas)} veces"
+
+    monkeypatch.setattr(mod.socket, "create_connection", falla)
+    mod._RED.clear()
+    assert mod._hay_red() is False
 
 
 def test_ningun_gate_declara_una_dependencia_inexistente() -> None:

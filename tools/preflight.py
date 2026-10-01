@@ -45,7 +45,9 @@ verificar (que se reporta aparte de los fallos reales).
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -55,7 +57,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-VENV = Path(os.environ.get("BR_VENV", "/tmp/opencode/br-venv"))
+# El venv que este script **verifica**. Es el que corre los gates (`_py`), asi que
+# es tambien el que tiene que medir el gate de entorno: medir otro es medir algo que
+# nadie ejecuta. Antes estas dos cosas podian ser distintas sin que se notara, y
+# `BR_VENV` permitia separararlas todavia mas.
+#
+# El default es el `.venv` del repo (lo que `.gitignore` excluye y lo que
+# `AGENTS.md` asume), no una ruta absoluta: un default que no existe en la maquina
+# de quien lo corre hace que el gate mida el interprete equivocado.
+VENV = Path(os.environ.get("BR_VENV") or RAIZ / ".venv")
 
 PULSO = "OK   "
 FALLO = "FALLA"
@@ -85,7 +95,77 @@ class Gate:
 
 
 def _py(*args: str) -> tuple[str, ...]:
-    return (str(VENV / "bin" / "python"), *args)
+    return (str(_python_del_venv()), *args)
+
+
+def _python_del_venv() -> Path:
+    """El interprete del venv declarado, que es el que corre los gates."""
+    return VENV / "bin" / "python"
+
+
+# Pregunta al venv que hay instalado, no al proceso que corre este script.
+#
+# Se ejecuta en vez de leer `importlib.metadata` aca porque "el entorno" del gate
+# tiene que ser el que los gates van a usar. Leyendo el entorno del proceso, correr
+# `python tools/preflight.py` con otro interprete hacia que el gate de entorno
+# informara sobre ese otro — y los gates correrian con `VENV`. Medir uno y ejecutar
+# en otro es peor que no medir: el gate queda en verde describiendo un entorno que
+# nadie va a usar.
+_SONDA = (
+    "import json;from importlib.metadata import distributions;"
+    "print(json.dumps({(d.metadata['Name'] or '').lower(): d.version "
+    "for d in distributions() if d.metadata['Name']}))"
+)
+# Claveado por la ruta del interprete, no como un unico valor global: asi una segunda
+# llamada con el mismo venv no vuelve a pagarla, y cambiar `VENV` en un test no lee
+# el cache de otro venv.
+_PAQUETES: dict[str, dict[str, str] | None] = {}
+
+
+def _paquetes_del_venv() -> dict[str, str] | None:
+    """Paquetes instalados en el venv declarado. `None` si no se puede preguntar.
+
+    `None` no es "no hay paquetes": es "no se pudo averiguar", y la distincion es la
+    que separa un venv vacio de un venv que no existe. Un gate que no puede mirar y
+    responde "OK" esta afirmando algo que no sabe.
+
+    Los nombres se devuelven **sin normalizar** a proposito: la normalizacion se hace
+    del lado de aca, en `_normalizar_paquete`, para que exista una sola regla y no dos
+    que puedan dejar de coincidir. La sonda corre en otro proceso y no puede importar
+    nada de este.
+    """
+    exe = str(_python_del_venv())
+    if exe in _PAQUETES:
+        return _PAQUETES[exe]
+    resultado: dict[str, str] | None = None
+    if Path(exe).exists():
+        p = subprocess.run([exe, "-c", _SONDA], capture_output=True, text=True)
+        if p.returncode == 0:
+            try:
+                cargado = json.loads(p.stdout)
+            except json.JSONDecodeError:
+                cargado = None
+            if isinstance(cargado, dict):
+                resultado = {str(k): str(v) for k, v in cargado.items()}
+    _PAQUETES[exe] = resultado
+    return resultado
+
+
+_SEPARADORES = re.compile(r"[-_.]+")
+
+
+def _normalizar_paquete(nombre: str) -> str:
+    """El nombre con el que se comparan paquetes, como hace `importlib.metadata`.
+
+    Sin esto, `pip_audit` —que es como se llama la distribucion— y `pip-audit` —que
+    es como esta escrito el pin— son dos paquetes distintos, y el gate reporta
+    `pip-audit: NO INSTALADO` con el paquete instalado. Selvio al arrollar: la version
+    anterior usaba `md.version()`, que normaliza por dentro, y al reemplazarla por la
+    sonda se perdio esa normalizacion. Lo que se rompio lo dijo el gate, que ya miraba
+    donde debe: `pip-audit` faltaba de `.venv` despues de haberlo instalado con el
+    remedio que el propio gate indicaba.
+    """
+    return _SEPARADORES.sub("-", nombre).lower()
 
 
 def _twine_check() -> tuple[str, ...]:
@@ -246,10 +326,17 @@ def extras_activados() -> list[str]:
     si es barato y exacto es mirar los extras **declarados**: si un paquete que
     solo existe bajo `[pdf-ocr]` esta instalado, el venv no es el de los pines,
     y no hay que adivinar nada mas.
-    """
-    import importlib.metadata as md
 
-    base = pines_declarados()
+    ## Que entorno mira
+
+    El del venv declarado, interrogando a su interprete. Antes leia el del proceso que
+    corre este script, que es otra cosa: `python tools/preflight.py` con un interprete
+    distinto del venv hacia que este gate describiera ese interprete mientras los
+    gates se ejecutaban con `VENV`. Medir uno y correr en otro deja al gate en verde
+    describiendo un entorno que nadie usa.
+    """
+    base = {_normalizar_paquete(n) for n in pines_declarados()}
+    instalados = {_normalizar_paquete(k): v for k, v in (_paquetes_del_venv() or {}).items()}
     activados: list[str] = []
     for extra, pines in pines_por_extra().items():
         for nombre in pines:
@@ -258,11 +345,9 @@ def extras_activados() -> list[str]:
             # venv base y contarlo como extra activa hacia fallar el gate en verde
             # permanente. Solo importan los paquetes que el extra trae **y** el
             # entorno base no declara.
-            if nombre in base:
+            if _normalizar_paquete(nombre) in base:
                 continue
-            try:
-                md.version(nombre)
-            except md.PackageNotFoundError:
+            if _normalizar_paquete(nombre) not in instalados:
                 continue
             activados.append(f"{extra} (trae {nombre})")
     return sorted(activados)
@@ -274,18 +359,21 @@ def venv_actualizado() -> list[str]:
     Un venv con versiones viejas no es un detalle: produce falsos fallos que
     parecen bugs del repo. En esta repo hizo fallar `twine check` por un twine
     que ya no se declaraba.
-    """
-    import importlib.metadata as md
 
+    ## Que entorno mira
+
+    El del venv declarado, por la misma razon que `extras_activados`. Si no se puede
+    preguntar, todos los pines se reportan como faltantes: es la un lectura que no
+    miente, porque "no se pudo mirar" no se puede traducir en "todo bien".
+    """
     declarados = pines_declarados()
+    instalados = {_normalizar_paquete(k): v for k, v in (_paquetes_del_venv() or {}).items()}
     desfasados: list[str] = []
     for nombre, pin in sorted(declarados.items()):
-        try:
-            instalada = md.version(nombre)
-        except md.PackageNotFoundError:
+        instalada = instalados.get(_normalizar_paquete(nombre))
+        if instalada is None:
             desfasados.append(f"{nombre}: declarado {pin}, NO INSTALADO")
-            continue
-        if instalada != pin:
+        elif instalada != pin:
             desfasados.append(f"{nombre}: declarado {pin}, instalado {instalada}")
     return desfasados
 
@@ -426,6 +514,34 @@ def main(argv: list[str] | None = None) -> int:
     fallidos: list[str] = []
     no_verificados: list[str] = []
 
+    # 0. El venv declarado tiene que existir y poder responder. Va primero de todo
+    # porque si no, todo lo de abajo mide el entorno equivocado: los gates se ejecutan
+    # con este interprete, y sin el no se puede ni correr ni decir nada cierto sobre
+    # el entorno. Antes esta comprobacion no existia, y con `BR_VENV` apontando a una
+    # ruta que no existe el gate de entorno respondia `OK venv coincide con los pines`
+    # — un OK sobre un venv inexistente, que es el peor falso verde posible porque
+    # no deja rastro de nada que revisar.
+    #
+    # Sale con 2 y no con 1: no es un gate en rojo, es un entorno que impide
+    # verificar. El codigo 2 ya existe para esto.
+    if _paquetes_del_venv() is None:
+        exe = _python_del_venv()
+        print(f"ENTORNO no se puede verificar el venv declarado:\n  {exe}")
+        if not exe.exists():
+            print("  Ese interprete no existe.")
+        else:
+            print("  Ese interprete existe pero no responde a la sonda de paquetes.")
+        print(
+            "\n  Sin el, los gates correrian con otro interprete y el gate de entorno\n"
+            "  describiria un entorno que nadie usa. Por eso no se corre ninguno:\n"
+            "  un 'todo bien' aqui no seria cierto.\n\n"
+            "  Para apuntar a otro venv:\n"
+            "    BR_VENV=<ruta> python tools/preflight.py\n\n"
+            "  Para crear el venv:\n"
+            "    python -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'\n"
+        )
+        return 2
+
     # 1. Entorno: primero, porque un venv desfasado invalida todo lo demas.
     desfasajes = venv_actualizado()
     if desfasajes:
@@ -433,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
         for d in desfasajes:
             print(f"  - {d}")
         print(
-            f"\n  Corregir con:\n    {VENV / 'bin' / 'python'} -m pip install -e '.[dev]'\n"
+            f"\n  Corregir con:\n    {_python_del_venv()} -m pip install -e '.[dev]'\n"
             "  Un venv viejo produce fallos que parecen bugs del repo.\n"
         )
         fallidos.append("entorno")
@@ -459,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
             "\n  Un gate que dice 'OK' sobre un venv que no es el de los pines es un\n"
             "  gate que no dice la verdad.\n"
             "  Para volver al entorno de los pines:\n"
-            f"    {VENV / 'bin' / 'python'} -m pip uninstall -y "
+            f"    {_python_del_venv()} -m pip uninstall -y "
             + " ".join(sorted(pines_por_extra()[e.split()[0]]))
             + "\n"
             "  Si el extra es necesario (por ejemplo, para probar OCR), decláralo:\n"

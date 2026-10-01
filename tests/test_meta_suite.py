@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -705,25 +706,50 @@ def test_el_marker_slow_esta_registrado() -> None:
     )
 
 
-# --- 5. el texto del repo no trae caracteres de otro alfabeto --------------
+# --- 5. el texto del repo no trae letras de otro alfabeto --------------------
 #
-# Diez lineas de codigo y de documentacion propres de este repo tenian tokens CJK
-# pegados en medio de frases en espanol. Ninguna era codigo, ninguna hacia
-# algo: todas eran prosa.
+# Doce lineas de codigo y de documentacion propres de este repo tenian tokens de otro
+# alfabeto pegados en medio de frases en espanol. Ninguna era codigo, ninguna hacia
+# algo: todas eran prosa. Diez las cazo `4ce1bc4`; las dos ultimas las veia el guard
+# que ese commit escribio, porque solo conocia un alfabeto.
 #
 # ## Por que esto merece un test y no "tener cuidado"
 #
-# Porque ya paso, en diez lugares, y la causa es la misma que produce prosa en otro
+# Porque ya paso, en doce lugares, y la causa es la misma que produce prosa en otro
 # idioma: una herramienta que genera texto. El dano no es estetico. En `spec.md` y en
 # `todo.md` esos tokens caen en decisiones y riesgos que alguien lee para priorizar, y
 # "Worth its own plan; tracked as a real finding" con un caracter colado al lado se
 # lee igual de bien que sin el: el texto no dice que esta roto.
 #
+# ## Las dos mitades del guard, y por que no es una sola
+#
+# 1. `CJK`: puntuacion CJK, kana, bopomofo, ideogramas, hangul y formas de ancho
+#    completo, por rango.
+# 2. `_letra_ajena`: cualquier letra cuyo nombre Unicode no diga LATIN, por
+#    `unicodedata`. Cubre cirilico, arabe, hebreo, devanagari, Griego — y los que se
+#    agreguen en Unicode 17 sin tocar este archivo.
+#
+# La segunda mitad es la que evita repetir el error: la primera version de este guard
+# fue solo la primera, y por eso se le pasaron dos lineas con cirilico y una con arabe
+# que la version anterior todavia no habia corregido. **Enumerar rangos es lo que
+# produjo el fallo**: una enumeracion siempre tiene un rango que falta.
+#
+# Las dos mitades se necesitan porque cada una cubre lo que la otra no: la letra
+# cirilica la ve la regla 2, y una coma de ancho completo o un guion japones no la ve
+# ninguna de las dos porque no son letras. Un guion de ancho completo dentro de una
+# palabra es el mismo defecto que un ideograma pegado, y no se detecta por nombre de
+# letra.
+#
+# Sin nombre Unicode no hay forma objetiva de saber de que alfabeto es el caracter, asi
+# que se reporta en vez de dejarlo pasar. Hoy no hay ninguno en el repo — se midio — y
+# el caso de que aparezca es motivo para revisarlo, no para silenciarlo.
+#
 # ## Que NO cubre
 #
-# No revisa ortografia ni gramatica. Solo que no haya ideogramas CJK, kana, hangul ni
-# formas de ancho completo en los archivos propios. Eso es objectiveble; "esta bien
-# escrito" no lo es.
+# No revisa ortografia ni gramatica. Solo que no haya letras de otro alfabeto, ni
+# puntuacion CJK, en los archivos propios. Eso es objectiveble; "esta bien escrito" no
+# lo es. Las rayas, las flechas y los signos de moneda quedan fuera a proposito: son
+# puntuacion, se usan bien y no son un token de otro idioma pegado en una frase.
 #
 # ## Los directorios excluidos, y por que
 #
@@ -733,10 +759,11 @@ def test_el_marker_slow_esta_registrado() -> None:
 # excepcion al guard: es que el guard mide el texto que el repo escribe, no el que
 # recibe.
 #
-# ## La lista blanca, y por que esta vacia
+# ## La lista blanca, y por que no esta vacia
 #
-# Para que anadir un test con datos CJK legitimos —ancho de columna en XLSX, un PDF en
-# japones— no exija desactivar el guard entero. Se lista el archivo y con que motivo.
+# Para que anadir un test con datos de otro alfabeto legitimos —ancho de columna en
+# XLSX, un PDF en japones, una tabla de homoglifos— no exija desactivar el guard
+# entero. Se lista el archivo y con que motivo.
 
 CJK = re.compile(
     "["
@@ -750,19 +777,49 @@ CJK = re.compile(
 )
 EXCLUIDOS = (".pypi_smoke/", "tests/golden/", "docs/stress_test_")
 EXTENSIONES = (".py", ".md", ".yaml", ".yml", ".toml", ".cfg", ".txt")
-# Archivo -> por que lo necesita. Vacia hoy; se llena solo si aparece un motivo real.
-LISTA_BLANCA: dict[str, str] = {}
+# Archivo -> por que lo necesita. Se llena solo con un motivo real, nunca para callar
+# un hallazgo: el guard existe porque estos tokens se colaron sin que nadie los viera.
+LISTA_BLANCA: dict[str, str] = {
+    "tools/fuzzdata.py": (
+        "tabla de homoglifos: el fuzzer necesita la letra cirilica de verdad, porque "
+        "el caso que prueba es justo que dos referencias que el operador ve iguales "
+        "son distintas para la maquina"
+    ),
+}
 
 
-def test_el_texto_del_repo_no_trae_ideogramas_de_otro_alfabeto() -> None:
-    """Ningun archivo propio del repo tiene CJK fuera de las excepciones declaradas.
+def _alfabeto(caracter: str) -> str:
+    """Nombre del bloque de un caracter, para el mensaje del fallo."""
+    try:
+        return unicodedata.name(caracter).split()[0].lower()
+    except ValueError:
+        return "sin nombre unicode"
 
-    ## Por que el rango es amplio y no solo el de ideogramas
 
-    Porque una primera version de este escaneo uso solo el rango de ideogramas CJK, y se
-    le paso un caracter de hangul que estaba en `spec.md`. Un guard con un rango
-    incompleto es peor que ninguno: da la sensacion de haber revisado. Se cubren tambien
-    kana, bopomofo y las formas de ancho completo.
+def _letra_ajena(caracter: str) -> bool:
+    """¿Es una letra de otro alfabeto, o puntuacion CJK?"""
+    if CJK.search(caracter):
+        return True
+    if not caracter.isalpha():
+        return False
+    try:
+        nombre = unicodedata.name(caracter)
+    except ValueError:
+        return True
+    return "LATIN" not in nombre
+
+
+def test_el_texto_del_repo_no_trae_letras_de_otro_alfabeto() -> None:
+    """Ningun archivo propio del repo tiene letras de otro alfabeto fuera de la lista
+    blanca.
+
+    ## Por que la regla no es una lista de rangos
+
+    Porque una lista de rangos es la forma de escribir este guard que ya fallo una
+    vez: la primera version cubria ideogramas y se le paso un caracter de hangul. La
+    regla vigente consulta el nombre Unicode del caracter, asi que un alfabeto nuevo no
+    necesita que nadie se acuerde de agregarlo. Lo que si se enumera son los bloques
+    de puntuacion, que no tienen nombre de letra y por eso no se pueden consultar.
     """
     rastreados = subprocess.run(
         ["git", "ls-files"], capture_output=True, text=True, cwd=RAIZ, check=True
@@ -781,14 +838,23 @@ def test_el_texto_del_repo_no_trae_ideogramas_de_otro_alfabeto() -> None:
         except (UnicodeDecodeError, IsADirectoryError):
             continue
         for numero, linea in enumerate(texto.splitlines(), 1):
-            if CJK.search(linea):
-                limpio = CJK.sub("?", linea.strip())[:80]
-                hallazgos.append(f"  {nombre}:{numero}: {limpio}")
+            ajenos = [c for c in linea if _letra_ajena(c)]
+            if not ajenos:
+                continue
+            # El mensaje lleva el texto ya saneado: un guard que lleva el payload
+            # encima se detecta a si mismo.
+            limpio = "".join("?" if _letra_ajena(c) else c for c in linea.strip())[:80]
+            alfabetos = sorted({_alfabeto(c) for c in ajenos})
+            hallazgos.append(
+                f"  {nombre}:{numero}: {len(ajenos)} char(es) de {', '.join(alfabetos)}\n"
+                f"      {limpio}"
+            )
 
     assert not hallazgos, (
-        f"{len(hallazgos)} linea(s) con caracteres CJK en texto del repo:\n"
+        f"{len(hallazgos)} linea(s) con caracteres de otro alfabeto en texto del repo:\n"
         + "\n".join(hallazgos)
-        + "\n\nNo es codigo, es prosa con un token pegado. Si el archivo necesita CJK "
-        "legitimo (datos de prueba, no prosa), agregalo a LISTA_BLANCA con el motivo: "
-        "el guard mide el texto que el repo escribe, no el que recibe."
+        + "\n\nNo es codigo, es prosa con un token pegado: se lee igual de bien roto "
+        "que entero, y el texto no dice que este roto. Si el archivo necesita otro "
+        "alfabeto legitimo (datos de prueba, no prosa), agregalo a LISTA_BLANCA con el "
+        "motivo: el guard mide el texto que el repo escribe, no el que recibe."
     )

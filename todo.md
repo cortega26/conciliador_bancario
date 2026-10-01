@@ -213,7 +213,7 @@ sistema aguanta ese default con holgura.
 
 ## Registro de hallazgos del propio proceso
 
-Cosas queupuются mal en esta sesión y que hay que rememberspara no repetirlas:
+Cosas que pasan mal en esta sesión y que hay que recordar para no repetirlas:
 
 - Escribir en `main` en vez de crear rama: **2 veces**.
 - `await_ci.py` con el número de PR equivocado: **1 vez** (el #47 era el release).

@@ -52,11 +52,61 @@ Meta: que un usuario (frecuentemente **contador/a Excel-first, poco tecnico**) o
 
 ## Contrato de exit codes (CLI)
 
-Estos codigos son parte de la UX "scriptable":
-- `concilia validate`: `0` OK; `1` fallo de validacion / error; `3` no implementado.
-- `concilia run`: `0` OK; `1` error; `2` flags incompatibles; `3` no implementado;
-  **`7` hubo hallazgos criticos** (solo con `--fail-on-critico`, ver abajo).
-- `concilia explain`: `0` encontrado; `1` `run.json` invalido (fail-closed); `2` no encontrado / falta `run.json`.
+Estos codigos son parte de la UX "scriptable". Los tres comandos se documentan en
+tablas, y no en prosa mezclada, por dos razones: una tabla se lee de un vistazo y un
+cliente puede branchear sobre ella, y `tests/test_docs_actualizados.py` la compara con
+`cli/errors.py`. Si anadir un codigo al modulo no aparece en la tabla, el test falla.
+
+### `concilia validate`
+
+| Codigo | Cuando |
+|---|---|
+| `0` | La entrada es valida. |
+| `2` | Entrada invalida: una ruta que no existe, un flag sin valor util. |
+| `4` | Error de ingesta: un archivo que no se pudo interpretar. |
+| `10` | Error interno. |
+
+### `concilia run`
+
+| Codigo | Cuando | Que hacer |
+|---|---|---|
+| `0` | La conciliacion se completo. Puede haber hallazgos criticos: se avisan por pantalla. | Nada. Los pendientes son el caso normal. |
+| `2` | Entrada invalida: un archivo no existe, un flag no existe, un valor de flag no se puede usar. | Corregir la invocacion. |
+| `3` | La configuracion no cumple el esquema. | Corregir el YAML. |
+| `4` | Error de ingesta: un archivo que no se pudo leer o interpretar. | Revisar el archivo. Es el fallo mas comun. |
+| `6` | Error de IO, o **la salida ya esta en uso** por otra corrida. | Para `6`, revisar permisos/espacio. Si es el cerrojo, esperar: la otra corrida lo suelta al terminar. |
+| `7` | Hubo hallazgos criticos y se paso `--fail-on-critico`. | Leer `run.json`. |
+| `10` | Error interno: la herramienta se rompio. | Reportar el bug con los artefactos. |
+
+### `concilia explain`
+
+| Codigo | Cuando |
+|---|---|
+| `0` | El hallazgo existe y se explico. |
+| `2` | No encontrado, o falta `run.json`. |
+| `5` | `run.json` invalido: fail-closed, no se explica nada. |
+
+### Lo que esta tabla corrige
+
+La version anterior de esta seccion decia que `run` daba `1` en error y `3` cuando
+algo no estaba implementado. **Las dos cosas eran falsas**, y la segunda era la
+peor: `3` es configuracion invalida segun el esquema. Un cliente que lo leia como
+"falta una funcionalidad" no reportaba un bug, dejaba de intentarlo, y el sintoma
+aparecia semanas despues en produccion del cliente, sin rastro local.
+
+`4`, `6` y `10` no estaban documentados, y `4` es el fallo real mas frecuente: un
+archivo que el banco exporto con una columna de mas.
+
+### Que distingue `6` de "la salida ya esta en uso"
+
+Hoy no los distingue: **los dos son `6`**, porque el cerrojo se reporta como
+`ErrorOperacionIO`. Un `OSError` de permisos y un cerrojo ocupado son el mismo numero,
+aunque el remedio es distinto —uno hay que corregirlo, el otro hay que reintentar— y
+un script que reintenta en bucle ante un problema de permisos no termina nunca.
+
+Es una limitacion **documentada**, no un olvido: `6` significa "no se pudo escribir la
+salida", y el mensaje en pantalla si dice cual de los dos es. Distinguirlos con un
+codigo propio es un cambio de contrato, asi que no se hace aqui.
 
 ### `7` y `--fail-on-critico`
 

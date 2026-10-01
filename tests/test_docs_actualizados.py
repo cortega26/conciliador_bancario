@@ -205,3 +205,160 @@ def test_la_pr_tabla_de_pr_es_real() -> None:
     existentes = {str(n) for n in json.loads(salida.stdout)}
     faltantes = prs - existentes
     assert not faltantes, f"PRs citados que no existen: {sorted(faltantes)}"
+
+
+# --- El contrato de exit codes, que es lo que la automatizacion del cliente lee ----
+#
+# `docs/ux_contracts.md` se presenta como "parte de la UX scriptable", asi que un
+# cliente puede branchear sobre estos numeros. La tabla que estaba ahi decia `1` =
+# "error" (no existe tal codigo), `3` = "no implementado" (`3` es configuracion
+# invalida), y no mencionaba `4`, `6` ni `10`. De esos, `4` es el fallo real mas
+# frecuente y `10` significa "la herramienta se romvio".
+#
+# ## Por que un test y no "tener cuidado"
+#
+# Porque el documento ya mintio una vez y nada lo impide volver a mintir: es prosa, y
+# la prosa no falla. Un cliente que lea `3` y concluya "falta una funcionalidad" no
+# reporta un bug: deja de intentarlo. Eso es un hallazgo invisible, la peor categoria
+# de este repo.
+#
+# ## Que NO verifica
+#
+# No verifica que las descripciones sean correctas: eso no se puede medir de forma
+# util. Verifica dos cosas concretas y medibles: que **todo** `EXIT_*` de
+# `cli/errors.py` aparezca en la seccion del contrato, y que la seccion no prometa
+# codigos que el codigo nunca emite.
+
+CONTRATO_EXIT = Path("docs/ux_contracts.md")
+
+# Tolera anotacion de tipo, valor con signo y comentario al final, porque las tres son
+# formas en que se escribe una constante en un modulo con `mypy` encima. La version
+# anterior exigia `EXIT_X = 5` pelado, y una anotacion la hacia **invisible**: el guard
+# pasaba en verde con un codigo sin documentar, que es justo el fallo que existe para
+# evitar. Un guard que se puede esquivar escribiendo el codigo de otra manera no es un
+# guard.
+_EXIT_DECL = re.compile(
+    r"^EXIT_(?P<nombre>\w+)\s*(?::\s*[^=]+)?=\s*(?P<valor>-?\d+)\s*(?:#.*)?$",
+    re.M,
+)
+
+
+def _codigos_del_codigo() -> dict[str, int]:
+    """Los `EXIT_*` de `cli/errors.py`, leidos del source y no importados.
+
+    Se leen del archivo a proposito. Si el test los importara, un `EXIT_NUEVO` agregado
+    al modulo entraria en la comparacion por la puerta de atras y el guard no diria
+    nada: verificaria que el codigo esta documentado en el mismo codigo. Leyendolo del
+    source, un codigo nuevo aparece como "no documentado", que es justo lo que hay que
+    decidir a mano.
+    """
+    fuente = (RAIZ / "src" / "conciliador_bancario" / "cli" / "errors.py").read_text(
+        encoding="utf-8"
+    )
+    return {m.group("nombre"): int(m.group("valor")) for m in _EXIT_DECL.finditer(fuente)}
+
+
+@pytest.mark.parametrize(
+    "declaracion",
+    [
+        "EXIT_PLAIN = 5",
+        "EXIT_ANOTADO: int = 5",
+        "EXIT_ANOTADO_COMPLEJO: Final[int] = 5",
+        "EXIT_COMENTARIO = 5  # con nota al lado",
+        "EXIT_CON_ESPACIOS   =    5",
+        "EXIT_NEGATIVO = -1",
+    ],
+)
+def test_el_guard_reconoce_como_se_escribe_una_constante(declaracion: str) -> None:
+    """El guard tiene que leer las formas en que un developer escribe de verdad.
+
+    Sin esto, la correccion del patron es una afirmacion: nadie verifica que
+    `EXIT_NUEVO: int = 9` —la forma mas natural con `mypy` activo— siga siendo
+    detectable, y el guard se degrada en silencio la primera vez que alguien anota una
+    constante.
+    """
+    m = _EXIT_DECL.search(declaracion)
+    assert m is not None, f"el guard no reconoce: {declaracion!r}"
+    assert m.group("valor") == declaracion.rsplit("=", 1)[1].split("#")[0].strip()
+
+
+def _seccion_del_contrato() -> str:
+    """La seccion "Contrato de exit codes" del documento, no el archivo entero.
+
+    Aislarla importa: el resto de `ux_contracts.md` menciona exit codes en prosa (por
+    ejemplo la seccion de `--fail-on-critico`), y mezclarla haria que el test midiera
+    menciones sueltas en vez de la tabla que es el contrato.
+    """
+    texto = CONTRATO_EXIT.read_text(encoding="utf-8")
+    inicio = texto.index("## Contrato de exit codes")
+    # La seccion puede ser la ultima del archivo: se corta en el siguiente `## ` o
+    # hasta el final. Sin ese `or len(texto)`, agregar una seccion despues rompia el
+    # test con un ValueError en vez de decir que el documento cambio de forma.
+    fin = texto.find("\n## ", inicio + 1)
+    return texto[inicio : fin if fin != -1 else len(texto)]
+
+
+@pytest.mark.parametrize(
+    "nombre,valor", sorted(_codigos_del_codigo().items(), key=lambda kv: kv[1])
+)
+def test_todo_exit_del_codigo_esta_documentado(nombre: str, valor: int) -> None:
+    """Cada `EXIT_*` del modulo tiene que aparecer en la tabla del contrato.
+
+    Sin esto, agregar un codigo es invisible para el cliente: el numero nuevo llega
+    al script y el script no sabe que hacer con el.
+    """
+    seccion = _seccion_del_contrato()
+    # Substring y no regex con `\b`: el cierre del codigo es un backtick, que no es
+    # caracter de palabra, asi que `` `0`\b `` no matchea nunca porque el limite de
+    # palabra se cumple entre dos no-palabras. La primera version hacia eso y fallo para
+    # los ocho codigos a la vez, que es la forma mas ruidosa de decir "el test esta
+    # mal". Un substring `` `0` `` no confunde `0` con `10`: el backtick de cierre
+    # tiene que estar pegado al numero.
+    assert f"`{valor}`" in seccion, (
+        f"{nombre} = {valor} no esta documentado en {CONTRATO_EXIT}. Un cliente que "
+        f"reciba {valor} no tiene contrato que seguir: documentalo, o no lo emitas."
+    )
+
+
+def test_la_tabla_no_promete_codigos_que_el_codigo_no_emite() -> None:
+    """La tabla no puede ofrecer un codigo que `cli/errors.py` nunca devuelve.
+
+    Este es el que habria atrapado la tabla anterior: decia `1` = "error" y `3` = "no
+    implementado", y `3` es configuracion invalida. Un script que lo leia como "falta
+    funcionalidad" no reporta nada, y el sintoma aparece semanas despues, en el cliente.
+
+    ## Por que solo mira filas de tabla
+
+    Porque una mencion en prosa es una afirmacion distinta de una promesa de contrato.
+    La seccion dice "lo que esta tabla corrige" y ahi nombra el codigo que ya no existe
+    para explicar por que se elimino; eso es informacion, no una oferta. Lo que un
+    cliente brancharea son las **filas**, y es lo unico que este test compara.
+    """
+    filas = [ln for ln in _seccion_del_contrato().splitlines() if ln.strip().startswith("|")]
+    assert filas, (
+        f"{CONTRATO_EXIT} no tiene tablas de exit codes. Se documentaron en prosa "
+        "mezclada y no se pueden ni leer de un vistazo ni comparar con el codigo."
+    )
+    documentados = {int(n) for ln in filas for n in re.findall(r"`(\d+)`", ln)}
+    reales = set(_codigos_del_codigo().values())
+    fantasmas = documentados - reales
+    assert not fantasmas, (
+        f"{CONTRATO_EXIT} promete exit codes que el codigo nunca emite: "
+        f"{sorted(fantasmas)}. Cada codigo de la tabla tiene que existir en "
+        "cli/errors.py, con ese mismo numero y ese mismo significado."
+    )
+
+
+def test_la_tabla_no_dice_que_un_codigo_no_implementado() -> None:
+    """Un codigo de la tabla no puede significar "esto no esta implementado".
+
+    Ningun camino de la CLI devuelve "no implementado": lo esta es un contrato de
+    plan, no un resultado. Y el numero que se le asigne se convierte en la palabra
+    "falta una funcionalidad" para quien lo lea desde un shell.
+    """
+    seccion = _seccion_del_contrato().lower()
+    assert "no implementado" not in seccion, (
+        f"{CONTRATO_EXIT} sigue diciendo 'no implementado' como si fuera un exit code. "
+        "No hay tal resultado: si algo no esta implementado, no deberia emitir un "
+        "codigo que el cliente tenga que interpretar."
+    )

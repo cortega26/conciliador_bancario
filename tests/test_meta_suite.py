@@ -507,6 +507,49 @@ def test_el_verificador_instala_el_archivo_y_no_resuelve_por_indice() -> None:
 # --- 6. preflight: los comandos se arman al correr, no al importar ----------
 
 
+def test_el_gate_de_tipos_no_depende_del_entorno_que_lo_corre() -> None:
+    """El cache incremental de mypy queda desactivado, y esta es la razon.
+
+    ## El defecto
+
+    El cache de mypy esta claveado por `python_version` —el **objetivo**, declarado en
+    `pyproject.toml`—, no por el interprete que corre mypy. Con eso, `.mypy_cache/3.11/`
+    lo comparten dos entornos distintos: un 3.11 y un 3.14, o uno con las dependencias
+    de OCR y otro sin ellas. Medido con el mismo codigo y el mismo cache:
+
+        A) interprete A escribe el cache  -> Success
+        B) interprete B con ese cache     -> 1 error DENTRO de `rich/pretty.py`
+        C) A otra vez, reescribe          -> Success
+        D) B otra vez                     -> el mismo error
+        E) B con el cache borrado         -> Success
+
+    El veredicto dependia de quien habia corrido mypy la ultima vez. Los errores que
+    aparecen no son de este codigo ni de este entorno, y el riesgo mayor es el otro:
+    un cache viejo puede devolver `Success` sobre codigo que ya no se verifica.
+
+    ## Que prueba este test y que no
+
+    **Fija la decision, no reproduce el defecto.** No hay forma de reproducirlo en un
+    solo entorno: hacen falta dos interpretes con site-packages distintos, y un test que
+    los construya para una sola afirmacion seria mas caro y mas frágil que el defecto
+    que vigila. La secuencia A-B-C-D-E de arriba es la reproduccion, y vive en el
+    comentario de `pyproject.toml`, que es donde se llega cuando alguien nota que
+    mypy tarda 17 segundos.
+
+    Por que alcanza con fijar la decision: quitar `incremental = false` devuelve el
+    repo al estado en que el veredicto depende de la maquina, y eso se ve aqui sin
+    depender de como este armado el entorno de quien corre los tests.
+    """
+    import tomllib
+
+    config = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["mypy"]
+    assert config.get("incremental") is False, (
+        "[tool.mypy] tiene incremental distinto de false: el cache vuelve a decidir "
+        "verdictos y el gate de tipos depende de quien corrio mypy ultimo. "
+        "Ver el comentario de pyproject.toml con la medicion."
+    )
+
+
 def test_ningun_gate_declara_una_dependencia_inexistente() -> None:
     """`depende_de` tiene que apuntar a gates reales, o el aviso miente."""
     from preflight import GATES

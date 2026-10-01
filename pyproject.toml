@@ -152,6 +152,30 @@ fail_under = 88
 
 [tool.mypy]
 python_version = "3.11"
+# El cache incremental de mypy esta claveado por la version **objetivo**
+# (`python_version`, arriba), no por el interprete que corre mypy. Con eso, el
+# cache de `.mypy_cache/3.11/` lo comparten dos entornos distintos: uno con las
+# dependencias de OCR y otro sin ellas, o un 3.11 y un 3.14.
+#
+# Medido, con el mismo codigo y el mismo `.mypy_cache/`:
+#
+#   A) interprete A escribe el cache   -> Success
+#   B) interprete B con ese cache      -> 1 error DENTRO de `rich/pretty.py`
+#   C) A otra vez (reescribe)          -> Success
+#   D) B otra vez                       -> el mismo error
+#   E) B con el cache borrado          -> Success
+#
+# O sea: el veredicto depende de quien corrio mypy ultimo. Los errores que aparecen
+# no son de este codigo ni de este entorno —se los atribuyo a un tercero que el
+# entorno actual ni tiene instalado—, y el riesgo mayor es el otro: un cache viejo
+# puede devolver `Success` sobre codigo que ya no se verifica.
+#
+# Desactivar incremental cuesta ~17s por corrida (medido en 3.14, 44 archivos), que
+# en CI se pagaba igual porque ahi el cache siempre es frio, y en local son 17s
+# contra los 0,2s del cache caliente. Se paga ese precio porque un gate de tipos que
+# depende del historial de la maquina no es un gate: es una loteria con la palabra
+# "tipos" en el mensaje.
+incremental = false
 warn_return_any = true
 warn_unused_configs = true
 # Un `# type: ignore` que deja de ser necesario es ruido que se pudre: con esto

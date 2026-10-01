@@ -184,9 +184,17 @@ def test_un_job_nuevo_no_tiene_que_parecer_en_los_dos_lados() -> None:
     from await_ci import ESPERADOS_BASE
 
     jobs = _jobs_de_los_workflows()
-    inventado = "job-que-no-existe (3.99)"
-    ausentes = _sin_productor((*ESPERADOS_BASE, inventado), jobs)
-    assert ausentes == [inventado], f"el guard de ESPERADOS_BASE no filtra: {ausentes}"
+    # Los dos casos, porque filtrar por prefijo —que es lo que se escribe por inercia—
+    # distingue el primero y **no** el segundo: `test (9.99)` tiene un job que existe y
+    # una version que no. Se cobro esa mutacion: con el prefijo solo, la contraprueba
+    # pasaba en verde.
+    job_inventado = "job-que-no-existe (3.99)"
+    version_inventada = "test (9.99)"
+    ausentes = _sin_productor((*ESPERADOS_BASE, job_inventado, version_inventada), jobs)
+    assert ausentes == [
+        job_inventado,
+        version_inventada,
+    ], f"el guard de ESPERADOS_BASE no filtra: {ausentes}"
 
 
 def test_los_jobs_de_ci_cubren_los_gates_de_preflight() -> None:

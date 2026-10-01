@@ -2,6 +2,18 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.5.1](https://github.com/cortega26/conciliador_bancario/compare/v0.5.0...v0.5.1) (2026-10-01)
+
+
+### Tests
+
+* dos guards que no miraban nada, uno de ellos desde hace años ([404c384](https://github.com/cortega26/conciliador_bancario/commit/404c3848f13562ba30482e53ab49a833d8b6e245))
+
+
+### Documentation
+
+* el registro de hallazgos del proceso, con los errores de esta sesion ([c134226](https://github.com/cortega26/conciliador_bancario/commit/c134226c7edeb9ddba13597321752e5a70e5e1a5))
+
 ## [0.5.0](https://github.com/cortega26/conciliador_bancario/compare/v0.4.0...v0.5.0) (2026-10-01)
 
 

@@ -1251,6 +1251,119 @@ def _letra_ajena(caracter: str) -> bool:
     return "LATIN" not in nombre
 
 
+# --- 5.c los fuzzers no pueden perder el corpus que protegen --------------------
+#
+# Los fuzzers parametrizan sobre los casos del generador, y para cada modo hay un test
+# que se salta en los casos que no aplican. Ese "se salta en los que no aplican" es el
+# lugar donde se cuela un corpus vacio: si un conjunto se queda vacio, sus tests se
+# saltan **todos**, la suite sigue verde y el camino que ese fuzzer protege queda sin
+# probar.
+#
+# No es hipotetico: `todo.md` registra "un `@parametrize` con filtro vacio porque una
+# edicion al generador no aplico: 1 vez". No quedo nada que lo impida.
+#
+# ## Cada generador protege un eje distinto, y por eso el piso se declara por eje
+#
+# La primera version de este guard exigia many "casos que deben rechazarse" para todos
+# los generadores, y cayo al aplicarlo: `gen_xlsx_formulas` tiene **1 solo** caso que
+# debe rechazarse sobre 10, y eso es lo correcto, porque su oraculo esta al reves. Su
+# riesgo no es rechazar de mas, es que una formula viva llegue al reporte, asi que casi
+# todo su corpus **debe aceptarse** y lo que fija es que las dos capas de proteccion
+# (`data_only=True` y `prevenir_csv_injection`) sigan ahi.
+#
+# Un piso unico habria "arreglado" ese generador con casos inventados que contradicen su
+# propio oraculo. Por eso la tabla declara, para cada generador, el modo que protege y
+# el minimo de ese modo —y un minimo de 1 en el complementario, para que ningun
+# generador pierda del todo la cobertura del otro eje—.
+#
+# La asimetria queda escrita y no escondida: es informacion que antes no estaba en
+# ningun sitio y que se tablero al aplicar el guard.
+#
+# (modulo, funcion) -> (modo que protege, minimo, minimo del modo complementario)
+GENERADORES_PROTEGIDOS: dict[tuple[str, str], tuple[str, int, int]] = {
+    ("fuzzdata", "gen_montos"): ("debe_rechazarse", 40, 10),
+    ("fuzzdata", "gen_fechas"): ("debe_rechazarse", 20, 5),
+    ("fuzztabular", "gen_xlsx"): ("debe_rechazarse", 6, 1),
+    ("fuzztabular", "gen_xml"): ("debe_rechazarse", 8, 1),
+    # Oraculo invertido a proposito: protege que las formulas se neutralicen.
+    ("fuzztabular", "gen_xlsx_formulas"): ("debe_aceptarse", 9, 1),
+}
+
+
+def _casos(clave: tuple[str, str]) -> list[object]:
+    mod = __import__(clave[0])
+    return list(getattr(mod, clave[1])())
+
+
+def test_los_fuzzers_mantienen_el_corpus_que_protegian() -> None:
+    """Ningun fuzzer puede quedarse sin los casos de su eje protegido.
+
+    Un corpus vacio deja el camino fail-closed —o el de neutralizacion de formulas—
+    sin probar, con la suite en verde. Los pisos estan junto a las cifras reales
+    medidas, asi que bajarlos es una decision explicita y no un efecto colateral.
+    """
+    flojos: dict[str, str] = {}
+    medido: dict[str, dict[str, int]] = {}
+    for clave, (modo, minimo, minimo_contrario) in GENERADORES_PROTEGIDOS.items():
+        casos = _casos(clave)
+        conteo: dict[str, int] = {}
+        for c in casos:
+            conteo[getattr(c, "modo", "sin modo")] = (
+                conteo.get(getattr(c, "modo", "sin modo"), 0) + 1
+            )
+        medido[f"{clave[0]}.{clave[1]}"] = conteo
+        if conteo.get(modo, 0) < minimo:
+            flojos[f"{clave[0]}.{clave[1]}"] = (
+                f"{conteo.get(modo, 0)} casos '{modo}', piso {minimo}"
+            )
+        contrario = minimo_contrario
+        otro = "debe_aceptarse" if modo == "debe_rechazarse" else "debe_rechazarse"
+        if conteo.get(otro, 0) < contrario:
+            flojos[f"{clave[0]}.{clave[1]} (eje contrario)"] = (
+                f"{conteo.get(otro, 0)} casos '{otro}', piso {contrario}"
+            )
+    assert not flojos, (
+        f"fuzzers por debajo de su piso: {flojos}. Todo lo medido: {medido}. "
+        "Un corpus vacio deja el camino sin probar y la suite en verde. Si la "
+        "cobertura cayo a proposito, baja el piso en GENERADORES_PROTEGIDOS con el "
+        "motivo."
+    )
+
+
+def test_el_guard_de_corpus_detecta_un_generador_vaciado() -> None:
+    """Contraprueba: el guard tiene que notar un generador que se vacia.
+
+    Sin esto, un guard que devuelve siempre vacio pasaria en verde siempre, que es lo que
+    se le pide evitar a todo lo demas de este archivo. Se comprueba con los casos reales
+    del fuzzer mas demanding, restando los que debe rechazar.
+    """
+    clave = ("fuzzdata", "gen_montos")
+    modo, minimo, _ = GENERADORES_PROTEGIDOS[clave]
+    invalidos = [c for c in _casos(clave) if getattr(c, "modo", "") == modo]
+
+    assert len(invalidos) > minimo, (
+        "el caso real esta en o por debajo del piso: el guard no serviria para el "
+        "caso que documenta"
+    )
+    vaciado = [c for c in _casos(clave) if getattr(c, "modo", "") != modo]
+    conteo_vaciado = sum(1 for c in vaciado if getattr(c, "modo", "") == modo)
+    assert conteo_vaciado == 0, "el contraejemplo no esta vaciado: no prueba nada"
+
+
+def test_cada_fuzzer_declara_los_dos_ejes() -> None:
+    """La tabla declara los dos ejes, no solo el protegido.
+
+    Si `minimo_contrario` quedara en 0, un fuzzer podria perder toda la cobertura de
+    rechazo —el camino fail-closed— y el guard no lo notaria.
+    """
+    sin_piso = [k for k, (_, _, contrario) in GENERADORES_PROTEGIDOS.items() if contrario < 1]
+    assert not sin_piso, f"fuzzers con piso 0 en el eje complementario: {sin_piso}"
+    assert len(GENERADORES_PROTEGIDOS) >= 5, (
+        "se esperaban al menos los 5 generadores que consumen los tests de fuzz; "
+        f"hay {len(GENERADORES_PROTEGIDOS)} declarados"
+    )
+
+
 def test_el_texto_del_repo_no_trae_letras_de_otro_alfabeto() -> None:
     """Ningun archivo propio del repo tiene letras de otro alfabeto fuera de la lista
     blanca.

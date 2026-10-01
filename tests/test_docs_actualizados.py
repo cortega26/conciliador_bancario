@@ -185,26 +185,115 @@ def test_el_informe_declara_que_la_fuente_de_verdad_es_spec() -> None:
     ), "el informe no dice cual es la fuente de verdad del estado de los hallazgos"
 
 
+def _pr_existe(numero: int) -> tuple[bool, str | None]:
+    """(existe, motivo si no se pudo averiguar).
+
+    ## Por que `gh api` y no `gh pr view`
+
+    Porque **`gh pr view <n>` no comprueba nada**: con `#99999` —que no existe en este
+    repo— responde `{"number": 99999}`. Ecoa el numero que le pasan. Un guard construido
+    encima de eso pasa siempre, que es peor que no tener guard: la tabla de PRs queda
+    "verificada" sin haber mirado nada.
+
+    `gh api repos/:owner/:repo/pulls/<n>` si distingue: responde 404 "Not Found" para lo
+    que no existe, y 200 para lo que existe.
+
+    La distincion entre "no existe" y "no se pudo mirar" importa: 404 es un hallazgo
+    (el documento cita algo inexistente), y cualquier otra cosa —`gh` sin autenticar, sin
+    red, o sin el binario— es "no se pudo comprobar", que es un skip con su motivo.
+    """
+    try:
+        p = subprocess.run(
+            ["gh", "api", f"repos/:owner/:repo/pulls/{numero}"],
+            capture_output=True,
+            text=True,
+            cwd=RAIZ,
+        )
+    except FileNotFoundError:
+        return False, "el binario gh no esta instalado"
+    if p.returncode == 0:
+        return True, None
+    error = f"{p.stderr or ''} {p.stdout or ''}"
+    if "404" in error or "Not Found" in error:
+        return False, None
+    return False, error.strip()[:120] or f"gh salio con {p.returncode} y sin mensaje"
+
+
+def _prs_citados_no_existentes(prs: set[int]) -> tuple[list[int], dict[int, str]]:
+    """(inexistentes, no verificables con su motivo)."""
+    inexistentes: list[int] = []
+    sin_verificar: dict[int, str] = {}
+    for pr in sorted(prs):
+        existe, motivo = _pr_existe(pr)
+        if existe:
+            continue
+        if motivo is None:
+            inexistentes.append(pr)
+        else:
+            sin_verificar[pr] = motivo
+    return inexistentes, sin_verificar
+
+
 def test_la_pr_tabla_de_pr_es_real() -> None:
     """Cada PR citado tiene que existir de verdad en el remoto.
 
     Una tabla que cita PRs inventados es peor que una que no cita ninguno: parece
     trazable y no lo es.
+
+    ## Este test llevaba anos sin comprobar nada
+
+    La version anterior llamaba a `gh pr view "#41, #42, #43, ..."`, y `gh pr view` toma
+    **un** argumento: la llamada fallaba siempre con `no pull requests found for branch
+    "#41, #42, ..."`, y el `if salida.returncode != 0` la convertia en un skip con el
+    motivo `gh no disponible` —con `gh` perfectamente disponible—. Medido: 86 PRs en el
+    repo y el test sin mirar ninguno, en local y en CI.
+
+    Los 59 skips de una corrida completa incluian este. Un guard que se salta con un
+    motivo falso entrena a leer el motivo y creerselo.
     """
     prs = {pr for pr, _ in HALLADOS.values()}
-    salida = subprocess.run(
-        ["gh", "pr", "view", ", ".join(f"#{p}" for p in sorted(prs)), "--json", "number"],
+    inexistentes, sin_verificar = _prs_citados_no_existentes(prs)
+
+    assert not inexistentes, (
+        f"PRs citados que no existen en el remoto: {inexistentes}. "
+        "Una tabla que cita PRs inventados es peor que una que no cita ninguno."
+    )
+    if sin_verificar and not (prs - set(sin_verificar)):
+        motivos = "; ".join(f"#{k}: {v}" for k, v in sorted(sin_verificar.items()))
+        pytest.skip(f"no se pudo comprobar ningun PR contra el remoto ({motivos})")
+
+
+def test_el_verificador_de_prs_detecta_un_pr_inexistente() -> None:
+    """Contraprueba: el verificador tiene que encontrar un PR que no existe.
+
+    Sin esto, un verificador que devuelve siempre "existe" pasaria el test de arriba en
+    verde, que es exactamente lo que hacia la version anterior —no por un defecto de
+    codigo, sino porque la consulta que usaba no comprobaba nada—.
+
+    Usa un numero que el repo no tiene (el maximo real se lee del remoto), asi que si
+    el numero empieza a existir, el test avisa en vez de volverse verde sin querer.
+    """
+    p = subprocess.run(
+        ["gh", "api", "repos/:owner/:repo/pulls?state=all&per_page=100&page=1"],
         capture_output=True,
         text=True,
         cwd=RAIZ,
     )
-    if salida.returncode != 0:
-        pytest.skip(f"gh no disponible: {salida.stderr.strip()[:80]}")
+    if p.returncode != 0:
+        pytest.skip(f"gh no disponible: {(p.stderr or '').strip()[:80]}")
+
     import json
 
-    existentes = {str(n) for n in json.loads(salida.stdout)}
-    faltantes = prs - existentes
-    assert not faltantes, f"PRs citados que no existen: {sorted(faltantes)}"
+    numeros = {pr["number"] for pr in json.loads(p.stdout)}
+    assert numeros, "no se pudo leer la lista de PRs del remoto"
+
+    inventado = max(numeros) + 1000
+    assert inventado not in numeros
+    inexistentes, sin_verificar = _prs_citados_no_existentes({inventado})
+    assert inexistentes == [inventado], (
+        f"un PR inexistente paso como existente: faltantes={inexistentes} "
+        f"sin_verificar={sin_verificar}. El guard no comprueba nada."
+    )
 
 
 # --- El contrato de exit codes, que es lo que la automatizacion del cliente lee ----

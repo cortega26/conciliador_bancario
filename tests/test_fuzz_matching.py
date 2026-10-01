@@ -122,6 +122,55 @@ def test_invariante_toda_transaccion_queda_explicada(caso: CasoMatching) -> None
         )
 
 
+@pytest.mark.parametrize("caso", CASOS, ids=[c.nombre for c in CASOS])
+def test_invariante_los_ids_de_hallazgo_son_unicos(caso: CasoMatching) -> None:
+    """Ningun id de hallazgo puede aparecer dos veces en una corrida.
+
+    ## Por que este invariante estaba ausente, y por que es el que mas daño hace
+
+    `RunPayload` no valida unicidad de `hallazgos[].id`, y los tests que si lo
+    comprueban —`test_diferencia_sumas.py` y los golden— lo hacen sobre entradas
+    concretas. Un motor que reprocese una fila y emita el hallazgo dos veces pasa
+    entero: el id es determinista, asi que las dos copias son **indistinguibles** en el
+    assert salvo que se cuente.
+
+    Y no es cosmetico. El id es lo que `concilia explain <id>` recibe: con el mismo id
+    cinco veces, `explain` devuelve la quinta y el operador cree que la decision se tomo
+    una, cuando la fila se evaluo cinco veces. El repo ya pago esta clase de bug una
+    (`4f23385`, "hallazgos con el mismo id") y el modo de fallo volver a colarse era
+    exactamente este: no por un id mal calculado, sino por un hallazgo emitido dos
+    veces.
+
+    ## Por que hace falta el invariante y no el escenario
+
+    El escenario que lo dispara esta en `gen_casos()`, pero lo que lo vuelve a hacer
+    visible para siempre es esta asercion sobre **todos** los casos: anade un
+    escenario nuevo y el invariante ya esta ahi midiendo.
+    """
+    r = correr(caso)
+    ids = [h.id for h in r.hallazgos]
+    repetidos = sorted({i for i in ids if ids.count(i) > 1})
+    assert not repetidos, (
+        f"{caso.nombre}: {len(ids)} hallazgos, {len(repetidos)} ids repetidos "
+        f"({repetidos}). Un id repetido hace que `explain` devuelva solo el ultimo, "
+        "y esconde que la decision se evaluo mas de una vez."
+    )
+
+
+@pytest.mark.parametrize("caso", CASOS, ids=[c.nombre for c in CASOS])
+def test_invariante_los_ids_de_match_son_unicos(caso: CasoMatching) -> None:
+    """Los ids de match se derivan de las entidades, asi que repetidos = doble conteo.
+
+    Mismo motivo que el de hallazgos: si dos matches distintos comparten id, el
+    `run.json` tiene dos filas que `explain` no puede distinguir, y el total conciliado
+    se puede leer dos veces.
+    """
+    r = correr(caso)
+    ids = [m.id for m in r.matches]
+    repetidos = sorted({i for i in ids if ids.count(i) > 1})
+    assert not repetidos, f"{caso.nombre}: ids de match repetidos: {repetidos}"
+
+
 # --- El hallazgo que motivo el modulo ---------------------------------------
 
 

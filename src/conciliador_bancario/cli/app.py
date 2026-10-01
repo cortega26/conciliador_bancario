@@ -161,6 +161,15 @@ def cmd_run(
             "codigo de salida, para automatizacion."
         ),
     ),
+    exit_code_en_uso: bool = typer.Option(
+        False,
+        "--exit-code-en-uso",
+        help=(
+            "Terminar con exit 8 cuando otra corrida ya tiene el --out, en vez del 6 "
+            "de IO. Solo cambia el codigo de salida, para automatizacion que reintenta: "
+            "sin el flag, el comportamiento es el de siempre."
+        ),
+    ),
     log_level: str = typer.Option("INFO", "--log-level"),
     enable_ocr: bool = typer.Option(False, "--enable-ocr"),
     max_input_bytes: Optional[int] = typer.Option(
@@ -219,7 +228,9 @@ def cmd_run(
         )
     except Exception as e:  # noqa: BLE001
         emit_failure_audit_best_effort(out_dir=out, command="run", exc=e)
-        raise render_and_exit(console=console, exc=e, debug=debug) from e
+        raise render_and_exit(
+            console=console, exc=e, debug=debug, exit_code_en_uso=exit_code_en_uso
+        ) from e
     console.print(f"[green]Run ID[/green]: {resultado.run_id}")
     if not dry_run:
         console.print(f"[green]Reporte[/green]: {out / 'reporte_conciliacion.xlsx'}")

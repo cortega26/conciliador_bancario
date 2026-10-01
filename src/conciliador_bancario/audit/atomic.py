@@ -47,6 +47,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from conciliador_bancario.errors import ErrorSalidaEnUso as _ErrorSalidaEnUso
+
 NOMBRE_CERROJO = ".concilia.lock"
 
 # Un cerrojo sin PID se declara basura solo si lleva este tiempo sin escribirse.
@@ -265,5 +267,18 @@ class CerrojoDeSalida:
         self.liberar()
 
 
-class ErrorSalidaEnUso(RuntimeError):
-    """Dos corridas compitiendo por el mismo `--out`."""
+class ErrorSalidaEnUso(_ErrorSalidaEnUso):
+    """Dos corridas compitiendo por el mismo `--out`.
+
+    ## Por que sigue apareciendo aca, y no es una clase mas
+
+    No es una clase distinta: hereda del unico `ErrorSalidaEnUso` de
+    `conciliador_bancario.errors`. Antes de que existiera el unico, este era un
+    `RuntimeError` pelado y `pipeline.py` tenia que reconvertirlo en
+    `ErrorOperacionIO` para que la CLI lo entendiera; ahi se perdia la identidad que
+    hoy permite darle codigo de salida propio.
+
+    Se conserva el alias porque este modulo, `pipeline.py` y los tests lo nombran desde
+    aca. Lo que importa es que `isinstance(e, ErrorSalidaEnUso)` da verdadero en las
+    dos rutas, que es lo que la CLI consulta.
+    """

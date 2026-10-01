@@ -16,6 +16,7 @@ from conciliador_bancario.errors import (
     ErrorContrato,
     ErrorEntradaUsuario,
     ErrorOperacionIO,
+    ErrorSalidaEnUso,
 )
 from conciliador_bancario.ingestion.base import ErrorIngestion
 
@@ -33,6 +34,10 @@ EXIT_INTERNAL = 10
 # esta lista contra la tabla de `docs/ux_contracts.md`, asi que un codigo emitido que
 # no este aqui no aparece en el contrato y el guard no lo ve.
 EXIT_CRITICOS = 7
+# La salida ya esta en uso por otra corrida. **Opt-in**: el default sigue siendo
+# `EXIT_IO`, para no romper a quien hoy branch-ea sobre `6`. Es el mismo trato que
+# `--fail-on-critico` le dio al `7`. Ver `ErrorSalidaEnUso`.
+EXIT_SALIDA_EN_USO = 8
 
 
 @dataclass(frozen=True)
@@ -56,7 +61,29 @@ def _error_hint(exc: Exception) -> str | None:
     return None
 
 
-def classify_cli_error(exc: Exception) -> ErrorRender:
+def classify_cli_error(exc: Exception, *, exit_code_en_uso: bool = False) -> ErrorRender:
+    """Traduce la excepcion a exit code, categoria y mensaje.
+
+    ## Por que `exit_code_en_uso` es un parametro y no una constante
+
+    Porque el codigo nuevo es opt-in. Un `OSError` de permisos y un cerrojo ocupado son
+    los dos `ErrorOperacionIO`, y un unico codigo les da a los dos el mismo remedio
+    equivocado: uno se corrige y el otro se reintenta. Poner el `8` fijo habria roto a
+    quien hoy branch-ea sobre `6`.
+
+    La comprobacion va **antes** de la rama de `ErrorOperacionIO` y no despues, porque
+    `ErrorSalidaEnUso` hereda de ella: al reves, nunca llegaria aqui.
+    """
+    if exit_code_en_uso and isinstance(exc, ErrorSalidaEnUso):
+        return ErrorRender(
+            EXIT_SALIDA_EN_USO,
+            "salida en uso",
+            str(exc),
+            _error_details(exc),
+            _error_hint(exc)
+            or "Hay otra conciliacion usando este --out. Reintenta en un momento; "
+            "no es un error del archivo.",
+        )
     if isinstance(exc, ErrorEntradaUsuario):
         return ErrorRender(
             EXIT_USER_INPUT, "entrada", str(exc), _error_details(exc), _error_hint(exc)
@@ -92,8 +119,14 @@ def classify_cli_error(exc: Exception) -> ErrorRender:
     )
 
 
-def render_and_exit(*, console: Console, exc: Exception, debug: bool) -> typer.Exit:
-    rendered = classify_cli_error(exc)
+def render_and_exit(
+    *,
+    console: Console,
+    exc: Exception,
+    debug: bool,
+    exit_code_en_uso: bool = False,
+) -> typer.Exit:
+    rendered = classify_cli_error(exc, exit_code_en_uso=exit_code_en_uso)
     console.print(f"[red]Error ({rendered.category})[/red] {rendered.message}")
     if rendered.details:
         console.print("Detalles:")

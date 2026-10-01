@@ -222,6 +222,29 @@ Cosas que pasan mal en esta sesión y que hay que recordar para no repetirlas:
 - El `write` de un archivo de texto reportado como exitoso sin escribir: **1 vez**.
 - Un `@parametrize` con filtro vacío porque una edición al generador no aplicó: **1 vez**.
 - Oráculos míos que exigían más de lo que el diseño promete: **4 veces**.
+- `git checkout -- <archivo>` revirtiendo trabajo sin commitear: **3 veces** en la
+  sesion del barrido de gates. La primera la announce en el commit de `requiere_red`
+  como "esta vez commiteo antes de mutar", y dos mas vinieron despues con el mismo
+  descuido. El aviso de `preflight` sobre el arbol sucio existe por esto, y se le
+  cumple a uno mismo mas facil que a los demas.
+- Una mordida que **no muerde porque la mutacion no ocurrio**: **5 veces**. Dos por
+  error mio (insertar una clave sin quitar la anterior, y dejar un `if` sin cuerpo:
+  el TOML no parseo y Python no compilo) y tres porque el texto ancla ya no existia
+  tras un `black`. Un "el test cayo" por un error de sintaxis es un test que no se
+  ejecuto.
+- Un test **tautologico** que no podia fallar: **1 vez** (`len >= piso or piso > len`,
+  que es cierto para cualquier numero). Se escribe sin pensar y pasa en verde para
+  siempre, que es lo mismo que no escribirlo.
+- Texto con palabras rotas o de otro alfabeto en codigo, prosa y **mensajes de
+  commit**: **6 veces**, en una sola sesion. El guard de alfabetos cubre los archivos
+  del repo, y ninguno de los seis estaba en un archivo: tres en cadenas de un test,
+  tres en mensajes de commit. **Un guard que solo mira una parte de la salida no
+  cubre la salida.**
+- Creer un problema resuelto porque los tests pasan, sin mirar el comportamiento
+  real: **1 vez**, y la mas grave de esta sesion. La sonda de red de `pip_audit_gate`
+  daba "hay red" porque el socket directo a `pypi.org` abria, mientras `pip-audit`
+  seguia un proxy caido: los tests verdes y el gate reventando con el traceback de
+  `requests`. Se nota mirando lo que hace el codigo, no lo que afirman sus pruebas.
 
 **Lección**: el fallo más común no es el código, es el test que afirma algo que
 nadie verificó. Por eso el gate incluye "cada test nuevo tiene su prueba de

@@ -2,6 +2,13 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.4.0](https://github.com/cortega26/conciliador_bancario/compare/v0.3.2...v0.4.0) (2026-10-01)
+
+
+### Features
+
+* **cli:** la salida en uso tiene codigo propio, pero solo si se pide ([79cdcba](https://github.com/cortega26/conciliador_bancario/commit/79cdcba61399e3df97722843113da8bb02a0f692))
+
 ## [0.3.2](https://github.com/cortega26/conciliador_bancario/compare/v0.3.1...v0.3.2) (2026-10-01)
 
 

@@ -15,6 +15,7 @@ producen confianza falsa.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import tempfile
@@ -654,7 +655,7 @@ def test_los_tests_lentos_se_ejecutan_en_ci() -> None:
 
     ## Por que hace falta un test y nosolo discipline
 
-    La纪律 de "agregar un job cuando agregas un test lento" no sobrevive a que
+    La disciplina de "agregar un job cuando agregas un test lento" no sobrevive a que
     alguien growth tired. Un test que afirma la condicion es lo unico que la
     sostiene: cuando se agregue un `@pytest.mark.slow` nuevo, este test sigue
     verde **porque el job existe**, y si el job se borra, este test se cae.
@@ -701,4 +702,93 @@ def test_el_marker_slow_esta_registrado() -> None:
     assert "markers" in pyproject and "slow" in pyproject, (
         "el marker `slow` no esta registrado en pyproject.toml: pytest va a "
         "advertir en cada corrida y nadie lo va a leer"
+    )
+
+
+# --- 5. el texto del repo no trae caracteres de otro alfabeto --------------
+#
+# Diez lineas de codigo y de documentacion propres de este repo tenian tokens CJK
+# pegados en medio de frases en espanol. Ninguna era codigo, ninguna hacia
+# algo: todas eran prosa.
+#
+# ## Por que esto merece un test y no "tener cuidado"
+#
+# Porque ya paso, en diez lugares, y la causa es la misma que produce prosa en otro
+# idioma: una herramienta que genera texto. El dano no es estetico. En `spec.md` y en
+# `todo.md` esos tokens caen en decisiones y riesgos que alguien lee para priorizar, y
+# "Worth its own plan; tracked as a real finding" con un caracter colado al lado se
+# lee igual de bien que sin el: el texto no dice que esta roto.
+#
+# ## Que NO cubre
+#
+# No revisa ortografia ni gramatica. Solo que no haya ideogramas CJK, kana, hangul ni
+# formas de ancho completo en los archivos propios. Eso es objectiveble; "esta bien
+# escrito" no lo es.
+#
+# ## Los directorios excluidos, y por que
+#
+# `.pypi_smoke/` es un venv de terceros **rastreado a proposito** (ver `plans/005`, que
+# dice explicitamente no borrarlo) y trae tablas de Unicode de pip. `tests/golden/` y
+# `docs/stress_test_*` son datos de prueba, no prosa del repo. Excluirlos no es una
+# excepcion al guard: es que el guard mide el texto que el repo escribe, no el que
+# recibe.
+#
+# ## La lista blanca, y por que esta vacia
+#
+# Para que anadir un test con datos CJK legitimos —ancho de columna en XLSX, un PDF en
+# japones— no exija desactivar el guard entero. Se lista el archivo y con que motivo.
+
+CJK = re.compile(
+    "["
+    "\u2e80-\u303f"  # radicals, simbolos y puntuacion CJK
+    "\u3040-\u30ff"  # hiragana y katakana
+    "\u3100-\u312f"  # bopomofo
+    "\u4e00-\u9fff"  # ideogramas unificados
+    "\uac00-\ud7af"  # hangul
+    "\uff00-\uffef"  # formas de ancho completo
+    "]"
+)
+EXCLUIDOS = (".pypi_smoke/", "tests/golden/", "docs/stress_test_")
+EXTENSIONES = (".py", ".md", ".yaml", ".yml", ".toml", ".cfg", ".txt")
+# Archivo -> por que lo necesita. Vacia hoy; se llena solo si aparece un motivo real.
+LISTA_BLANCA: dict[str, str] = {}
+
+
+def test_el_texto_del_repo_no_trae_ideogramas_de_otro_alfabeto() -> None:
+    """Ningun archivo propio del repo tiene CJK fuera de las excepciones declaradas.
+
+    ## Por que el rango es amplio y no solo el de ideogramas
+
+    Porque una primera version de este escaneo uso solo el rango de ideogramas CJK, y se
+    le paso un caracter de hangul que estaba en `spec.md`. Un guard con un rango
+    incompleto es peor que ninguno: da la sensacion de haber revisado. Se cubren tambien
+    kana, bopomofo y las formas de ancho completo.
+    """
+    rastreados = subprocess.run(
+        ["git", "ls-files"], capture_output=True, text=True, cwd=RAIZ, check=True
+    ).stdout.split()
+    assert rastreados, "git ls-files no devolvio nada: el guard no midio nada"
+
+    hallazgos: list[str] = []
+    for nombre in rastreados:
+        if nombre.startswith(EXCLUIDOS) or not nombre.endswith(EXTENSIONES):
+            continue
+        if nombre in LISTA_BLANCA:
+            continue
+        ruta = RAIZ / nombre
+        try:
+            texto = ruta.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, IsADirectoryError):
+            continue
+        for numero, linea in enumerate(texto.splitlines(), 1):
+            if CJK.search(linea):
+                limpio = CJK.sub("?", linea.strip())[:80]
+                hallazgos.append(f"  {nombre}:{numero}: {limpio}")
+
+    assert not hallazgos, (
+        f"{len(hallazgos)} linea(s) con caracteres CJK en texto del repo:\n"
+        + "\n".join(hallazgos)
+        + "\n\nNo es codigo, es prosa con un token pegado. Si el archivo necesita CJK "
+        "legitimo (datos de prueba, no prosa), agregalo a LISTA_BLANCA con el motivo: "
+        "el guard mide el texto que el repo escribe, no el que recibe."
     )

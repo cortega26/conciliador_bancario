@@ -66,7 +66,7 @@ def cliente(tmp_path: Path) -> dict[str, Path]:
 def test_corrida_valida_produce_los_tres_artefactos(cliente: dict[str, Path]) -> None:
     """Una corrida buena produce `run.json`, `audit.jsonl` y el reporte.
 
-    Todo en un test porque这三个 artefactos son un contrato: si falta uno, el
+    Todo en un test porque estos tres artefactos son un contrato: si falta uno, el
     operador no puede auditar lo que concilió.
     """
     out = cliente["raiz"] / "out"
@@ -90,7 +90,7 @@ def test_run_json_es_json_valido_y_tiene_contrato(cliente: dict[str, Path]) -> N
     """`run.json` tiene que parsear y traer el esquema que promete el contrato.
 
     Un `run.json` truncado o con campos de menos es peor que no tenerlo: el
-    operador、并 automata lo leen.
+    operador, y los procesos que lo automatizan.
     """
     out = cliente["raiz"] / "out"
     _run(

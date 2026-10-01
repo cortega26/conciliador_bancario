@@ -102,8 +102,8 @@ muera o dos corridas colisionen.
   para no cruzar filesystem.
 - El audit log además abre en modo append; dos procesos escribiendo a la vez
   pueden intercalar líneas. Con `os.replace` el archivo entero se reemplaza, así
-  que el problema real es *dos corridas distintas적 compiten por el mismo
-  destino*, que es un conflicto de nombre, no de entrelineado.
+que el problema real es que *dos corridas distintas* compiten por el mismo
+destino, que es un conflicto de nombre, no de entrelineado.
 
 **Decisión de producto, explícita**: ¿dos corridas sobre el mismo `--out` deben
 fallar, o la segunda debe sobrescribir? Default propuesto: **fallar con un
@@ -212,7 +212,8 @@ Verificado: 1000 USD contra 1000 CLP produce exit 0 con
 La información está en `run.json` y en la hoja de hallazgos, pero el código de salida
 decía "todo bien".
 
-**Resuelto sin cambiar el exit por defecto**, por las dos razones que se与企业izaron:
+**Resuelto sin cambiar el exit por defecto**, por las dos razones que se
+plantearon en la revision:
 
 - `0` significa "la conciliación se completó", y una conciliación con pendientes es
   el caso normal de todo contador.

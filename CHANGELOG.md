@@ -2,6 +2,13 @@
 
 Este proyecto sigue (en lo posible) **Keep a Changelog** y **SemVer**.
 
+## [0.5.2](https://github.com/cortega26/conciliador_bancario/compare/v0.5.1...v0.5.2) (2026-10-05)
+
+
+### Documentation
+
+* revamp README for adoption and discoverability ([#91](https://github.com/cortega26/conciliador_bancario/issues/91)) ([9f2be7f](https://github.com/cortega26/conciliador_bancario/commit/9f2be7f174c2f576ceef9e2f7aa9fd74cde13734))
+
 ## [0.5.1](https://github.com/cortega26/conciliador_bancario/compare/v0.5.0...v0.5.1) (2026-10-01)
 
 

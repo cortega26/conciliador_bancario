@@ -1,13 +1,37 @@
-# Conciliador Bancario (MVP)
+<div align="center">
 
-CLI local (Chile-first) para **conciliación bancaria** con enfoque **fail-closed**, **auditabilidad** y **salidas deterministas**.
+# Conciliador Bancario
 
+<p><strong>Una conciliación incorrecta puede ser peor que una conciliación pendiente.</strong></p>
+<p>CLI local, Chile-first y <strong>fail-closed</strong> para conciliar movimientos bancarios contra registros esperados con evidencia auditable y salidas deterministas.</p>
+
+[![GitHub stars](https://img.shields.io/github/stars/cortega26/conciliador_bancario?style=flat&logo=github)](https://github.com/cortega26/conciliador_bancario/stargazers)
 [![CI](https://github.com/cortega26/conciliador_bancario/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cortega26/conciliador_bancario/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/bankrecon.svg?label=PyPI)](https://pypi.org/project/bankrecon/)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Licencia](https://img.shields.io/github/license/cortega26/conciliador_bancario)
 
----
+</div>
+
+```bash
+pipx install bankrecon
+concilia --help
+```
+
+## Diseñado para no inventar certeza
+
+Muchos reconciliadores optimizan por porcentaje de auto-match. Este proyecto optimiza primero por **control de daño**: cuando la evidencia es insuficiente o ambigua, deja el caso pendiente y explica por qué.
+
+| Lo que necesitas en cierre y auditoría | Lo que produce |
+|:---|:---|
+| Saber qué se concilió | Matches explícitos |
+| Saber qué no calzó | Hallazgos y discrepancias |
+| Poder reproducir una corrida | `run.json` determinista |
+| Seguir la evidencia | `audit.jsonl` append-only |
+| Revisar humanamente | Reporte XLSX opcional |
+| Mantener datos fuera de terceros | Ejecución local, sin telemetría |
+
+> **Principio de diseño:** ante ambigüedad, no autoconcilia. La ausencia de match es visible; un falso match puede contaminar el cierre.
 
 ## Vista rápida (inputs → proceso → outputs)
 

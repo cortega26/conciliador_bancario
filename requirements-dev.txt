@@ -3,7 +3,7 @@
 pytest==9.1.1
 hypothesis==6.168.3
 ruff==0.4.10
-black==26.5.1
+black==26.10.1
 bandit==1.9.4
 pip-audit==2.10.1
 build==1.6.1
@@ -16,4 +16,4 @@ types-PyYAML==6.0.12.20260906
 # los bugs de contrato (ej. pasar details= a una excepcion que no lo acepta).
 types-openpyxl==3.1.5.20260827
 types-defusedxml==0.7.0.20260504
-setuptools==84.0.0
+setuptools==84.1.0

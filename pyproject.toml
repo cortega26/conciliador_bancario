@@ -26,7 +26,7 @@ dependencies = [
   "rich==15.0.0",
   "PyYAML==6.0.3",
   "openpyxl==3.1.5",
-  "pypdf==6.19.0",
+  "pypdf==6.21.2",
   "defusedxml==0.7.1",
 ]
 
@@ -35,7 +35,7 @@ dev = [
   "pytest==9.1.1",
   "hypothesis==6.168.3",
   "ruff==0.4.10",
-  "black==26.5.1",
+  "black==26.10.1",
   "bandit==1.9.4",
   "pip-audit==2.10.1",
   "build==1.6.1",
@@ -50,14 +50,14 @@ dev = [
   "types-defusedxml==0.7.0.20260504",
   # Fijado para que el gate de supply chain sea reproducible: el runner de CI
   # trae su propia version y sin este pin la auditoria depende de la imagen.
-  "setuptools==84.0.0",
+  "setuptools==84.1.0",
   "coverage==7.6.1",
 ]
 pdf_ocr = [
   # Requiere dependencias de sistema (poppler) para convertir PDF->imagenes.
   "pdf2image==1.17.0",
   "pytesseract==0.3.13",
-  "Pillow==12.3.0",
+  "Pillow==13.0.0",
 ]
 
 [project.scripts]
